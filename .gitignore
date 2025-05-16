@@ -1,0 +1,4 @@
+__pycache__/*
+src/CARMA/build/*
+src/data/eos/*
+src/kzz.py
