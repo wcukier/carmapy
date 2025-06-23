@@ -1,0 +1,24 @@
+[project]
+name = "carmapy"
+description = "A python wrapper of the CARMA cloud aerosol model"
+# version = "0.0.1"
+dynamic = ["version"]
+authors = [
+    {name= "Wolf Cukier", email="wcukier@uchicago.edu"},
+]
+dependencies = [
+    "requests",
+    'importlib-metadata; python_version<"3.10"',
+    "matplotlib",
+    "numpy",
+    "scipy",
+    "pyfastchem",
+    "f90nml"
+]
+
+[tool.setuptools_scm]
+
+[build-system]
+requires = ["setuptools", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+

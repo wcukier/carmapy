@@ -50,6 +50,7 @@ subroutine test_day()
   integer    :: irestart    ! =1 to restart
 !  integer, parameter    :: idiag     = 1  ! =1 to output diagnostic
   integer    :: idiag   ! =1 to output diagnostic
+  integer    :: iappend
   integer    :: iskip        ! Output every iskip steps; no steps skipped if = 1
   integer    :: nstep        
 
@@ -215,7 +216,7 @@ subroutine test_day()
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg
-  namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv
+  namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend
 
 
   real(kind=f), allocatable ::tempr(:), pre(:), prel(:), alt(:), altl(:), wtmol_air(:), grav(:), ekz(:), ekzl(:), wtmol_gas(:)
@@ -235,7 +236,7 @@ subroutine test_day()
   NZP1 = NZ + 1
 
   file_pos = "asis"
-  if (irestart .eq. 1) file_pos = "append"
+  if ((irestart .eq. 1).and.(iappend .eq. 1)) file_pos = "append"
 
 
 
@@ -340,10 +341,21 @@ subroutine test_day()
   allocate(growlg(NZ,NBIN,NGROUP))
   allocate(evaplg(NZ,NBIN,NGROUP))
 
+
+
+
+
+  
+
   ! Define the particle-grid extent of the CARMA test
   write(*,*) "Create CARMA Object ..."
 
-  call CARMA_Create(carma, NBIN, NELEM, NGROUP, NSOLUTE, NGAS, NWAVE, rc, LUNOPRT=6)
+  if (idiag .eq. 1) then 
+    call CARMA_Create(carma, NBIN, NELEM, NGROUP, NSOLUTE, NGAS, NWAVE, rc, LUNOPRT=6, lundiag=lundiagn)
+  else
+    call CARMA_Create(carma, NBIN, NELEM, NGROUP, NSOLUTE, NGAS, NWAVE, rc, LUNOPRT=6)
+  end if
+
 
   if (rc < 0) stop "    *** FAILED in CARMA_Create ***"
 
@@ -564,6 +576,21 @@ subroutine test_day()
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Write output for the test
+  if (idiag .eq. 1) then
+    open(unit=lundiagn,file = fileprefix // diag // filename(1:len_trim(filename)) // filesuffix, status="unknown")
+    write(lundiagn,*) 'PART 0: HEADER'
+    write(lundiagn,*) 'SIMULATION TYPE:'
+    write(lundiagn,*) 'VENUS'
+    write(lundiagn,*) 'DIMENSIONS:'
+    write(lundiagn,'(6A9)') 'NZ', 'NGROUP', 'NELEM', 'NBIN', 'NGAS', 'NSTEP'
+    write(lundiagn,'(6I9)') NZ, NGROUP, NELEM, NBIN, NGAS, nstep + 1
+    write(lundiagn,*) 'GROUP INFORMATION:'
+    write(lundiagn,'(A13,2A10,A17,A14,A19,A15)') 'IGROUP', 'IBIN', 'R', 'MASS', 'dR', 'R_LOWBOUND', 'R_UPBOUND' 
+    write(lundiagn,'(A10,A12,A15,A11,A19,2A15)') '','','(microns)', '(g)','(microns)','(microns)','(microns)'
+  end if 
+
+
+
 
 
   write(lun,'(7i10)') NZ, NGROUP, NELEM, NBIN, NGAS, nstep + 1, iskip
@@ -574,16 +601,55 @@ subroutine test_day()
 
     do ibin = 1, NBIN
       write(lun,'(2i4,5e15.5)') igroup, ibin, r(ibin) * 1e4_f, rmass(ibin,igroup), dr(ibin) * 1e4_f, rlow(ibin) * 1e4_f, rup(ibin) * 1e4_f
+    
+      if (idiag .eq. 1) then
+        write(lundiagn,'(i10,i12,5e15.5)') igroup, ibin, r(ibin) * 1e4_f, &
+	      rmass(ibin,igroup), dr(ibin) * 1e4_f, rlow(ibin) * 1e4_f, rup(ibin) * 1e4_f
+      end if
+
     end do
+
   end do
 
   
+  if (idiag .eq. 1) then  
+    write(lundiagn,*) 'ELEMENT INFORMATION:'
+    write(lundiagn,'(2A10,A18)') 'IELEM', 'IGROUP', 'NAME' 
+
+    do ielem = 1, NELEM
+      call CARMAELEMENT_Get(carma, ielem, rc, igroup=igroup, name=name)
+      if (rc < 0) stop "    *** FAILED ***"
+      write(lundiagn,'(i8,i10,A35)') ielem, igroup, name
+    end do
+
+    write(lundiagn,*) 'GAS INFORMATION:'
+    write(lundiagn,'(A6,A15,A35)') 'IGAS', 'NAME', 'WTMOL (g/mol)'
+
+    do igas = 1, NGAS
+      call CARMAGAS_Get(carma, igas, rc, name=gname, wtmol=wtmol)
+      if (rc < 0) stop "    *** FAILED ***"
+      write(lundiagn,'(i4,A40,e10.3)') igas, gname, wtmol
+    end do
+
+    write(lundiagn,*) 'ATMOSPHERE INFORMATION:'
+    write(lundiagn,'(A5,4A15)') 'Z', 'ALTITUDE', 'dALT', 'PRESSURE', 'TEMPERATURE'
+    write(lundiagn,'(A5,4A15)') '', '(km)', '(km)', '(mbars)', '(K)'  
+  end if
+
+
 
   do i = 1, NZ
     write(lun,'(i3,5e15.5)') i, zc(i), zl(i+1)-zl(i), p(i) * 10._f, t(i), ekz(i)
+  
+    if (idiag .eq. 1) then
+      write(lundiagn,'(i5,4e15.5)') i, zc(i) / 1000._f, (zl(i+1)-zl(i)) / 1000._f, p(i) / 100._f, t(i)
+    end if
+
   end do
 
-
+  if (idiag .eq. 1) then
+    write(lundiagn,*) ' '
+  end if
 
   write(*,*) ""
 
@@ -698,6 +764,32 @@ subroutine test_day()
     time = (istep - 1) * dtime
 
     write(*,*) 'istep, time', istep, time, filename(1:len_trim(filename))
+
+    if (idiag .eq. 1) then
+      do iz = 1, NZ
+        totmass(iz) = sum((mmr(iz,1,:)+mmr(iz,2,:)) * abs((pl(iz+1) - pl(iz))) / 88.7_f) / deltaz / 100._f
+      end do
+      write(lundiagn,'(A6,I10,A12,f15.2,A8)') 'STEP:', istep, 'TIME:', istep*dtime, 'SECONDS'
+      write(lundiagn,*) ' '		
+      write(lundiagn,*) 'PART 1: TOTAL MASS AT START OF TIME STEP'
+      write(lundiagn,*) '****************************************'						
+      write(lundiagn,*) 'Z: ALTITUDE LEVEL INDEX'								
+      write(lundiagn,*) 'PARTMASS: TOTAL MASS DENSITY OF GAS AT Z [g/cm3]'
+      write(lundiagn,*) 'GASMASS: TOTAL MASS DENSITY OF PARTICLES AT Z [g/cm3]'
+      write(lundiagn,*) '****************************************'						
+      write(lundiagn,'(A6,2A15)') 'Z', 'PARTMASS', 'GASMASS'
+      do iz = 1, NZ
+	      write(lundiagn,'(i6,2e15.3)') iz, totmass(iz), (mmr_gas(iz,1)+mmr_gas(iz,2)) * abs((pl(iz+1) - pl(iz))) / 88.7_f / deltaz / 100._f
+      end do
+      write(lundiagn,*) ' '
+      write(lundiagn,'(A6,2e15.3)') 'TOT:',sum(totmass), &
+                                    sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f / deltaz / 100._f ) 
+      write(lundiagn,*) ' '
+      write(lundiagn,*) 'COLUMN TOTAL MASS = TOT * NZ * deltaz (in meters) * (100 cm / m)'
+      startcd = sum(totmass) * NZ * deltaz * 100._f + sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f ) * NZ
+      write(lundiagn,'(A28,e28.15)') 'COLUMN TOTAL MASS [g/cm2]: ', startcd
+      write(lundiagn,*) ' '
+    end if
 
 
     if (IS_2D .eq. 1) then
@@ -852,6 +944,55 @@ subroutine test_day()
 
     !endif
 
+      if (idiag .eq. 1) then
+        do iz = 1, NZ
+          totmass(iz) = sum((mmr(iz,1,:)+mmr(iz,2,:)) * abs((pl(iz+1) - pl(iz))) / 88.7_f) / deltaz / 100._f
+        end do		
+
+        write(lundiagn,*) 'PART 6: TOTAL MASS AT END OF TIME STEP'
+        write(lundiagn,*) '****************************************'						
+        write(lundiagn,*) 'Z: ALTITUDE LEVEL INDEX'								
+        write(lundiagn,*) 'PARTMASS: TOTAL MASS DENSITY OF GAS AT Z [g/cm3]'
+        write(lundiagn,*) 'GASMASS: TOTAL MASS DENSITY OF PARTICLES AT Z [g/cm3]'
+        write(lundiagn,*) '****************************************'						
+        write(lundiagn,'(A6,2A15)') 'Z', 'PARTMASS', 'GASMASS'
+
+        do iz = 1, NZ
+          write(lundiagn,'(i6,2e15.3)') iz, totmass(iz), (mmr_gas(iz,1)+mmr_gas(iz,2)) * abs((pl(iz+1) - pl(iz))) / 88.7_f / deltaz / 100._f
+        end do
+
+        write(lundiagn,*) ' '
+        write(lundiagn,'(A6,2e15.3)') 'TOT:',sum(totmass), &
+                                      sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f / deltaz / 100._f ) 
+        write(lundiagn,*) ' '
+        write(lundiagn,*) 'COLUMN TOTAL MASS = TOT * NZ * deltaz (in meters) * (100 cm / m)'
+          endcd = sum(totmass) * NZ * deltaz * 100._f + sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f ) * NZ
+        write(lundiagn,'(A28,e28.15)') 'COLUMN TOTAL MASS [g/cm2]: ', endcd
+        write(lundiagn,*) ' '
+        write(lundiagn,*) 'PART 7: MASS CONSERVATION SUMMARY'
+        write(lundiagn,*) '******************************************************************************'
+        write(lundiagn,*) ''    
+        write(lundiagn,'(A62)') 'MASS CONSERVATION: Ab - Aa = (B + C + D) * E'
+        write(lundiagn,*) ''
+        write(lundiagn,'(A45,e28.15)') 'Aa. TOTAL COLUMN DENSTY AT START (g/cm2):', startcd
+        write(lundiagn,'(A45,e28.15)') 'Ab. TOTAL COLUMN DENSTY AT END (g/cm2):', endcd
+        write(lundiagn,'(A45,e28.15)') 'B. TOTAL INPUT RATE (g/cm2/s):', inputrate
+        write(lundiagn,'(A45,e28.15)') 'C. TOTAL VERTICAL PARTICLE FLUX (g/cm2/s):', vertpartflux
+        write(lundiagn,'(A45,e28.15)') 'D. TOTAL VERTICAL GAS FLUX (g/cm2/s):', vertgasflux
+        write(lundiagn,'(A45,e28.15)') 'E. TIME STEP (s):', dtime
+        write(lundiagn,*) ''
+        write(lundiagn,'(A45,e28.15)') 'Ab - Aa = ', endcd - startcd
+        write(lundiagn,'(A45,e28.15)') '(B + C + D) * E = ', (inputrate + vertgasflux + vertpartflux) * dtime
+        write(lundiagn,'(A45,e28.15)') 'Ab - Aa -[(B + C + D) * E] = ', endcd - startcd - &
+          [(inputrate + vertpartflux + vertgasflux) * dtime]
+        write(lundiagn,*) ''    
+        write(lundiagn,*) '************************************************************10000000******************'
+        write(lundiagn,*) ''    
+        write(lundiagn,*) ''  
+      end if
+
+
+
 
 
     !if (istep .ge. 89000) then
@@ -884,6 +1025,10 @@ subroutine test_day()
   close(unit=lun)
   close(unit=lunf)
   close(unit=lunrates)
+  if (idiag .eq. 1) then
+    close(unit=lundiagn)
+  end if
+
 
 
   if (rc < 0) stop "    *** FAILED ***"

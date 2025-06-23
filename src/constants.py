@@ -212,12 +212,208 @@ RHO_AL2O3 = 3.99		# Al2O3
 RHO_CO = 1.0288		# CO, Bierhals J; Ullmann's Encyclopedia of Industrial Chemistry.
 
 
+TCOEFF_KCL = 11382.
+TCOEFF_ZNS = 15873.
+TCOEFF_NA2S = 13889.
+TCOEFF_MNS = 23810.
+TCOEFF_CR = 20592.
+TCOEFF_MG2SIO4 = 32488.   # Visscher notes
+TCOEFF_FE = 20995.    # Visscher et al. 2010, ApJ 716, 1060
+TCOEFF_TIO2_LODDERS = 34602.    # Diana email
+TCOEFF_TIO2_HELLING = 32456.8678    # Helling et al. 2001
+TCOEFF_AL2O3 = 45892.6    # Wakeford et al. 2017
+
+	 # # Value of Collision Diameters [cm]
+COLDIA_H2O = 3.11e-8   # Jacobson 2005 (book)
+COLDIA_H2SO4 = 4.3e-8   # Michael J. Mills 1996, thesis  (Stratospheric Sulfate Aerosol: A Microphysical Model)
+COLDIA_S8 = 6e-8   # Estimated from bond length, from Meyer 1976
+COLDIA_S2 = 2e-8   # Estimated from bond length, from Meyer 1976
+COLDIA_KCL = 3.08e-8   # Estimated from bond length, from Chemical Bonds and Bonds Energy by R Sanderson, 1976
+COLDIA_ZNS =  3.665e-8  # Estimated from bond length, from Zack & Ziurys (2009), Journal of Molecular Spectroscopy 257, 213
+COLDIA_NA2S =  4.195e-8  # Estimated from unit cell volume, Glasser & Jenkins 2000
+COLDIA_MNS =  3.675e-8  # Estimated from unit cell volume, http://pveducation.org/pvcdrom/materials/MnS
+COLDIA_CR =  3.655e-8  # Atomic radius
+COLDIA_FE =  3.695e-8  # Atomic radius
+COLDIA_MG2SIO4 =  3.845e-8  # Estimated from unit cell volume, Glasser & Jenkins 2000
+COLDIA_TIO2 =  3.385e-8  # Estimated from Helling et al. (2001)
+COLDIA_AL2O3 =  3.825e-8  # Estimated from Dobrovinskaya et al. 2009
+COLDIA_CO =  3.86e-8  # Ramos-Estrada M. et al. Latin Am Appl Res. 34, 41-47, 2004
+
+
+
+# p = 10^(offset - t_coeff/T - met_coeff * met - logp_coeff * log10 p)
+
+
+
+gas_dict = {
+    "H2O": {
+        "cond_rho": RHO_W,
+        "vaprtn": {
+            "rtn": I_VAPRTN_H2O_MURPHY2005,
+            "offset": 0,
+            "T_coeff": 0,
+            "met_coeff": 0,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_H2O,
+        "wtmol_dif": WTMOL_H2O,
+        "gcomp": I_GCOMP_H2O,
+        "mucos_dict": {},
+        "fastchem_specie": "H2O1",
+        "opacity_files": "WS15/H2O_complex.txt"
+    },
+        "KCl": {
+        "cond_rho": RHO_KCL,
+        "vaprtn": {
+            "rtn": I_VAPRTN_KCL_MORLEY2012,
+            "offset": 13.6106,
+            "T_coeff": TCOEFF_KCL,
+            "met_coeff": 0,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_KCL,
+        "wtmol_dif": WTMOL_KCL,
+        "gcomp": I_GCOMP_KCL,
+        "mucos_dict": {},
+        "fastchem_specie": "Cl1K1",
+        "opacity_files": "WS15/KCl_complex.txt"
+    },
+        "ZnS": {
+        "cond_rho": RHO_ZNS,
+        "vaprtn": {
+            "rtn": I_VAPRTN_ZNS_MORLEY2012,
+            "offset": 18.812,
+            "T_coeff": TCOEFF_ZNS,
+            "met_coeff": 1,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_ZNS,
+        "wtmol_dif": WTMOL_ZN,
+        "gcomp": I_GCOMP_ZNS,
+        "mucos_dict": {"KCl": 0.144356},
+        "fastchem_specie": "Zn",
+        "opacity_files": "WS15/ZnS_complex.txt"
+    },
+        "Na2S": {
+        "cond_rho": RHO_NA2S,
+        "vaprtn": {
+            "rtn": I_VAPRTN_NA2S_MORLEY2012,
+            "offset": 14.55,
+            "T_coeff": TCOEFF_ZNS,
+            "met_coeff": 0.5,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_NA2S,
+        "wtmol_dif": WTMOL_NA,
+        "gcomp": I_GCOMP_NA2S,
+        "mucos_dict": {"TiO2": 0.48481},
+        "fastchem_specie": "Na",
+        "opacity_files": "WS15/Na2S_complex.txt"
+    },
+        "MnS": {
+        "cond_rho": RHO_MNS,
+        "vaprtn": {
+            "rtn": I_VAPRTN_MNS_MORLEY2012,
+            "offset": 17.532,
+            "T_coeff": TCOEFF_MNS,
+            "met_coeff": 1,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_MNS,
+        "wtmol_dif": WTMOL_MN,
+        "gcomp": I_GCOMP_MNS,
+        "mucos_dict": {"TiO2": 0.214735},
+        "fastchem_specie": "Na",
+        "opacity_files": "KH18/MnS-KH_complex.txt"
+    },
+        "Cr": {
+        "cond_rho": RHO_CR,
+        "vaprtn": {
+            "rtn": I_VAPRTN_CR_MORLEY2012,
+            "offset": 13.49,
+            "T_coeff": TCOEFF_CR,
+            "met_coeff": 0,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_CR,
+        "wtmol_dif": WTMOL_CR,
+        "gcomp": I_GCOMP_CR,
+        "mucos_dict": {"TiO2": 0.262189},
+        "fastchem_specie": "Cr",
+        "opacity_files": "KH18/Cr_complex.txt"
+    },
+        "Mg2SiO4": {
+        "cond_rho": RHO_MG2SIO4,
+        "vaprtn": {
+            "rtn": I_VAPRTN_MG2SIO4_VISSCHER2010,
+            "offset": 22.08,
+            "T_coeff": TCOEFF_MG2SIO4,
+            "met_coeff": 1.4,
+            "logp_coeff": 0.2
+        },
+        "wtmol": WTMOL_MG2SIO4,
+        "wtmol_dif": WTMOL_MG,
+        "gcomp": I_GCOMP_MG2SIO4,
+        "mucos_dict": {"TiO2": 0.995},
+        "fastchem_specie": "Mg",
+        "opacity_files": "B21/Mg2SiO4_amorph.txt"
+    },
+        "Fe": {
+        "cond_rho": RHO_FE,
+        "vaprtn": {
+            "rtn": I_VAPRTN_FE_VISSCHER2010,
+            "offset": 13.23,
+            "T_coeff": TCOEFF_FE,
+            "met_coeff": 0,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_FE,
+        "wtmol_dif": WTMOL_FE,
+        "gcomp": I_GCOMP_FE,
+        "mucos_dict": {"TiO2": 0.221548},
+        "fastchem_specie": "Fe",
+        "opacity_files": "KH18/Fe_complex.txt"
+    },
+        "TiO2": {
+        "cond_rho": RHO_TIO2,
+        "vaprtn": {
+            "rtn": I_VAPRTN_TIO2_HELLING2001,
+            "offset": 15.5489,
+            "T_coeff": TCOEFF_TIO2_HELLING,
+            "met_coeff": 0,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_TIO2,
+        "wtmol_dif": WTMOL_TIO2,
+        "gcomp": I_GCOMP_TIO2,
+        "mucos_dict": {},
+        "fastchem_specie": "O2Ti1",
+        "opacity_files": "gCMCRT/TiO2[s].txt"
+    },
+        "Al2O3": {
+        "cond_rho": RHO_AL2O3,
+        "vaprtn": {
+            "rtn": I_VAPRTN_AL2O3_WAKEFORD2017,
+            "offset": 23.7,
+            "T_coeff": TCOEFF_AL2O3,
+            "met_coeff": 1.66,
+            "logp_coeff": 0
+        },
+        "wtmol": WTMOL_AL2O3,
+        "wtmol_dif": WTMOL_AL,
+        "gcomp": I_GCOMP_AL2O3,
+        "mucos_dict": {"TiO2": 0.724172},
+        "fastchem_specie": "Al",
+        "opacity_files": "KH18/Al2O3[s].txt"
+    }
+}
+
 
 
 cond_rho = {
     "KCl": RHO_KCL,
     "ZnS": RHO_ZNS,
-    "Na2S": RHO_ZNS,
+    "Na2S": RHO_NA2S,
     "MnS": RHO_MNS,
     "Cr": RHO_CR,
     "Mg2SiO4": RHO_MG2SIO4,
@@ -229,17 +425,17 @@ cond_rho = {
 
 
 
-igas_dict = {
-    "KCl": 1,
-    "ZnS": 2,
-    "Na2S": 3,
-    "MnS": 4,
-    "Cr": 5,
-    "Mg2SiO4": 6,
-    "Fe": 7,
-    "TiO2": 8,
-    "Al2O3": 9
-}
+# igas_dict = {
+#     "KCl": 1,
+#     "ZnS": 2,
+#     "Na2S": 3,
+#     "MnS": 4,
+#     "Cr": 5,
+#     "Mg2SiO4": 6,
+#     "Fe": 7,
+#     "TiO2": 8,
+#     "Al2O3": 9
+# }
 
 vaprtn_dict = {
     "H2O": I_VAPRTN_H2O_MURPHY2005,
@@ -253,7 +449,6 @@ vaprtn_dict = {
     "TiO2": I_VAPRTN_TIO2_HELLING2001,
     "Al2O3": I_VAPRTN_AL2O3_WAKEFORD2017
 }
-
 
 wtmol_dict = {
     "H2O": WTMOL_H2O,
@@ -314,7 +509,7 @@ mucos_dict = {
 
 
 fastchem_species = {
-    "H2O": "H2O2",
+    "H2O": "H2O",
     "TiO2": "O2Ti1",
     "Fe": "Fe",
     "Mg2SiO4": "Mg",
@@ -326,11 +521,26 @@ fastchem_species = {
     "Al2O3": "Al"
 }
 
+opacity_files = {
+    "H2O": "WS15/H2O_ice.txt",
+    "KCl": "WS15/KCl_complex.txt",
+    "ZnS": "WS15/ZnS_complex.txt",
+    "Na2S": "WS15/Na2S_complex.txt",
+    "MnS": "KH18/MnS-KH_complex.txt",
+    "Cr": "KH18/Cr_complex.txt",
+    "Mg2SiO4": "B21/Mg2SiO4_amorph.txt",
+    "Fe": "KH18/Fe_complex.txt",
+    "TiO2": "gCMCRT/TiO2[s].txt", 
+    "Al2O3": "KH18/Al2O3[s].txt"
+}
 
-JUPITER_RADIUS = 6.69950
+
+
+JUPITER_RADIUS = 6.995e9 #cm
 BAR_TO_BARYE = 1e6
 k_B = 1.381e-16 #erg/K
 PROTON_MASS =  1.673e-24 # g
 
 PARMENTIER_A_COEFF = 0.32
 PARMENTIER_B_COEFF = 1/30000
+

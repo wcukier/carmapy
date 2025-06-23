@@ -54,7 +54,7 @@ subroutine gsolve(carma, cstate, iz, previous_ice, previous_liquid, rc)
   call totalcondensate(carma, cstate, iz, total_ice, total_liquid, rc)
   
   do igas = 1,NGAS
-  
+  ! TODO - WC
    if (igas .eq. igash2o) then
      stofact = 1._f
    else if (igas .eq. igash2so4) then

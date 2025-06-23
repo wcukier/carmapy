@@ -15,7 +15,7 @@ PACKAGE =	CARMA
 TGZ =		CARMA.tar
 
 FFLAGS = -O3
-# FFLAGS += -traceback -O3
+# FFLAGS += -traceback 
 # FFLAGS += -pg 
 # FFLAGS += -ggdb -O0 -tr=aceback 
 #FFLAGS += -DSINGLE                    # for single precision

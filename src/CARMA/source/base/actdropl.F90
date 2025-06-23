@@ -138,7 +138,7 @@ subroutine actdropl(carma, cstate, iz, rc, maxrate)           !PETER
  		      rnuclg(ibin,igroup,ignucto) = 1.0e3_f
 		    endif
 		  else  
-
+!TODO - WC
                     if (igas .eq. igash2o) then
                       rho_cond = RHO_W
                     else if (igas .eq. igash2so4) then

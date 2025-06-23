@@ -86,6 +86,7 @@ subroutine growevapl(carma, cstate, iz, rc)
 
     if (igas .ne. 0) then
       ! Only valid for condensing liquid water and sulfric acid currently.
+      ! TODO - WC
       if ((igas .ne. igash2o) .and. (igas .ne. igash2so4) .and. (igas .ne. igass8) .and. (igas .ne. igass2) &
 	.and. (igas .ne. igaskcl) .and. (igas .ne. igaszns) .and. (igas .ne. igasna2s) &
         .and. (igas .ne. igasmns) .and. (igas .ne. igascr) .and. (igas .ne. igasfe) &

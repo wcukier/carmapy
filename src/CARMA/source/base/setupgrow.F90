@@ -59,6 +59,7 @@ subroutine setupgrow(carma, cstate, rc)
     endif
   enddo
 
+  !TODO - WC
   ! Define parameters with weak time-dependence to be used in
   ! growth equation.
   do k = 1, NZ

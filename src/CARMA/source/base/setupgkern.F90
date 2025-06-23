@@ -91,6 +91,7 @@ subroutine setupgkern(carma, cstate, rc)
     !
     rhoa_cgs(:, igas) = rhoa(:) / (xmet(:)*ymet(:)*zmet(:))
 
+    ! TODO - WC
     if (igas .eq. igash2o) then
         
       ! Condensing gas is water vapor
