@@ -1,5 +1,5 @@
 import numpy as np
-from .constants import *
+from carmapy.constants import *
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.widgets import Button, Slider
@@ -7,7 +7,7 @@ import matplotlib as mpl
 from itertools import cycle
 from scipy.signal import periodogram
 from scipy.interpolate import interp1d
-from .chemistry import get_fastchem_abundances
+from carmapy.chemistry import get_fastchem_abundances
 import os
 import PyMieScatt as ps
 from tqdm import tqdm

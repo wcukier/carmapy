@@ -4,3 +4,5 @@ src/data/eos/*
 src/kzz.py
 src/refractive_indices_txt_files/** 
 **/__pycache__
+src/carmapy.egg-info/** 
+build/lib/** 

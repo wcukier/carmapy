@@ -1,5 +1,5 @@
-from .constants import *
-from .results import *
+from carmapy.constants import *
+from carmapy.results import *
 import os
 import shutil
 import f90nml

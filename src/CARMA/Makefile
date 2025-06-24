@@ -96,6 +96,17 @@ ifeq ($(FORTRAN),gfortran)
   #LDFLAGS = -pthread -shared -Wl, -Wl,--no-undefined
 endif
 
+ifeq ($(FORTRAN),gcc)
+  FFLAGS += -ffree-line-length-512 -O3
+  # FFLAGS += -fexceptions -fbackslash 
+  # FFLAGS += -fPIC -fno-omit-frame-pointer -ffixed-line-length-none
+  #FLIBS= $RPATH $MLIBS -lm
+  FOPTIMFLAGS = -O3
+  FDEBUGFLAGS = -g
+
+  #LDFLAGS = -pthread -shared -Wl, -Wl,--no-undefined
+endif
+
 # Overridning the implicit rules, which would try to use m2c to
 # create the .mod.
 %.mod : %.o ;
