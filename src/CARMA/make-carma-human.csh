@@ -56,7 +56,7 @@ endif
 
 # Execute the make file in the build directory.
 cd $blddir
-$MAKETOOL $bldtgt FORTRAN=$2
+$MAKETOOL $bldtgt FORTRAN=ifort
 
 # Create the documentation.
 # if ($bldtgt != tar) then

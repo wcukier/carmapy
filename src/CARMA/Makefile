@@ -2,7 +2,7 @@
 # Jamison A. Smith, AKA JAS
 # April 26, 2007
 
-FORTRAN =	ifort
+# FORTRAN =	ifort
 #FORTRAN =	pgf90
 #FORTRAN =	pathf90
 # FORTRAN =	gfortran
@@ -120,7 +120,7 @@ carmapy.exe : $(CARMA_OBJ) carma_carmapy.o carma_testutils.o atmosphere_mod.o
 
 
 # Compile everything.
-all : carmapy.exe
+all: carmapy.exe
 
 # Compile all of the documentation.
 doc : $(CARMA_DOC) $(TEST_DOC)
