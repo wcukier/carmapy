@@ -14,7 +14,6 @@ dependencies = [
     "scipy",
     "pyfastchem",
     "f90nml",
-    "PyMieScatt"
 ]
 
 [tool.setuptools_scm]
