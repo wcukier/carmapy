@@ -10,7 +10,8 @@ import shlex
 import contextlib
 from numpy.typing import ArrayLike
 
-SRC = os.path.dirname(__file__)
+SRC = os.path.dirname(os.path.dirname(__file__))
+
 
 
 @contextlib.contextmanager
@@ -524,10 +525,11 @@ class Carma:
                 f.write("\n")
         
         with _cd(path):
+
             try:
                 subprocess.run(["export", "OMP_NUM_THREADS=1"], shell=True,stdout=subprocess.PIPE)
                 subprocess.run(["export", "KMP_STACKSIZE=128M"], shell=True,stdout=subprocess.PIPE)
-                p = subprocess.Popen(os.path.join(SRC, "CARMA", "build", "carma", "carmapy.exe"), shell=True, stdout=subprocess.PIPE)
+                p = subprocess.Popen(os.path.join(SRC, "CARMA", "build", "carma", "carmapy.exe"), shell=False, stdout=subprocess.PIPE)
                 
                 while p.poll() is None:
                     l = p.stdout.readline() # This blocks until it receives a newline.
@@ -738,5 +740,9 @@ def default_carma(name):
     carma.add_hom_group("Cr", 1e-8)
     carma.add_hom_group("KCl", 1e-8)
     carma.add_het_group("ZnS", "KCl", 1e-8 * 2**(1/3))
+
+    carma.surface_grav = 31600
+    carma.wt_mol = 1.5 
+
     return carma
 

@@ -5,7 +5,7 @@ from scipy.interpolate import interp1d
 
 from numpy.typing import ArrayLike
 import os
-SRC = os.path.dirname(__file__)
+SRC = os.path.dirname(os.path.dirname(__file__))
 
 
 def get_fastchem_abundances(T : np.ndarray, 

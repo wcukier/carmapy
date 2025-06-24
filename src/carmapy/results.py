@@ -9,14 +9,12 @@ from scipy.signal import periodogram
 from scipy.interpolate import interp1d
 from carmapy.chemistry import get_fastchem_abundances
 import os
-import PyMieScatt as ps
-from tqdm import tqdm
+# import PyMieScatt as ps
 from scipy.interpolate import RectBivariateSpline
 
 # petroff 10 color cycle
 petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6", "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
-SRC = os.path.dirname(__file__)
-
+SRC = os.path.dirname(os.path.dirname(__file__))
 
 class Results:
     
