@@ -15,6 +15,7 @@ class BuildFortranBinary(build_ext):
         compilers = [
             ("ifort", ["make", "FC=ifort"]),
             ("gfortran", ["make", "FC=gfortran"]),
+            ("gcc", ["make", "FC=gcc"]),
         ]
 
         built = False
@@ -28,7 +29,7 @@ class BuildFortranBinary(build_ext):
                 print(f"{name} failed")
 
         if not built:
-            raise RuntimeError("Fortran build failed with both Intel and gfortran compilers.")
+            raise RuntimeError("Fortran build failed with both Intel, gfortran, and gcc compilers.")
 
         # Move binary to package dir
         # binary_path = os.path.join("CARMA", "carmapy.exe")  # adjust to your binary name
