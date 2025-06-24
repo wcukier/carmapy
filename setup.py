@@ -21,7 +21,7 @@ class BuildFortranBinary(build_ext):
         for name, cmd in compilers:
             try:
                 print(f"Trying to build with {name}")
-                subprocess.check_call(cmd, cwd="fortran", env=env)
+                subprocess.check_call(cmd, cwd=os.path.join("src", "CARMA"), env=env)
                 built = True
                 break
             except subprocess.CalledProcessError:

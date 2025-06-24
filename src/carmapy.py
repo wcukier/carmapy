@@ -507,6 +507,7 @@ class Carma:
                     if g.nmr < 0:
                         raise AttributeError(f"The nmr for {g.name} was not set.")
                 if len(np.shape(g.nmr)) > 0:
+                    print(g.nmr[0])
                     f.write(f"{g.nmr[0]:10e}\t")
                 else:
                     f.write(f"{g.nmr:10e}\t")
@@ -514,7 +515,7 @@ class Carma:
             for i in range(1, self.NZ):
                 for key in self.gasses.keys():
                     g = self.gasses[key]
-                    if len(np.shape(g.nmr)) > 0:
+                    if len(np.shape(g.nmr)) > 1:
                         if len(g.nmr) != self.NZ:
                             raise ValueError(f"The array for nmr of {g.name} is {len(g.nmr)}.  It should be {self.NZ}.")
                         f.write(f"{g.nmr[i]:10e}\t")
@@ -526,7 +527,7 @@ class Carma:
             try:
                 subprocess.run(["export", "OMP_NUM_THREADS=1"], shell=True,stdout=subprocess.PIPE)
                 subprocess.run(["export", "KMP_STACKSIZE=128M"], shell=True,stdout=subprocess.PIPE)
-                p = subprocess.Popen(os.path.join(SRC, "carmapy.exe"), shell=True, stdout=subprocess.PIPE)
+                p = subprocess.Popen(os.path.join(SRC, "CARMA", "build", "carma", "carmapy.exe"), shell=True, stdout=subprocess.PIPE)
                 
                 while p.poll() is None:
                     l = p.stdout.readline() # This blocks until it receives a newline.

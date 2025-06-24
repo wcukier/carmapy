@@ -17,8 +17,8 @@ def get_fastchem_abundances(T : np.ndarray,
   pressure = np.array(P) / BAR_TO_BARYE
 
   fastchem = pyfastchem.FastChem(
-    os.path.join(SRC, "fastchem", "asplund_2009_extended.dat")
-    os.path.join(SRC, "fastchem", "logK.dat")
+    os.path.join(SRC, "fastchem", "asplund_2009_extended.dat"),
+    os.path.join(SRC, "fastchem", "logK.dat"),
     1)
 
 
@@ -119,9 +119,8 @@ def populate_abundances_at_cloud_base(carma, species, metalicity):
     fast_chem_gas = fastchem_species.get(s, -1) 
     if fast_chem_gas == -1: raise ValueError("{s} is not currently supported by the carmapy fastchem interface")
 
-    override[s] = get_fastchem_abundances(np.array([p_t(Ts[intersection])]), np.array([Ts[intersection]]), [fast_chem_gas], metalicity)
+    override[s] = get_fastchem_abundances(np.array([p_t(Ts[intersection])]), np.array([Ts[intersection]]), [fast_chem_gas], metalicity)[0]
   
-  print(override)
   populate_fastchem_abundances(carma, metalicity, override)
   pass
   
