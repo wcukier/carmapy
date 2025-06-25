@@ -22,7 +22,7 @@ class BuildFortranBinary(build_ext):
         for name, cmd in compilers:
             try:
                 print(f"Trying to build with {name}")
-                subprocess.check_call("chmod +x make-carma.csh", cwd=os.path.join("src", "CARMA"), env=env)
+                subprocess.check_call("chmod +x make-carma.csh", cwd=os.path.join("src", "CARMA"), env=env, shell=True)
 
                 subprocess.check_call(cmd, cwd=os.path.join("src", "CARMA"), env=env)
                 built = True
