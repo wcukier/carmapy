@@ -3,3 +3,4 @@
     scipy
     pyfastchem
     f90nml
+    nbsphinx
