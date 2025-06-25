@@ -5,3 +5,4 @@
     f90nml
     nbsphinx
     sphinx_rtd_theme
+    ipykernel
