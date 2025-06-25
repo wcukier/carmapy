@@ -14,8 +14,8 @@ class BuildFortranBinary(build_ext):
         # Try Intel compiler first
         env = os.environ.copy()
         compilers = [
-            ("ifort", ["./make-carma.csh", "all", "ifort"]),
-            ("gfortran", ["./make-carma.csh", "all", "gfortran"]),
+            ("ifort", ["./make-carma.csh all ifort"]),
+            ("gfortran", ["./make-carma.csh all gfortran"]),
         ]
 
         built = False
