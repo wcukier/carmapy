@@ -6,3 +6,6 @@ src/refractive_indices_txt_files/**
 **/__pycache__
 src/carmapy.egg-info/** 
 build/lib/** 
+docs/source/notebooks/*/** 
+docs/build/** 
+.DS_Store

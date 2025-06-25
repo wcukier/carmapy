@@ -6,7 +6,8 @@ from scipy.interpolate import interp1d
 from numpy.typing import ArrayLike
 import os
 SRC = os.path.dirname(os.path.dirname(__file__))
-
+import io
+import sys
 
 def get_fastchem_abundances(T : np.ndarray, 
                             P : np.ndarray, 
@@ -19,11 +20,11 @@ def get_fastchem_abundances(T : np.ndarray,
   fastchem = pyfastchem.FastChem(
     os.path.join(SRC, "fastchem", "asplund_2009_extended.dat"),
     os.path.join(SRC, "fastchem", "logK.dat"),
-    1)
-
+    0)
 
   input_data = pyfastchem.FastChemInput()
   output_data = pyfastchem.FastChemOutput()
+
 
   input_data.temperature = temperature
   input_data.pressure = pressure
@@ -40,14 +41,9 @@ def get_fastchem_abundances(T : np.ndarray,
       
   fastchem.setElementAbundances(element_abundances)
 
+  if np.amin(output_data.element_conserved[:]) == 0:
+    raise RuntimeError("FastChem - element conservation: fail")
 
-  print("FastChem reports:")
-  print("  -", pyfastchem.FASTCHEM_MSG[fastchem_flag])
-
-  if np.amin(output_data.element_conserved[:]) == 1:
-    print("  - element conservation: ok")
-  else:
-    print("  - element conservation: fail")
     
   number_densities = np.array(output_data.number_densities)
 
@@ -102,7 +98,7 @@ def populate_fastchem_abundances(carma: "Carma", metalicity = 1.0, override = {"
   
   carma.set_nmr(nmr_dict)
 
-def populate_abundances_at_cloud_base(carma, species, metalicity):
+def populate_abundances_at_cloud_base(carma, metalicity=1):
   P = carma.P_levels
   T = carma.T_levels
 
@@ -110,19 +106,19 @@ def populate_abundances_at_cloud_base(carma, species, metalicity):
 
   override= {"H2O": 0}
 
-  for s in species:
+  for s in list(carma.gasses.keys())[1:]:
+
     cond_curve = interp1d(T, condensation_curve(P, T, np.log10(metalicity), s))
     Ts = np.linspace(np.min(T), np.max(T), 50000)
-
     intersection = np.argmin(np.abs(p_t(Ts) - cond_curve(Ts)))
 
     fast_chem_gas = fastchem_species.get(s, -1) 
     if fast_chem_gas == -1: raise ValueError("{s} is not currently supported by the carmapy fastchem interface")
 
-    override[s] = get_fastchem_abundances(np.array([p_t(Ts[intersection])]), np.array([Ts[intersection]]), [fast_chem_gas], metalicity)[0]
+    override[s] = get_fastchem_abundances(np.array([Ts[intersection]]), np.array([p_t(Ts)[intersection]]), [fast_chem_gas], metalicity)[0]
   
   populate_fastchem_abundances(carma, metalicity, override)
-  pass
+  
   
         
     

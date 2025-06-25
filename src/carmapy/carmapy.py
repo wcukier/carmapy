@@ -69,6 +69,9 @@ class Carma:
         else:
             self.igridv = I_CART
 
+        self.add_gas("H2O")
+
+
         
     def set_stepping(self, dt=None, output_gap = None, n_tstep = None) -> None:
         if dt:
@@ -375,7 +378,7 @@ class Carma:
        
         return k_B * T/(self.wt_mol * PROTON_MASS * self.surface_grav)
 
-    def run(self, path=None):
+    def run(self, path=None, suppress_output=False):
         if self.is_2d and self.velocity_avg < 0:
             raise RuntimeError("For 2D carma, velocity_avg must be specified")
         
@@ -508,7 +511,6 @@ class Carma:
                     if g.nmr < 0:
                         raise AttributeError(f"The nmr for {g.name} was not set.")
                 if len(np.shape(g.nmr)) > 0:
-                    print(g.nmr[0])
                     f.write(f"{g.nmr[0]:10e}\t")
                 else:
                     f.write(f"{g.nmr:10e}\t")
@@ -533,10 +535,10 @@ class Carma:
                 
                 while p.poll() is None:
                     l = p.stdout.readline() # This blocks until it receives a newline.
-                    print(l.decode('UTF-8'))
+                    if not suppress_output: print(l.decode('UTF-8'))
                 # When the subprocess terminates there might be unconsumed output 
                 # that still needs to be processed.
-                print(p.stdout.read().decode('UTF-8'))
+                if not suppress_output: print(p.stdout.read().decode('UTF-8'))
             except Exception as e:
                 print(e)
             
@@ -712,37 +714,10 @@ def load_carma(path, restart=1):
         
     return carma
 
-def default_carma(name):
-    carma = Carma(name)
-    carma.add_gas("H2O")
 
-    # Optional, here to preserve ordering
-    carma.add_gas("TiO2")
-    carma.add_gas("Fe")
-    carma.add_gas("Mg2SiO4")
-    carma.add_gas("Cr")
-    carma.add_gas("MnS")
-    carma.add_gas("Na2S")
-    carma.add_gas("ZnS")
-    carma.add_gas("KCl")
-    carma.add_gas("Al2O3")
+def available_species():
+    print(list(gas_dict.keys())[1:])
 
 
-
-    carma.add_hom_group("TiO2", 1e-8)
-    carma.add_het_group("Al2O3", "TiO2", 1e-8 * 2**(1/3))
-    carma.add_het_group("Fe", "TiO2", 1e-8 * 2**(1/3))
-    carma.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2**(1/3))
-    carma.add_het_group("Cr", "TiO2", 1e-8 * 2**(1/3))
-    carma.add_het_group("MnS", "TiO2", 1e-8 * 2**(1/3))
-    carma.add_het_group("Na2S", "TiO2", 1e-8 * 2**(2/3))
-    carma.add_hom_group("Fe", 1e-8)
-    carma.add_hom_group("Cr", 1e-8)
-    carma.add_hom_group("KCl", 1e-8)
-    carma.add_het_group("ZnS", "KCl", 1e-8 * 2**(1/3))
-
-    carma.surface_grav = 31600
-    carma.wt_mol = 1.5 
-
-    return carma
-
+def included_mucos(specie):
+    print(gas_dict[specie]["mucos_dict"])
