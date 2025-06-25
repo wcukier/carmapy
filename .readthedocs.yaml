@@ -25,6 +25,9 @@ build:
     # rust: "1.70"
 
     # golang: "1.20"
+  jobs:
+    pre_install:
+      - pip install .
 
 
 # Build documentation in the "docs/" directory with Sphinx
@@ -63,6 +66,3 @@ python:
 
     - requirements: docs/requirements.txt
 
-jobs:
-  pre_install:
-    - pip install .
