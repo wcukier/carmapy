@@ -62,3 +62,7 @@ python:
   install:
 
     - requirements: docs/requirements.txt
+
+jobs:
+  pre_install:
+    - pip install .
