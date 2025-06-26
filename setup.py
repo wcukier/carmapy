@@ -23,6 +23,7 @@ class BuildFortranBinary(build_ext):
             try:
                 print(f"Trying to build with {name}")
                 print(os.getcwd())
+                print(os.path.join(SRC, "CARMA"))
                 subprocess.check_call(cmd, cwd=os.path.join(SRC, "CARMA"), env=env)
                 built = True
                 break
