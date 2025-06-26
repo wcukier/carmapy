@@ -6,7 +6,6 @@ import os
 import shutil
 import sys
 
-
 class BuildFortranBinary(build_ext):
     def run(self):
         print("Building Fortran binary...")
@@ -14,17 +13,16 @@ class BuildFortranBinary(build_ext):
         # Try Intel compiler first
         env = os.environ.copy()
         compilers = [
-            ("ifort", ["./make-carma.csh all ifort"]),
-            ("gfortran", ["./make-carma.csh all gfortran"]),
+            ("ifort", ["./make-carma.csh", "all", "ifort"]),
+            ("gfortran", ["./make-carma.csh", "all", "gfortran"]),
         ]
 
         built = False
         for name, cmd in compilers:
             try:
                 print(f"Trying to build with {name}")
-                subprocess.check_call("chmod +x make-carma.csh", cwd=os.path.join("src", "CARMA"), env=env, shell=True)
 
-                subprocess.check_call(cmd, cwd=os.path.join("src", "CARMA"), env=env, shell=True)
+                subprocess.check_call(cmd, cwd=os.path.join("src", "CARMA"), env=env)
                 built = True
                 break
             except subprocess.CalledProcessError:
@@ -32,7 +30,6 @@ class BuildFortranBinary(build_ext):
 
         if not built:
             raise RuntimeError("Fortran build failed with both Intel and gfortran compilers.")
-
         # Move binary to package dir
         # binary_path = os.path.join("CARMA", "carmapy.exe")  # adjust to your binary name
         # target_path = os.path.join(self.build_lib, "mypackage", "mybinary")
