@@ -391,6 +391,8 @@ class Carma:
         
         os.makedirs(path, exist_ok=True)
         os.makedirs(os.path.join(path, "inputs"), exist_ok=True)
+        os.listdir(os.path.join(SRC, "CARMA", "build", "carma")) #DEBUG
+
         shutil.copy(os.path.join(SRC, "CARMA", "build", "carma", "carmapy.exe"), path)
 
         
