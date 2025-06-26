@@ -27,10 +27,7 @@ class BuildFortranBinary(build_ext):
         for name, cmd in compilers:
             try:
                 print(f"Trying to build with {name}")
-                print(os.getcwd())
-                print(os.path.join(SRC, "CARMA", "build", "carma"))
-                print(os.listdir(os.path.join(SRC, "CARMA", "build", "carma")))
-                subprocess.check_call("ls", cwd=os.path.join(SRC, "CARMA", "build", "carma"), env=env)
+
 
                 subprocess.check_call(cmd, cwd=os.path.join(SRC, "CARMA", "build", "carma"), env=env)
                 built = True
@@ -42,11 +39,13 @@ class BuildFortranBinary(build_ext):
         if not built:
             raise RuntimeError("Fortran build failed with both Intel and gfortran compilers.")
         # Move binary to package dir
-        # binary_path = os.path.join("CARMA", "carmapy.exe")  # adjust to your binary name
-        # target_path = os.path.join(self.build_lib, "mypackage", "mybinary")
-        # os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        # shutil.copy2(binary_path, target_path)
-        # print(f"Binary copied to {target_path}")
+        binary_path = os.path.join(SRC, "CARMA", "build", "carma", "carmapy.exe")  # adjust to your binary name
+        print(self.build_lib)
+        target_path = os.path.join(self.build_lib, "carmapy", "carmapy.exe")
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        shutil.copy2(binary_path, target_path)
+        print(f"Binary copied to {target_path}")
+        # raise
 
 
 class CustomBuildPy(build_py):

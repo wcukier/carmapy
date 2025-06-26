@@ -44,6 +44,6 @@ def example_carma(name):
     carma.calculate_z(mu_levels)
     carma.extend_atmosphere(1e10)
 
-    populate_abundances_at_cloud_base(carma, ["TiO2"], 1)
+    populate_abundances_at_cloud_base(carma, metalicity=1)
 
     return carma

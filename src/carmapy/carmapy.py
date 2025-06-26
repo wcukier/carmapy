@@ -379,8 +379,6 @@ class Carma:
         return k_B * T/(self.wt_mol * PROTON_MASS * self.surface_grav)
 
     def run(self, path=None, suppress_output=False):
-        print(__file__)
-        print(SRC)
         if self.is_2d and self.velocity_avg < 0:
             raise RuntimeError("For 2D carma, velocity_avg must be specified")
         
@@ -391,9 +389,8 @@ class Carma:
         
         os.makedirs(path, exist_ok=True)
         os.makedirs(os.path.join(path, "inputs"), exist_ok=True)
-        print(os.listdir(os.path.join(SRC, "CARMA"))) #DEBUG
 
-        shutil.copy(os.path.join(SRC, "CARMA", "build", "carma", "carmapy.exe"), path)
+        shutil.copy(os.path.join(SRC, "carmapy", "carmapy.exe"), path)
 
         
         path_end = os.path.basename(path) 
@@ -535,7 +532,7 @@ class Carma:
             try:
                 subprocess.run(["export", "OMP_NUM_THREADS=1"], shell=True,stdout=subprocess.PIPE)
                 subprocess.run(["export", "KMP_STACKSIZE=128M"], shell=True,stdout=subprocess.PIPE)
-                p = subprocess.Popen(os.path.join(SRC, "CARMA", "build", "carma", "carmapy.exe"), shell=False, stdout=subprocess.PIPE)
+                p = subprocess.Popen(os.path.join(SRC, "carmapy", "carmapy.exe"), shell=False, stdout=subprocess.PIPE)
                 
                 while p.poll() is None:
                     l = p.stdout.readline() # This blocks until it receives a newline.
