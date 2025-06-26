@@ -112,6 +112,18 @@ class Results:
         self.gas_names = list(carma.gasses.keys())
         self.dt_timestep = carma.dt * carma.output_gap 
         self.path = path
+
+        self.gasses = {}
+        for i in range(1, len(self.gas_names)):
+            self.gasses[self.gas_names[i]] = gas_abund[:, i, :]
+
+        self.clouds
+        for i in range(len(self.group_names)):
+            self.clouds[self.group_names[i]] = {
+                "numden": self.numden[:, i, :, :],
+                "r": self.r[:, i],
+                "r_mass": self.rmass[:, i]
+            }
                         
                         
     def plot_toa_gas(self, skip_gasses = [0], burn_in = 20, **kwargs):
