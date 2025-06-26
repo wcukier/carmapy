@@ -25,6 +25,8 @@ class BuildFortranBinary(build_ext):
                 print(os.getcwd())
                 print(os.path.join(SRC, "CARMA"))
                 print(os.listdir(os.path.join(SRC, "CARMA")))
+                subprocess.check_call("ls", cwd=os.path.join(SRC, "CARMA"), env=env)
+
                 subprocess.check_call(cmd, cwd=os.path.join(SRC, "CARMA"), env=env)
                 built = True
                 break
