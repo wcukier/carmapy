@@ -17,6 +17,9 @@ build:
   tools:
 
     python: "3.12"
+  
+  apt_packages:
+    - gfortran
 
     # You can also specify other tool versions:
 
