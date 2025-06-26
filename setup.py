@@ -6,6 +6,8 @@ import os
 import shutil
 import sys
 
+SRC = os.path.join(os.path.dirname(__file__), "src")
+
 class BuildFortranBinary(build_ext):
     def run(self):
         print("Building Fortran binary...")
@@ -21,7 +23,7 @@ class BuildFortranBinary(build_ext):
             try:
                 print(f"Trying to build with {name}")
                 print(os.getcwd())
-                subprocess.check_call(cmd, cwd=os.path.join("src", "CARMA"), env=env)
+                subprocess.check_call(cmd, cwd=os.path.join(SRC, "CARMA"), env=env)
                 built = True
                 break
             except subprocess.CalledProcessError as e:
