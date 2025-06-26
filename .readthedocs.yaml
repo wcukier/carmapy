@@ -27,8 +27,6 @@ build:
     # golang: "1.20"
   jobs:
     pre_install:
-      - apt-get install -y csh
-      - chmod +x src/CARMA/make-carma.csh
       - pip install .
 
 

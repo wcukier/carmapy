@@ -8,6 +8,7 @@ import sys
 
 SRC = os.path.join(os.path.dirname(__file__), "src")
 
+
 class BuildFortranBinary(build_ext):
     def run(self):
         print("Building Fortran binary...")
@@ -15,19 +16,23 @@ class BuildFortranBinary(build_ext):
         # Try Intel compiler first
         env = os.environ.copy()
         compilers = [
-            ("ifort", [os.path.join(SRC, "CARMA", "make-carma.csh"), "all", "ifort"]),
-            ("gfortran", [os.path.join(SRC, "CARMA", "make-carma.csh"), "all", "gfortran"]),
+            ("ifort", ["make", "all", "FORTRAN=ifort"]),
+            ("gfortran", ["make", "all", "FORTRAN=gfortran"]),
         ]
         built = False
+
+        os.makedirs(os.path.join(SRC, "CARMA", "build", "carma"), exist_ok=True)
+        shutil.copyfile(os.path.join(SRC, "CARMA", "Makefile"), os.path.join(SRC, "CARMA", "build", "carma", "Makefile"))
+
         for name, cmd in compilers:
             try:
                 print(f"Trying to build with {name}")
                 print(os.getcwd())
-                print(os.path.join(SRC, "CARMA"))
-                print(os.listdir(os.path.join(SRC, "CARMA")))
-                subprocess.check_call("ls", cwd=os.path.join(SRC, "CARMA"), env=env)
+                print(os.path.join(SRC, "CARMA", "build", "carma"))
+                print(os.listdir(os.path.join(SRC, "CARMA", "build", "carma")))
+                subprocess.check_call("ls", cwd=os.path.join(SRC, "CARMA", "build", "carma"), env=env)
 
-                subprocess.check_call(cmd, env=env)
+                subprocess.check_call(cmd, cwd=os.path.join(SRC, "CARMA", "build", "carma"), env=env)
                 built = True
                 break
             except subprocess.CalledProcessError as e:
