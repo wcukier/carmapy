@@ -16,16 +16,16 @@ class BuildFortranBinary(build_ext):
             ("ifort", ["./make-carma.csh", "all", "ifort"]),
             ("gfortran", ["./make-carma.csh", "all", "gfortran"]),
         ]
-
         built = False
         for name, cmd in compilers:
             try:
                 print(f"Trying to build with {name}")
-
+                print(os.getcwd())
                 subprocess.check_call(cmd, cwd=os.path.join("src", "CARMA"), env=env)
                 built = True
                 break
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as e:
+                print(e)
                 print(f"{name} failed")
 
         if not built:
