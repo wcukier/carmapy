@@ -379,6 +379,8 @@ class Carma:
         return k_B * T/(self.wt_mol * PROTON_MASS * self.surface_grav)
 
     def run(self, path=None, suppress_output=False):
+        print(__file__)
+        print(SRC)
         if self.is_2d and self.velocity_avg < 0:
             raise RuntimeError("For 2D carma, velocity_avg must be specified")
         
