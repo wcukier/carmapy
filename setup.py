@@ -15,8 +15,8 @@ class BuildFortranBinary(build_ext):
         # Try Intel compiler first
         env = os.environ.copy()
         compilers = [
-            ("ifort", ["./make-carma.csh", "all", "ifort"]),
-            ("gfortran", ["./make-carma.csh", "all", "gfortran"]),
+            ("ifort", [os.path.join(SRC, "CARMA", "make-carma.csh"), "all", "ifort"]),
+            ("gfortran", [os.path.join(SRC, "CARMA", "make-carma.csh"), "all", "gfortran"]),
         ]
         built = False
         for name, cmd in compilers:
@@ -27,7 +27,7 @@ class BuildFortranBinary(build_ext):
                 print(os.listdir(os.path.join(SRC, "CARMA")))
                 subprocess.check_call("ls", cwd=os.path.join(SRC, "CARMA"), env=env)
 
-                subprocess.check_call(cmd, cwd=os.path.join(SRC, "CARMA"), env=env)
+                subprocess.check_call(cmd, env=env)
                 built = True
                 break
             except subprocess.CalledProcessError as e:
