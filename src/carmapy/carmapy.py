@@ -57,6 +57,8 @@ class Carma:
         self.wt_mol: float = None          # mean molecular weight of the atmosphere, in amu
         self.r_planet: float = 6.991e9     # radius of the planet, in cm
         self.velocity_avg: float = -1      # average longitudinal velocity in cm/s, ignored if is_2d==False
+        self.log_solar_metalicity: float = 0
+        
         self.restart: bool = False        # if True will restart the carma run from the saved state
         
         self.dt: int = 1000              # carma timestep in seconds
@@ -415,7 +417,8 @@ class Carma:
                 "wtmol_air_set":        self.wt_mol,
                 "grav_set":             self.surface_grav,
                 "rplanet":              self.r_planet,
-                "velocity_avg":         self.velocity_avg
+                "velocity_avg":         self.velocity_avg,
+                "met":                  self.log_solar_metalicity
                 },
             "input_params": {
                 "NZ":                   self.NZ,
@@ -624,7 +627,7 @@ def load_carma(path, restart=1):
     carma = Carma(path)
     carma.restart = restart
     
-    nml = f90nml.read(os.path.join(path, "inputs", "inputs.nml"))
+    nml = f90nml.read(os.path.join(path, "inputs", "input.nml"))
 
     carma.NZ = nml["input_params"]["NZ"] 
     carma.NLONGITUDE = nml["input_params"]["NLONGITUDE"]

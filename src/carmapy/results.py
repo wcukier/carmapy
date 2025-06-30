@@ -16,6 +16,8 @@ from scipy.interpolate import RectBivariateSpline
 petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6", "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
 SRC = os.path.dirname(os.path.dirname(__file__))
 
+MICRON_TO_CM = 1e-4
+
 class Results:
     
     def __init__(self, carma):
@@ -117,11 +119,11 @@ class Results:
         for i in range(1, len(self.gas_names)):
             self.gasses[self.gas_names[i]] = gas_abund[:, i, :]
 
-        self.clouds
+        self.clouds = {}
         for i in range(len(self.group_names)):
             self.clouds[self.group_names[i]] = {
                 "numden": self.numden[:, i, :, :],
-                "r": self.r[:, i],
+                "r": self.r[:, i] * MICRON_TO_CM,
                 "r_mass": self.rmass[:, i]
             }
                         

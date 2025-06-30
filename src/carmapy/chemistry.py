@@ -72,7 +72,7 @@ def condensation_curve(P: float | ArrayLike,
   return 10**(offset
               - T_coeff/T
               - met_coeff * met
-              - logp_coeff * np.log10(P))
+              - logp_coeff * np.log10(1e-6*P))
 
 def populate_fastchem_abundances(carma: "Carma", metalicity = 1.0, override = {"H2O": 0}):
   species = []
@@ -98,9 +98,21 @@ def populate_fastchem_abundances(carma: "Carma", metalicity = 1.0, override = {"
   
   carma.set_nmr(nmr_dict)
 
+def find_cloud_base(carma, species, metalicity=1):
+  P = carma.P_centers
+  T = carma.T_centers
+
+  p_t = interp1d(T, P)
+
+  cond_curve = interp1d(T, condensation_curve(P, T, np.log10(metalicity), species))
+  Ts = np.linspace(np.min(T), np.max(T), 50000)
+  intersection = np.argmin(np.abs(p_t(Ts)/cond_curve(Ts) - 1))
+
+  return p_t(Ts[intersection]), Ts[intersection]
+
 def populate_abundances_at_cloud_base(carma, metalicity=1):
-  P = carma.P_levels
-  T = carma.T_levels
+  P = carma.P_centers
+  T = carma.T_centers
 
   p_t = interp1d(T, P)
 
@@ -108,14 +120,12 @@ def populate_abundances_at_cloud_base(carma, metalicity=1):
 
   for s in list(carma.gasses.keys())[1:]:
 
-    cond_curve = interp1d(T, condensation_curve(P, T, np.log10(metalicity), s))
-    Ts = np.linspace(np.min(T), np.max(T), 50000)
-    intersection = np.argmin(np.abs(p_t(Ts) - cond_curve(Ts)))
+    P_int, T_int = find_cloud_base(carma, s, metalicity)
 
     fast_chem_gas = fastchem_species.get(s, -1) 
     if fast_chem_gas == -1: raise ValueError("{s} is not currently supported by the carmapy fastchem interface")
 
-    override[s] = get_fastchem_abundances(np.array([Ts[intersection]]), np.array([p_t(Ts)[intersection]]), [fast_chem_gas], metalicity)[0]
+    override[s] = get_fastchem_abundances(np.array([T_int]), np.array([P_int]), [fast_chem_gas], metalicity)[0]
   
   populate_fastchem_abundances(carma, metalicity, override)
   

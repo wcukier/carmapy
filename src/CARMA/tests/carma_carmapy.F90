@@ -215,7 +215,7 @@ subroutine test_day()
   real(kind=f)          :: current_distance, closeto_temp_profile, num_steps_btwn, current_step, RPLANET_DAT
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file
-  namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg
+  namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg, met
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend
 
 
@@ -281,7 +281,6 @@ subroutine test_day()
 
   wtmol_air(:) =wtmol_air_set 
   grav(:) = grav_set 
-  met = 1._f
 
   t0_in = MAXVAL(tempr)
 
@@ -884,7 +883,7 @@ subroutine test_day()
       do i = 1, NZ
         READ(gas_in, *) mmr_gas(i, :)
         do j = 1, NGAS
-          mmr_gas(i,j) = min(mmr_gas(i,j) * (wtmol_gas(j)/ wtmol_air(1)) * 10._f**met,svpliq(i,j) * (wtmol_gas(j) / wtmol_air(1)))
+          mmr_gas(i,j) = min(mmr_gas(i,j) * (wtmol_gas(j)/ wtmol_air(1)), svpliq(i,j) * (wtmol_gas(j) / wtmol_air(1)))
         end do
       end do
 

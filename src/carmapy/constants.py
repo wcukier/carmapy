@@ -346,7 +346,7 @@ gas_dict = {
         "cond_rho": RHO_MG2SIO4,
         "vaprtn": {
             "rtn": I_VAPRTN_MG2SIO4_VISSCHER2010,
-            "offset": 22.08,
+            "offset": 20.88+1.2,
             "T_coeff": TCOEFF_MG2SIO4,
             "met_coeff": 1.4,
             "logp_coeff": 0.2
