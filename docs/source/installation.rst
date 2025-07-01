@@ -7,7 +7,7 @@ Currently this is the only way to install carmapy::
 
    git clone https://github.com/wcukier/carmapy
    cd carmapy
-   pip install -e .
+   pip install .
 
 
 Testing Installation
