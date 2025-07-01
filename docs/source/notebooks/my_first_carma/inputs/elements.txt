@@ -1,0 +1,4 @@
+igroup	name	rho	process	igas
+1	"Pure TiO2"             4.2500	"Volatile"     	 2
+2	"Mg2SiO4 Mantle"        3.2100	"Volatile"     	 3
+2	"TiO2 Core (Mg2SiO4)"   4.2500	"Core Mass"    	 2

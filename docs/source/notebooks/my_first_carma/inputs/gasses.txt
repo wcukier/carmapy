@@ -1,0 +1,4 @@
+name	wtmol	ivaprtn	icomp	wtmol_dif
+"H2O Vapor"             1.801600e+01	 2	 1	18.0160
+"TiO2 Vapor"            7.986600e+01	16	13	79.8660
+"Mg2SiO4 Vapor"         1.406900e+02	13	12	24.3050

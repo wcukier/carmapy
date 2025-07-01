@@ -259,7 +259,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_H2O,
         "gcomp": I_GCOMP_H2O,
         "mucos_dict": {},
-        "fastchem_specie": "H2O1",
+        "fastchem_species": "H2O1",
         "opacity_files": "WS15/H2O_complex.txt"
     },
         "KCl": {
@@ -275,7 +275,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_KCL,
         "gcomp": I_GCOMP_KCL,
         "mucos_dict": {},
-        "fastchem_specie": "Cl1K1",
+        "fastchem_species": "Cl1K1",
         "opacity_files": "WS15/KCl_complex.txt"
     },
         "ZnS": {
@@ -291,7 +291,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_ZN,
         "gcomp": I_GCOMP_ZNS,
         "mucos_dict": {"KCl": 0.144356},
-        "fastchem_specie": "Zn",
+        "fastchem_species": "Zn",
         "opacity_files": "WS15/ZnS_complex.txt"
     },
         "Na2S": {
@@ -307,7 +307,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_NA,
         "gcomp": I_GCOMP_NA2S,
         "mucos_dict": {"TiO2": 0.48481},
-        "fastchem_specie": "Na",
+        "fastchem_species": "Na",
         "opacity_files": "WS15/Na2S_complex.txt"
     },
         "MnS": {
@@ -323,7 +323,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_MN,
         "gcomp": I_GCOMP_MNS,
         "mucos_dict": {"TiO2": 0.214735},
-        "fastchem_specie": "Na",
+        "fastchem_species": "Na",
         "opacity_files": "KH18/MnS-KH_complex.txt"
     },
         "Cr": {
@@ -339,7 +339,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_CR,
         "gcomp": I_GCOMP_CR,
         "mucos_dict": {"TiO2": 0.262189},
-        "fastchem_specie": "Cr",
+        "fastchem_species": "Cr",
         "opacity_files": "KH18/Cr_complex.txt"
     },
         "Mg2SiO4": {
@@ -355,7 +355,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_MG,
         "gcomp": I_GCOMP_MG2SIO4,
         "mucos_dict": {"TiO2": 0.995},
-        "fastchem_specie": "Mg",
+        "fastchem_species": "Mg",
         "opacity_files": "B21/Mg2SiO4_amorph.txt"
     },
         "Fe": {
@@ -371,7 +371,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_FE,
         "gcomp": I_GCOMP_FE,
         "mucos_dict": {"TiO2": 0.221548},
-        "fastchem_specie": "Fe",
+        "fastchem_species": "Fe",
         "opacity_files": "KH18/Fe_complex.txt"
     },
         "TiO2": {
@@ -387,7 +387,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_TIO2,
         "gcomp": I_GCOMP_TIO2,
         "mucos_dict": {},
-        "fastchem_specie": "O2Ti1",
+        "fastchem_species": "O2Ti1",
         "opacity_files": "gCMCRT/TiO2[s].txt"
     },
         "Al2O3": {
@@ -403,7 +403,7 @@ gas_dict = {
         "wtmol_dif": WTMOL_AL,
         "gcomp": I_GCOMP_AL2O3,
         "mucos_dict": {"TiO2": 0.724172},
-        "fastchem_specie": "Al",
+        "fastchem_species": "Al",
         "opacity_files": "KH18/Al2O3[s].txt"
     }
 }
@@ -508,7 +508,7 @@ mucos_dict = {
 }
 
 
-fastchem_species = {
+fastchem_speciess = {
     "H2O": "H2O",
     "TiO2": "O2Ti1",
     "Fe": "Fe",

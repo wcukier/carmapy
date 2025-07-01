@@ -2,7 +2,7 @@ import pyfastchem
 from carmapy.constants import *
 import numpy as np
 from scipy.interpolate import interp1d
-
+import scipy.optimize 
 from numpy.typing import ArrayLike
 import os
 SRC = os.path.dirname(os.path.dirname(__file__))
@@ -59,9 +59,9 @@ def get_fastchem_abundances(T : np.ndarray,
   
   return np.array(ret)
 
-def condensation_curve(P: float | ArrayLike, 
+def saturation_vapor_pressure(P: float | ArrayLike, 
                        T: float | ArrayLike, 
-                       met: float,
+                       log_met: float,
                        gas: str) -> float | ArrayLike:
 
   offset     = gas_dict[gas]["vaprtn"].get("offset", 0)
@@ -71,21 +71,21 @@ def condensation_curve(P: float | ArrayLike,
 
   return 10**(offset
               - T_coeff/T
-              - met_coeff * met
-              - logp_coeff * np.log10(1e-6*P))
+              - met_coeff * log_met
+              - logp_coeff * np.log10(P))
 
-def populate_fastchem_abundances(carma: "Carma", metalicity = 1.0, override = {"H2O": 0}):
+def populate_fastchem_abundances(carma: "Carma", metallicity=1, override = {"H2O": 0}):
   species = []
   
   
   for gas in carma.gasses.keys():
-      s = gas_dict[gas].get("fastchem_specie", -1) 
+      s = gas_dict[gas].get("fastchem_species", -1) 
       
       if s == -1:
           raise ValueError(f"{gas} is not currently supported by the carmapy fastchem interface")
       species.append(s)
         
-  abund = get_fastchem_abundances(carma.T_centers, carma.P_centers, species)
+  abund = get_fastchem_abundances(carma.T_centers, carma.P_centers, species, metallicity)
   
   
   nmr_dict = {}
@@ -98,19 +98,35 @@ def populate_fastchem_abundances(carma: "Carma", metalicity = 1.0, override = {"
   
   carma.set_nmr(nmr_dict)
 
-def find_cloud_base(carma, species, metalicity=1):
+
+def find_cloud_base(carma, species, metallicity=1):
   P = carma.P_centers
   T = carma.T_centers
 
+
+  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), species)
+  abund = get_fastchem_abundances(T, P, [gas_dict[species]["fastchem_species"]], metallicity)[0, :]
+
+  i = 0
+  while(sat_vp[i]/P[i] > abund[i]): 
+    i += 1
+  
+  guess = T[i]
+
   p_t = interp1d(T, P)
 
-  cond_curve = interp1d(T, condensation_curve(P, T, np.log10(metalicity), species))
-  Ts = np.linspace(np.min(T), np.max(T), 50000)
-  intersection = np.argmin(np.abs(p_t(Ts)/cond_curve(Ts) - 1))
+  def _diff(T):
 
-  return p_t(Ts[intersection]), Ts[intersection]
+    sat_vp = saturation_vapor_pressure(p_t(T), T, np.log10(metallicity), species)/p_t(T)
+    abund = get_fastchem_abundances(np.array(T), np.array(p_t(T)), [gas_dict[species]["fastchem_species"]], metallicity)[0, :]
 
-def populate_abundances_at_cloud_base(carma, metalicity=1):
+    return abund- sat_vp
+  
+
+  root = scipy.optimize.root(_diff, guess).x[0]
+  return p_t(root), root
+
+def populate_abundances_at_cloud_base(carma, metallicity=1):
   P = carma.P_centers
   T = carma.T_centers
 
@@ -120,14 +136,15 @@ def populate_abundances_at_cloud_base(carma, metalicity=1):
 
   for s in list(carma.gasses.keys())[1:]:
 
-    P_int, T_int = find_cloud_base(carma, s, metalicity)
+    P_int, T_int = find_cloud_base(carma, s, metallicity)
 
-    fast_chem_gas = fastchem_species.get(s, -1) 
+    fast_chem_gas = gas_dict[s].get("fastchem_species", -1) 
     if fast_chem_gas == -1: raise ValueError("{s} is not currently supported by the carmapy fastchem interface")
 
-    override[s] = get_fastchem_abundances(np.array([T_int]), np.array([P_int]), [fast_chem_gas], metalicity)[0]
+    override[s] = get_fastchem_abundances(np.array([T_int]), np.array([P_int]), [fast_chem_gas], metallicity)[0]
   
-  populate_fastchem_abundances(carma, metalicity, override)
+  print(override)
+  populate_fastchem_abundances(carma, metallicity, override)
   
   
         

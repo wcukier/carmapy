@@ -5,7 +5,19 @@ import numpy as np
 
 SRC = os.path.dirname(os.path.dirname(__file__))
 
-def example_levels():
+def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Loads example atmospheric structure "levels."  Atmospheric levels describe
+    the boundaries between atmospheric layers and thus the length of "levels" 
+    arrays is one more than that of the "centers" arrays
+
+    Returns:
+        Tuple of np.ndarray: A tuple containing four 1D numpy arrays
+            - P_levels (np.ndarray):   Pressure levels [barye]
+            - T_levels (np.ndarray):   Temperature levels [K]
+            - kzz_levels (np.ndarray): Eddy diffusion coefficients [cm²/s]
+            - mu_levels (np.ndarray): mean molecular weights [dimensionless]
+    """
     data = np.genfromtxt(os.path.join(SRC, "example_data", "example_levels"), skip_header=1)
 
     P_levels   = data[:, 0]

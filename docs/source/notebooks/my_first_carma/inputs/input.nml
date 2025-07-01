@@ -1,0 +1,45 @@
+&input_params
+    is_2d = 0
+    nbin = 80
+    ncoag = 0
+    nelem = 3
+    ngas = 3
+    ngroup = 2
+    ngrowth = 2
+    nlongitude = 64
+    nnuc = 2
+    nsolute = 1
+    nwave = 0
+    nz = 126
+    dtime = 100
+    iappend = 0
+    idiag = 0
+    igridv = 1
+    irestart = 0
+    iskip = 100
+    nstep = 3000
+/
+
+&io_files
+    centers_file = 'inputs/centers.txt'
+    coag_file = 'inputs/coagulation.txt'
+    elements_file = 'inputs/elements.txt'
+    filename = 'my_first_carma'
+    filename_restart = 'my_first_carma_restart'
+    fileprefix = 'bd_'
+    gas_input_file = 'inputs/gas_input.txt'
+    gases_file = 'inputs/gasses.txt'
+    groups_file = 'inputs/groups.txt'
+    growth_file = 'inputs/growth.txt'
+    levels_file = 'inputs/levels.txt'
+    nuc_file = 'inputs/nucleation.txt'
+    temps_file = 'inputs/temps.txt'
+/
+
+&physical_params
+    grav_set = 31600
+    met = 0
+    rplanet = 6991000000.0
+    velocity_avg = -1
+    wtmol_air_set = 2.3239773684490332
+/
