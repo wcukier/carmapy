@@ -7,6 +7,7 @@
 
    
    
+   
    .. rubric:: Methods
 
    .. autosummary::
@@ -17,6 +18,13 @@
    
 
    
+   
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~Group.core
+      ~Group.mantle
    
    
 

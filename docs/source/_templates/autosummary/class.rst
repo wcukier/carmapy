@@ -5,7 +5,8 @@
 .. autoclass:: {{ objname }}
 
    {% block methods %}
-   {% if methods %}
+   {% set method_list = methods | reject("equalto", "__init__") | list %}
+   {% if method_list %}
    .. rubric:: {{ _('Methods') }}
 
    .. autosummary::

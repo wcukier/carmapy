@@ -7,6 +7,7 @@
 
    
    
+   
    .. rubric:: Methods
 
    .. autosummary::

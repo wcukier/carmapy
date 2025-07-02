@@ -7,11 +7,6 @@
 
    
    
-   .. rubric:: Methods
-
-   .. autosummary::
-      :signatures: short
-   
    
    
 

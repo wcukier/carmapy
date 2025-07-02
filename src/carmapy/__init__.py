@@ -1,12 +1,11 @@
 from .carmapy import Carma, Gas, Group, Element, Coag, Growth, Nuc
-from .carmapy import load_carma
-from .carmapy import available_species, included_mucos
+
 
 
 import carmapy.example
 
 from .results import *
-
+from .base import *
 
 
 from .chemistry import populate_fastchem_abundances

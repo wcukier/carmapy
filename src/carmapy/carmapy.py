@@ -594,7 +594,9 @@ class Carma:
         Notes
         -------
         Atmosphere is extended adiabatically using the fit from Parmentier et 
-        al. (2015) [1]_ to the equation of state described in Saumon (1995) [2]_
+        al. (2015) [1]_ to the equation of state described in Saumon (1995) 
+        [2]_.  k_zz is assumed to be proportional to the cube root of the scale
+        height
 
 
         References
@@ -606,8 +608,11 @@ class Carma:
            Astrophysical Journal Supplement Series, 99 (IOP), 713
         """
 
-        if (self.P_levels is None or self.T_levels is None or self.kzz_levels is None or self.z_levels is None):
-            raise RuntimeError("P_levels, T_levels, z_levels, and/or kzz_levels are not set")
+        if ((self.P_levels is None) or (self.T_levels is None)
+             or (self.kzz_levels is None) or (self.z_levels is None)):
+
+            raise RuntimeError("P_levels, T_levels, z_levels, "
+                               "and/or kzz_levels are not set")
         
         if (self.surface_grav is None or self.wt_mol is None):
             raise RuntimeError("g and/or wt_mol are not set")
@@ -714,19 +719,19 @@ class Carma:
         
         nml = {
             "io_files": {
-                "filename":             path_end,
-                "filename_restart":     path_end+"_restart",
-                "fileprefix":           "bd_",
-                "gas_input_file":       os.path.join("inputs", "gas_input.txt"),
-                "centers_file":         os.path.join("inputs", "centers.txt"),
-                "levels_file":          os.path.join("inputs", "levels.txt"),
-                "temps_file":           os.path.join("inputs", "temps.txt"),
-                "groups_file":          os.path.join("inputs", "groups.txt"),
-                "elements_file":        os.path.join("inputs", "elements.txt"),
-                "gases_file":           os.path.join("inputs", "gasses.txt"),
-                "growth_file":          os.path.join("inputs", "growth.txt"),
-                "nuc_file":             os.path.join("inputs", "nucleation.txt"),
-                "coag_file":            os.path.join("inputs", "coagulation.txt")
+                "filename":            path_end,
+                "filename_restart":    path_end+"_restart",
+                "fileprefix":          "bd_",
+                "gas_input_file":      os.path.join("inputs", "gas_input.txt"),
+                "centers_file":        os.path.join("inputs", "centers.txt"),
+                "levels_file":         os.path.join("inputs", "levels.txt"),
+                "temps_file":          os.path.join("inputs", "temps.txt"),
+                "groups_file":         os.path.join("inputs", "groups.txt"),
+                "elements_file":       os.path.join("inputs", "elements.txt"),
+                "gases_file":          os.path.join("inputs", "gasses.txt"),
+                "growth_file":         os.path.join("inputs", "growth.txt"),
+                "nuc_file":            os.path.join("inputs", "nucleation.txt"),
+                "coag_file":           os.path.join("inputs", "coagulation.txt")
                 },
             "physical_params" : {
                 "wtmol_air_set":        self.wt_mol,
@@ -772,14 +777,19 @@ class Carma:
             f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\n")
             for key in self.gasses.keys():
                 name = '"'+key + ' Vapor"'
-                f.write(f'{name:24s}{self.gasses[key].wtmol:<.6e}\t{self.gasses[key].ivaprtn:2d}\t{self.gasses[key].icomp:2d}\t{self.gasses[key].wtmol_dif:3.4f}\n')
+                f.write(f'{name:24s}{self.gasses[key].wtmol:<.6e}\t'
+                        f'{self.gasses[key].ivaprtn:2d}\t'
+                        f'{self.gasses[key].icomp:2d}\t'
+                        f'{self.gasses[key].wtmol_dif:3.4f}\n')
         
         with open(os.path.join(path, io["elements_file"]), "w+") as f:
             f.write("igroup\tname\trho\tprocess\tigas\n")
             for key in self.elems.keys():
                 name = '"'+key + '"'
                 proc = '"'+self.elems[key].proc + '"'
-                f.write(f'{self.elems[key].group.igroup}\t{name:24s}{self.elems[key].rho:2.4f}\t{proc:15s}\t{self.elems[key].igas:2d}\n')
+                f.write(f'{self.elems[key].group.igroup}\t{name:24s}'
+                        f'{self.elems[key].rho:2.4f}\t{proc:15s}\t'
+                        f'{self.elems[key].igas:2d}\n')
         
         
         
@@ -788,14 +798,16 @@ class Carma:
             for nuc in self.nucs:
                 igas = nuc.gas.igas
                 if nuc.is_het:
-                    ele_from = nuc.group_from.core.ielem
-                    ele_to = nuc.group_to.core.ielem
-                    f.write(f'{ele_from:3d}\t{ele_to:3d}\t1\t{igas:3d}\t{ele_from:3d}\t{nuc.mucos:1.8f}\n')
+                    ele_from = nuc.group_core.core.ielem
+                    ele_to = nuc.group_mantle.core.ielem
+                    f.write(f'{ele_from:3d}\t{ele_to:3d}\t1\t{igas:3d}\t'
+                            f'{ele_from:3d}\t{nuc.mucos:1.8f}\n')
 
                 else:
-                    ele_from = nuc.group_from.core.ielem
+                    ele_from = nuc.group_core.core.ielem
                     ele_to = ele_from
-                    f.write(f'{ele_from:3d}\t{ele_to:3d}\t0\t{igas:3d}\t{0:3d}\t{0:1.8f}\n')
+                    f.write(f'{ele_from:3d}\t{ele_to:3d}\t0\t{igas:3d}\t'
+                            f'{0:3d}\t{0:1.8f}\n')
         
         with open(os.path.join(path, io["growth_file"]), "w+") as f:
             f.write("ielem\tigas\n")
@@ -815,9 +827,13 @@ class Carma:
         with open(os.path.join(path, io["levels_file"]), "w+") as f:
             f.write("z_levels\tP_levels\tkzz_levels\n")
             for i in range(self.NZ+1):
-                f.write(f"{self.z_levels[i]/100}\t{self.P_levels[i]/10}\t{self.kzz_levels[i]}\n")
+                f.write(f"{self.z_levels[i]/100}\t"
+                        f"{self.P_levels[i]/10}\t"
+                        f"{self.kzz_levels[i]}\n")
         
-        np.savetxt(os.path.join(path, io["temps_file"]), self.T_centers, delimiter='\t')
+        np.savetxt(os.path.join(path, io["temps_file"]),
+                    self.T_centers, 
+                    delimiter='\t')
         
         with open(os.path.join(path, io["gas_input_file"]), "w+") as f:
             for key in self.gasses.keys():
@@ -828,7 +844,8 @@ class Carma:
                 g = self.gasses[key]
                 if type(g) == type(1):
                     if g.nmr < 0:
-                        raise AttributeError(f"The nmr for {g.name} was not set.")
+                        raise AttributeError(f"The nmr for {g.name} "
+                                             "was not set.")
                 if len(np.shape(g.nmr)) > 0:
                     f.write(f"{g.nmr[0]:10e}\t")
                 else:
@@ -839,7 +856,10 @@ class Carma:
                     g = self.gasses[key]
                     if len(np.shape(g.nmr)) > 1:
                         if len(g.nmr) != self.NZ:
-                            raise ValueError(f"The array for nmr of {g.name} is {len(g.nmr)}.  It should be {self.NZ}.")
+                            raise ValueError(f"The array for nmr of {g.name} "
+                                             f"is {len(g.nmr)}.  It should be "
+                                             f"{self.NZ}.")
+                        
                         f.write(f"{g.nmr[i]:10e}\t")
                     else:
                         f.write(f"{0.:10e}\t")
@@ -848,14 +868,22 @@ class Carma:
         with _cd(path):
 
             try:
-                subprocess.run(["export", "OMP_NUM_THREADS=1"], shell=True,stdout=subprocess.PIPE)
-                subprocess.run(["export", "KMP_STACKSIZE=128M"], shell=True,stdout=subprocess.PIPE)
-                p = subprocess.Popen(os.path.join(SRC, "carmapy", "carmapy.exe"), shell=False, stdout=subprocess.PIPE)
+                subprocess.run(["export", "OMP_NUM_THREADS=1"], 
+                               shell=True,
+                               stdout=subprocess.PIPE)
+                
+                subprocess.run(["export", "KMP_STACKSIZE=128M"],
+                                shell=True,
+                                stdout=subprocess.PIPE)
+                p = subprocess.Popen(
+                    os.path.join(SRC, "carmapy", "carmapy.exe"), 
+                    shell=False, 
+                    stdout=subprocess.PIPE)
                 
                 while p.poll() is None:
-                    l = p.stdout.readline() # This blocks until it receives a newline.
+                    l = p.stdout.readline() #blocks until it receives a newline.
                     if not suppress_output: print(l.decode('UTF-8'))
-                # When the subprocess terminates there might be unconsumed output 
+                # When the subprocess ends there might be unconsumed output 
                 # that still needs to be processed.
                 if not suppress_output: print(p.stdout.read().decode('UTF-8'))
             except Exception as e:
@@ -874,7 +902,30 @@ class Carma:
     
     
 class Element:
-    """Elements are the components of groups.  
+    """An object representing a single species in a Group.  Note that element
+    refers not to chemical elements, but to components of the group (ie TiO2 
+    Core or MgSiO2 Mantle).
+
+    Parameters
+    ----------
+    name : str
+        The name of the element
+    ielem : int
+        The index of the element in the Carma simulation
+    group : Group
+        The group the element is part of
+    rho : float
+        The density of the element
+    proc : str
+        Flag that describes the element type.  Currently supported types are:
+
+        - "Volatile": Homogeneously nucleating elements or the outer element in a
+          heterogeneously nucleating group
+
+        - "Core Mass": The inner element in a heterogeneously nucleating group
+    igas : int
+        The index of the gas which the element grows from and evaporates to in t
+        he Carma simulation
     """
 
     def __init__(self, 
@@ -884,6 +935,7 @@ class Element:
                  rho: float,
                  proc: str,
                  igas: int):
+
         self.name:  str     = name
         self.ielem: int     = ielem
         self.group: "Group" = group
@@ -892,44 +944,170 @@ class Element:
         self.igas:  int     = igas #TODO chance to reference gas directly
     
 class Gas: 
+    """An object representing a limiting gas resevoir for a condensate.
+
+    Parameters
+    ----------
+    name : str
+        The name of the gas resevoir.  Note currently we name the gas resevoir
+        with the name of the condensate, not the gas phase (ie Mg2SiO4 not Mg) 
+    igas : int
+        The index of the gas in the Carma simulation
+    wtmol : float, optional
+        The molecular weight of the gas in condensate form [amu], if not 
+        provided uses carmapy defaults
+    ivaprtn : int, optional
+        Index of the vapor pressure routine.  Currently, only vapor pressure 
+        routines hardcoded into the CARMA can be used.  See constants.py for a
+        list of vapor pressure routines, if not provided uses
+        carmapy defaults (reccomended).
+    icomp : int, optional
+        Index that describes the gas composition.  Currently, only certain 
+        gasses hardcoded into the CARMA can be used.  See constants.py for a
+        list of gasses allowed, if not provided uses
+        carmapy defaults (reccomended).
+    wtmol_dif : float, optional
+        The molecular weight of the gas in its gas phase (ie the molecular 
+        weight of Mg for Mg2SiO4), uses carmapy defaults if not provided.
+    nmr : ArrayLike, optional
+        The number mixing ratio.  If a float is provided represents the number
+        mixing ratio at the bottom of the atmosphere; if an array then 
+        represents the mixing ratio at each "center" location.  Can be provided
+        at anytime before simulation run, by default -1 (not initialized)
+    """
+    
     def __init__(self, 
-                 gas_name: str, 
+                 name: str, 
                  igas: int, 
-                 **kwargs):
-        self.name:      str     = gas_name
-        self.igas:      int     = igas
-        self.wtmol:     float   = kwargs.get("wtmol", wtmol_dict[gas_name])
-        self.ivaprtn:   int     = kwargs.get("ivaprtn",vaprtn_dict[gas_name])
-        self.icomp:     int     = gcomp_dict[gas_name]
-        self.wtmol_dif: float   = kwargs.get("wtmol_dif", wtmol_dif_dict[gas_name])
+                 wtmol: float = None,
+                 ivaprtn: int = None,
+                 icomp: int = None,
+                 wtmol_dif: float = None,
+                 nmr: ArrayLike = -1):
+        self.name: str = name
+        self.igas: int = igas
 
+        if wtmol: 
+            self.wtmol: float = wtmol
+        else:
+            self.wtmol = gas_dict[name]["wtmol"]
 
-        self.nmr: float | ArrayLike = kwargs.get("nmr", -1)
+        if ivaprtn:
+            self.ivaprtn: int = ivaprtn
+        else:
+            self.ivaprtn = gas_dict[name]["vaprtn"]["rtn"]
+
+        if icomp:
+            self.icomp: int = icomp
+        else:
+            self.icomp = gas_dict[name]["gcomp"]
+
+        if wtmol_dif:
+            self.wtmol_dif: float = wtmol_dif
+        else:
+            self.wtmol_dif = gas_dict[name]["wtmol_dif"]
+        
+        self.nmr: ArrayLike = nmr
         
     
 class Nuc:
-    def __init__(self, group_from, group_to, is_het, gas, mucos):
-        self.group_from = group_from
-        self.group_to = group_to
+    """An object representing a nucleation pathway.
+
+    Parameters
+    ----------
+    group_core : Group
+        The group forms the seed particle for the nucleation event.  If 
+        homogeneous nucleation, should be the same as ``group_mantle``
+    group_mantle : _type_
+        The group which forms as a result of the nucleation
+    is_het : bool
+        if True, the nucleation is heterogeneous.  If False, homogeneous
+    gas : Gas
+        The gas resevoir which condenses
+    mucos : float
+        The cosine of the contact angle between the gas and the seed particle. 
+        Ignored if ``is_het==False``.
+    
+    """
+    def __init__(self, 
+                 group_core: "Group", 
+                 group_mantle: "Group",
+                 is_het: bool,
+                 gas : "Gas",
+                 mucos: "float") -> None:
+        self.group_core = group_core
+        self.group_mantle = group_mantle
         self.is_het = is_het
         self.gas = gas
-        self.ievp2elem = group_from.core
+        self.ievp2elem = group_core.core
         self.mucos = mucos
     
 class Growth:
-    def __init__(self, elem, gas):
+    """An object representing a growth/evaportation pathway.
+
+    Parameters
+    ----------
+    elem : Element
+        The element upon which the gas condenses/evaportates from
+    gas : Gas
+        The gas resevoir from/to which the gas condenses/evaportates
+
+    """
+    def __init__(self, elem: "Element", gas: "Gas") -> None:
         self.elem = elem
         self.gas = gas
     
 class Group:
-    def __init__(self, igroup, name, rmin):
+    """An object representing a cloud species
+        
+
+    Parameters
+    ----------
+    igroup : int
+        The index of the group in the Carma simulation
+    name : str
+        A name for the group.  The typical naming convention is "Pure <Species>"
+        (ie "Pure TiO2") for homogeneously nucleating groups and "<Mantle> on 
+        <Core>" (ie "Mg2SiO4 on TiO2") for heterogeneously nucleating groups
+    rmin : float
+        The minimum size of the condensate
+    """
+
+    core : "Element"
+    """The element which represents the original seed particle"""
+
+    mantle: "Element"
+    """The element on the surface of the cloud particle"""
+
+
+    def __init__(self, igroup: int, name: str, rmin: float) -> None:
         self.igroup = igroup
         self.name = name
         self.rmin = rmin
         self.core = None
         self.mantle = None
     
-    def coreify(self, ielem, group, gas_name="") -> Element:
+    def coreify(self, ielem: int, group: "Group", gas_name: str) -> Element:
+        """Create a core element from the only element of the current group.
+        Used to create the core element of a heterogeneously nucleating group
+        where this group serves as the seed particles.  Adds the created element
+        as the core of the provided group
+
+        Parameters
+        ----------
+        ielem : int
+            The index of the new element in the Carma simulation
+        group : Group
+            The group to which the new element belongs
+        gas_name : str
+            Name of the gas resevoir corresponding to the new element
+
+        Returns
+        -------
+        Element
+            The newly created element initialized as the core of a heterogeneous
+            group
+        """
         core_elem = self.core
         
         name = core_elem.name
@@ -937,115 +1115,19 @@ class Group:
         name = name + f" Core ({gas_name})"
         
         elem = Element(name, ielem, group, core_elem.rho, "Core Mass", core_elem.igas)
+        group.core = elem
         return elem
 
 
 class Coag:
-    def __init__(self, group):
+    """An object which represents a coagulation pathway of a condensate with 
+    itself.
+
+    Parameters
+    ----------
+    group : Group
+        The group which represents the condensate which is able to coagulate
+    """
+    def __init__(self, group: "Group") -> None:
         self.group = group
 
-
-
-
-def load_carma(path, restart=1):
-    carma = Carma(path)
-    carma.restart = restart
-    
-    nml = f90nml.read(os.path.join(path, "inputs", "input.nml"))
-
-    carma.NZ = nml["input_params"]["NZ"] 
-    carma.NLONGITUDE = nml["input_params"]["NLONGITUDE"]
-    carma.is_2d = nml["input_params"]["IS_2D"]
-    carma.igridv - nml["input_params"]["igridv"]
-    carma.NBIN = nml["input_params"]["NBIN"]
-    carma.output_gap = nml["input_params"]["iskip"]
-    carma.n_tstep  = nml["input_params"]["nstep"]
-    carma.dt = nml["input_params"]["dtime"]
-    
-    carma.wt_mol = nml["physical_params"]["wtmol_air_set"]
-    carma.surface_grav = nml["physical_params"]["grav_set"]
-    carma.r_planet = nml["physical_params"]["rplanet"]
-    carma.velocity_avg = nml["physical_params"]["velocity_avg"]
-    
-
-    io = nml["io_files"]
-
-    with open(os.path.join(path, io["groups_file"]), "r") as f:
-        f.readline()
-        for line in f:
-            name, rmin = shlex.split(line[:-1])
-            carma.groups[name] = Group(len(carma.groups)+1, name, float(rmin))
-        
-    with open(os.path.join(path, io["gases_file"]), "r") as f:
-        f.readline()
-        for line in f:
-            name, wtmol, ivaprtn, icomp, wtmol_dif = shlex.split(line[:-1])
-            name= name[:-len(' Vapor')]
-            carma.gasses[name] = Gas(name, len(carma.gasses)+1, wtmol=float(wtmol), ivaprtn=int(ivaprtn), wtmol_dif=float(wtmol_dif))
-            
-    
-    with open(os.path.join(path, io["elements_file"]), "r") as f:
-        f.readline()
-        for line in f:
-            igroup, name, rho, proc, igas = shlex.split(line[:-1])
-            group = carma.groups[list(carma.groups.keys())[int(igroup)-1]]
-            carma.elems[name] = Element(name, len(carma.elems)+1, group, float(rho), proc, int(igas))
-            if "Mantle" in name:
-                group.mantle = carma.elems[name]
-            else:
-                group.core = carma.elems[name]
-                
-    with open(os.path.join(path, io["nuc_file"])) as f:
-        f.readline()
-        for line in f:
-            ele_from, ele_to, _, igas, _, mucos = shlex.split(line[:-1])
-            if ele_to == ele_from:
-                is_het = False
-            else:
-                is_het = True
-            group_from = carma.elems[list(carma.elems.keys())[int(ele_from)-1]].group
-            group_to = carma.elems[list(carma.elems.keys())[int(ele_to)-1]].group
-            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
-            carma.nucs.append(Nuc(group_from, group_to, is_het, gas, float(mucos)))
-            
-    with open(os.path.join(path, io["growth_file"])) as f:
-        f.readline()
-        for line in f:
-            ielem, igas = shlex.split(line[:-1])
-            elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]
-            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
-            carma.growth.append(Growth(elem, gas))
-            
-    with open(os.path.join(path, io["coag_file"])) as f:
-        f.readline()
-        for line in f:
-            igroup = int(f.readline())
-            carma.add_coag(carma.groups[list(carma.elems.keys())[igroup-1]])
-            
-    centers = np.genfromtxt(os.path.join(path, io["centers_file"]), skip_header=1)
-    levels = np.genfromtxt(os.path.join(path, io["levels_file"]), skip_header=1)
-    
-    carma.z_centers = centers[:,0]*100
-    carma.z_levels = levels[:,0]*100
-
-    carma.P_centers = centers[:, 1]*10
-    carma.P_levels = levels[:,1]*10
-
-    carma.kzz_levels = levels[:, 2]
-
-    carma.T_centers = np.genfromtxt(os.path.join(path, io["temps_file"]))
-
-
-    gas_input = np.genfromtxt(os.path.join(path, io["gas_input_file"]))
-    for i, key in enumerate(carma.gasses.keys()):
-        carma.gasses[key].nmr = gas_input[1:, i]
-        
-    return carma
-
-
-def available_species():
-    print(list(gas_dict.keys())[1:])
-
-
-def included_mucos(specie):
-    print(gas_dict[specie]["mucos_dict"])

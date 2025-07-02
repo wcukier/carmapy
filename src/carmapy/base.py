@@ -1,0 +1,160 @@
+"""Essential functions for carmapy
+
+Note
+----
+All of these fuctions are loaded into the top-level carmapy namespace.  In other
+words you can access them like ``carmapy.load_carma(...)`` instead of 
+``carmapy.base.load_carma(...)``"""
+
+from carmapy.constants import *
+from carmapy.results import *
+from carmapy.carmapy import *
+import os
+import shutil
+import f90nml
+import numpy as np
+import subprocess
+import warnings
+import shlex
+import contextlib
+from numpy.typing import ArrayLike
+
+from typing import Union
+
+SRC = os.path.dirname(os.path.dirname(__file__))
+
+
+def load_carma(path: str, restart: int =0) -> Carma:
+    """Restores a carma object from files.  Loads in the configuration stored by
+    ``Carma.run()``
+
+    Parameters
+    ----------
+    path : str
+        The path to the directory holding the carma files
+    restart : int, optional
+        If 1, future calls to ``Carma.run()`` for this object will resume the 
+        simulation from the most recently saved state.  If 0, instead calls to 
+        ``Carma.run()`` will restart the simulation from the beginning.  Either
+        way, the current output files will be overwritten by default. By default
+        0
+
+    Returns
+    -------
+    Carma
+        The loaded Carma object
+    """
+
+    carma = Carma(path)
+    carma.restart = restart
+    
+    nml = f90nml.read(os.path.join(path, "inputs", "input.nml"))
+
+    carma.NZ = nml["input_params"]["NZ"] 
+    carma.NLONGITUDE = nml["input_params"]["NLONGITUDE"]
+    carma.is_2d = nml["input_params"]["IS_2D"]
+    carma.igridv - nml["input_params"]["igridv"]
+    carma.NBIN = nml["input_params"]["NBIN"]
+    carma.output_gap = nml["input_params"]["iskip"]
+    carma.n_tstep  = nml["input_params"]["nstep"]
+    carma.dt = nml["input_params"]["dtime"]
+    
+    carma.wt_mol = nml["physical_params"]["wtmol_air_set"]
+    carma.surface_grav = nml["physical_params"]["grav_set"]
+    carma.r_planet = nml["physical_params"]["rplanet"]
+    carma.velocity_avg = nml["physical_params"]["velocity_avg"]
+    
+
+    io = nml["io_files"]
+
+    with open(os.path.join(path, io["groups_file"]), "r") as f:
+        f.readline()
+        for line in f:
+            name, rmin = shlex.split(line[:-1])
+            carma.groups[name] = Group(len(carma.groups)+1, name, float(rmin))
+        
+    with open(os.path.join(path, io["gases_file"]), "r") as f:
+        f.readline()
+        for line in f:
+            name, wtmol, ivaprtn, icomp, wtmol_dif = shlex.split(line[:-1])
+            name= name[:-len(' Vapor')]
+            carma.gasses[name] = Gas(name, len(carma.gasses)+1, wtmol=float(wtmol), ivaprtn=int(ivaprtn), wtmol_dif=float(wtmol_dif))
+            
+    
+    with open(os.path.join(path, io["elements_file"]), "r") as f:
+        f.readline()
+        for line in f:
+            igroup, name, rho, proc, igas = shlex.split(line[:-1])
+            group = carma.groups[list(carma.groups.keys())[int(igroup)-1]]
+            carma.elems[name] = Element(name, len(carma.elems)+1, group, float(rho), proc, int(igas))
+            if "Mantle" in name:
+                group.mantle = carma.elems[name]
+            else:
+                group.core = carma.elems[name]
+                
+    with open(os.path.join(path, io["nuc_file"])) as f:
+        f.readline()
+        for line in f:
+            ele_from, ele_to, _, igas, _, mucos = shlex.split(line[:-1])
+            if ele_to == ele_from:
+                is_het = False
+            else:
+                is_het = True
+            group_core = carma.elems[list(carma.elems.keys())[int(ele_from)-1]].group
+            group_mantle = carma.elems[list(carma.elems.keys())[int(ele_to)-1]].group
+            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
+            carma.nucs.append(Nuc(group_core, group_mantle, is_het, gas, float(mucos)))
+            
+    with open(os.path.join(path, io["growth_file"])) as f:
+        f.readline()
+        for line in f:
+            ielem, igas = shlex.split(line[:-1])
+            elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]
+            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
+            carma.growth.append(Growth(elem, gas))
+            
+    with open(os.path.join(path, io["coag_file"])) as f:
+        f.readline()
+        for line in f:
+            igroup = int(f.readline())
+            carma.add_coag(carma.groups[list(carma.elems.keys())[igroup-1]])
+            
+    centers = np.genfromtxt(os.path.join(path, io["centers_file"]), skip_header=1)
+    levels = np.genfromtxt(os.path.join(path, io["levels_file"]), skip_header=1)
+    
+    carma.z_centers = centers[:,0]*100
+    carma.z_levels = levels[:,0]*100
+
+    carma.P_centers = centers[:, 1]*10
+    carma.P_levels = levels[:,1]*10
+
+    carma.kzz_levels = levels[:, 2]
+
+    carma.T_centers = np.genfromtxt(os.path.join(path, io["temps_file"]))
+
+
+    gas_input = np.genfromtxt(os.path.join(path, io["gas_input_file"]))
+    for i, key in enumerate(carma.gasses.keys()):
+        carma.gasses[key].nmr = gas_input[1:, i]
+        
+    return carma
+
+
+def available_species() -> None:
+    """Prints the gas species available in the carmapy defaults
+    """
+    print(list(gas_dict.keys())[1:])
+
+
+def included_mucos(species):
+    """Prints the cosines of the contanct angle available in carmapy defaults.
+    Prints the dictionary of potential seed particles and their contact angles
+    for the requested species from the carmapy defaults.
+
+    Parameters
+    ----------
+    species : str
+        The name of the gas species for which to see the available contact 
+        angles
+    """
+    print(gas_dict[species]["mucos_dict"])
