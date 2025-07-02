@@ -78,7 +78,11 @@ def load_carma(path: str, restart: int =0) -> Carma:
         for line in f:
             name, wtmol, ivaprtn, icomp, wtmol_dif = shlex.split(line[:-1])
             name= name[:-len(' Vapor')]
-            carma.gasses[name] = Gas(name, len(carma.gasses)+1, wtmol=float(wtmol), ivaprtn=int(ivaprtn), wtmol_dif=float(wtmol_dif))
+            carma.gasses[name] = Gas(name, 
+                                     len(carma.gasses)+1, 
+                                     wtmol=float(wtmol), 
+                                     ivaprtn=int(ivaprtn), 
+                                     wtmol_dif=float(wtmol_dif))
             
     
     with open(os.path.join(path, io["elements_file"]), "r") as f:
@@ -86,7 +90,13 @@ def load_carma(path: str, restart: int =0) -> Carma:
         for line in f:
             igroup, name, rho, proc, igas = shlex.split(line[:-1])
             group = carma.groups[list(carma.groups.keys())[int(igroup)-1]]
-            carma.elems[name] = Element(name, len(carma.elems)+1, group, float(rho), proc, int(igas))
+            carma.elems[name] = Element(name, 
+                                        len(carma.elems)+1, 
+                                        group, 
+                                        float(rho), 
+                                        proc, 
+                                        int(igas))
+            
             if "Mantle" in name:
                 group.mantle = carma.elems[name]
             else:
