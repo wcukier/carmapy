@@ -245,7 +245,7 @@ COLDIA_CO =  3.86e-8  # Ramos-Estrada M. et al. Latin Am Appl Res. 34, 41-47, 20
 
 
 
-gas_dict = {
+gas_dict = { #TODO change to predifined gas objects
     "H2O": {
         "cond_rho": RHO_W,
         "vaprtn": {

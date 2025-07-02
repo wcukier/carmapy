@@ -1,6 +1,11 @@
 Installation
 ===============
 
+Dependencies
+------------
+Most dependencies will be automatically installed for you but in order to 
+install 
+
 Installation with git
 ---------------------
 Currently this is the only way to install carmapy::

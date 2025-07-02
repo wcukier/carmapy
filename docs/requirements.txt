@@ -6,5 +6,5 @@
     nbsphinx
     sphinx_rtd_theme
     ipykernel
-    sphinx_autodoc_typehints
-    sphinx>=7.2
+    sphinx_autodoc_typehints>=8.2
+    sphinx>=8.2
