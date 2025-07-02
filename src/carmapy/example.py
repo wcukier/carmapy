@@ -1,3 +1,5 @@
+"""Example simulation configs and data"""
+
 from carmapy.carmapy import Carma
 from carmapy.chemistry import populate_abundances_at_cloud_base
 import os
@@ -9,7 +11,15 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Loads example atmospheric structure "levels."  Atmospheric levels describe
     the boundaries between atmospheric layers and thus the length of "levels" 
-    arrays is one more than that of the "centers" arrays
+    arrays is one more than that of the "centers" arrays.
+
+    The files are taken from a 1000 K, log g = 4.5, f_sed = 4, log [Fe/H] = 1
+    sonora diamondback run.
+
+    @Citation Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
+        http://arxiv.org/abs/2402.00758
+
+
 
     Returns:
         Tuple of np.ndarray: A tuple containing four 1D numpy arrays
@@ -30,6 +40,18 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
 
 def example_carma(name):
+    """
+    Initializes and returns a Carma object with an example atmospheric structure
+    based on a sonora diamondback run (Morley et al. 2024)/
+
+    The returned carma object includes Pure TiO2 and Mg2SiO4 on TiO2 clouds
+
+    Args:
+        name (str): A name identifier for the CARMA model instance.
+
+    Returns:
+        Carma: An initialized and configured CARMA model object.
+    """
     P_levels, T_levels, kzz_levels, mu_levels = example_levels()
 
     carma = Carma(name)
@@ -37,9 +59,7 @@ def example_carma(name):
     carma.set_physical_params(surface_grav=31600,
                               wt_mol=np.mean(mu_levels))
 
-
-    carma.set_stepping(dt=250, output_gap=10, n_tstep=10000)
-
+    carma.set_stepping(dt=250, output_gap=10, n_tstep=100)
 
     # Optional, here to preserve ordering
     carma.add_gas("TiO2")
@@ -48,7 +68,6 @@ def example_carma(name):
     carma.add_hom_group("TiO2", 1e-8)
     carma.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2**(1/3))
 
-
     carma.add_P(P_levels)
     carma.add_T(T_levels)
     carma.add_kzz(kzz_levels)
@@ -56,6 +75,6 @@ def example_carma(name):
     carma.calculate_z(mu_levels)
     carma.extend_atmosphere(1e10)
 
-    populate_abundances_at_cloud_base(carma, metalicity=1)
+    populate_abundances_at_cloud_base(carma, metallicity=1)
 
     return carma

@@ -10,6 +10,8 @@ import shlex
 import contextlib
 from numpy.typing import ArrayLike
 
+from typing import Union
+
 SRC = os.path.dirname(os.path.dirname(__file__))
 
 
@@ -27,20 +29,84 @@ def _cd(path):
 
 
 class Carma:
-    def __init__(self, name: str, is_2d=False) -> None:
-        
-        
-        self.is_2d:         bool        = is_2d          # true for 2d carma, false for 1d carma
-        self.NZ:            int         = 0                 # number of bins in the vertical (z) direction
-        self.NBIN:          int         = 80              # number of bins in particle radius
-        self.NLONGITUDE:    int         = 64        # number of longitude bins (ignored if is_2d==False)
-        self.P_levels:      ArrayLike   = None        # Pressure levels in barye, starting at bottom of atmosphere
-        self.P_centers:     ArrayLike   = None       # Pressure centers in barye, starting at bottom of atmosphere
-        self.z_levels:      ArrayLike   = None        # Altitude levels in cm, starting at bottom of atmosphere where z=0
-        self.z_centers:     ArrayLike   = None       # Altitude centers in cm, starting at bottom of atmosphere where z=0
-        self.T_centers:     ArrayLike   = None       # Temperature centers in K, starting at bottom of atmosphere
-        self.T_levels:      ArrayLike   = None        # Temperature levels in K, starting at the bottom of the atmosphere
-        self.kzz_levels:    ArrayLike   = None      # Eddy diffusion coefficent k_zz in cm^2/s, starting at bottom of atmosphere
+    """
+    An object representing a CARMA simulation. 
+
+    Parameters
+    ----------
+    name : str
+        A name identifier for the CARMA simulation. This name is used for output 
+        directories and file prefixes.
+    is_2d : bool, optional
+        If True, sets the simulation in 2D mode (longitude × vertical). 
+        Defaults to False  (1D vertical column). 
+        **Note: `is_2d=True` is not currently supported.**
+
+
+    Examples
+    --------
+    >>> carma = Carma("new_carma")
+    """
+
+    NZ:            int         = 0               
+    """ Number of vertical layers in the atmospheric grid. """
+    NBIN:          int         = 80             
+    """ Number of particle radius bins (default 80). """
+    NLONGITUDE:    int         = 64        
+    """ Number of longitude bins (used only in 2D mode). """
+
+    P_levels:      ArrayLike   = None        
+    """ Pressure levels starting from bottom of atmosphere [barye]. """
+    P_centers:     ArrayLike   = None       
+    """ Pressure center values (between levels) [barye]. """
+
+    z_levels:      ArrayLike   = None       
+    """ Altitude levels where z=0 is bottom of atmosphere [cm]. """
+    z_centers:     ArrayLike   = None       
+    """  Altitude center values (between levels) [cm]. """
+
+    T_levels:      ArrayLike   = None        
+    """  Temperature levels [K]. """
+    T_centers:     ArrayLike   = None      
+    """ Temperature center values (between levels) [K]. """
+
+    kzz_levels:    ArrayLike   = None     
+    """ Eddy diffusion coefficient levels [cm²/s]. """
+    
+
+    
+    surface_grav:       float   = None   
+    """ Surface gravity of the planet / brown dwarf [cm/s²] """
+    wt_mol:             float   = None          
+    """ Mean molecular weight of the atmosphere [dimentionless] """
+    log_metallicity:    float   = 0
+    """ Log Solar Metallicity (Default 0) """
+
+    r_planet:           float   = 6.991e9    
+    """ Planet radius [cm] (Defaults to 1 Jovian radius); ignored in 1D mode? 
+    """
+    velocity_avg:       float   = -1    
+    """ Mean longitudinal wind speed at the equator [cm/s]; ignored in 1-D mode 
+    """
+
+
+    restart:            bool    = False        
+    """If true, continues the simulation from a previously stored state 
+    (Default False) """
+
+    dt:                 int              
+    """ Simulation timestep [s] """
+
+    output_gap: int = 1000      
+    """ Number of timesteps between each simulation output """
+    n_tstep: int = 1_000_000    
+    """ Total number of timesteps """
+
+
+    def __init__(self, name: str, is_2d=False) -> None:        
+        self.is_2d:         bool        = is_2d          # true for 2d carma, false for 1d carma        
+        self.name:      str = name            # Name for the carma object, used to define the directory the object is saved in
+
         self.idiag:         int         = 0
         self.iappend:       int         = 0
 
@@ -51,21 +117,7 @@ class Carma:
         self.gasses:    dict[str, "Element"]    = {}      # dictionary of carma Gas objects
         self.nucs:      list["Nuc"]             = []      # list of carma Nuc objecs
         self.coags:     list["Coag"]            = []      # dictionary of carma Coag objects
-        
-        self.name:      str = name            # Name for the carma object, used to define the directory the object is saved in
-        self.surface_grav: float = None    # surface gravity of the planet, in cm/s^2
-        self.wt_mol: float = None          # mean molecular weight of the atmosphere, in amu
-        self.r_planet: float = 6.991e9     # radius of the planet, in cm
-        self.velocity_avg: float = -1      # average longitudinal velocity in cm/s, ignored if is_2d==False
-        self.log_solar_metalicity: float = 0
-        
-        self.restart: bool = False        # if True will restart the carma run from the saved state
-        
-        self.dt: int = 1000              # carma timestep in seconds
-        self.output_gap: int = 1000      # number of timesteps per output
-        self.n_tstep: int = 1_000_000    # total number of timesteps
-        
-        
+
         if is_2d:
             self.igridv: int = I_LOGP
         else:
@@ -75,7 +127,27 @@ class Carma:
 
 
         
-    def set_stepping(self, dt=None, output_gap = None, n_tstep = None) -> None:
+    def set_stepping(self, 
+                     dt: float | None = None, 
+                     output_gap: int | None = None, 
+                     n_tstep: int | None = None) -> None:
+        """Modifies the simulation timestepping behavior.  
+        Specifically, sets the simulation timestep, gap between outputs, and 
+        total number of timesteps. Will leave as-is any parameter not provided
+
+        Parameters
+        ----------
+        dt : float, optional
+            Simulation timestep [s], left as is if not provided
+        output_gap : int, optional
+            Gap between simulation outputs, left as is if not provided
+        n_tstep : int, optional
+            Total number of timesteps to run the simulation for, left as is if 
+            not provided
+        """
+        
+  
+
         if dt:
             if dt != int(dt):
                 raise TypeError("dt must be a integer")
@@ -102,27 +174,65 @@ class Carma:
         if n_tstep: self.n_tstep = n_tstep
             
         
-    def set_physical_params(self, surface_grav = None, wt_mol = None, r_planet = None, velocity_avg = None, use_jovian_radius=False):
+    def set_physical_params(self, 
+                            surface_grav: float = None, 
+                            wt_mol: float = None, 
+                            log_metallicity: float = None,
+                            r_planet: float = None, 
+                            velocity_avg: float = None, 
+                            use_jovian_radius: bool = False) -> None:
+        """Modifies the physical parameters of the simulation.
+        Can be used to set the surface gravity, the mean molecular weight, the 
+        log metallicity of the planet, the planetary radius, and the average
+        longitudinal equatorial wind speed velocity.  Will leave as-is any 
+        parameter not provided
+
+        Parameters
+        ----------
+        surface_grav : float, optional
+            Surface gravity [cm/s²], left as is if not provided
+        wt_mol : float, optional
+            Mean molecular weight [dimensionless], left as is if not provided
+        log_metallicity : float, optional
+            Log metallicity relative to solar ([Fe/H]), left as is if not 
+            provided
+        r_planet : float, optional
+            The planetary radius [cm (or R_J if use_jovian_radius is true)], 
+            left as is if not provided
+        velocity_avg : float, optional
+            The average longitudinal wind speed at the equator, left as is if 
+            not provided
+        use_jovian_radius : bool, optional
+            Set to true to provide planetary radius in Jovian radii, by default 
+            False
+        """
         if surface_grav:
             if surface_grav < 0:
                 raise ValueError("Surface Gravity must be positive")
        
-            
         if wt_mol:
             if wt_mol < 0:
                 raise ValueError("Molar Weight must be positive")
             if wt_mol > 3 or wt_mol < 2:
-                warnings.warn(f"Typical values of wt_mol are between 2 and 3.  Your value is {wt_mol}.")
+                warnings.warn(f"Typical values of wt_mol are between 2 and 3. "
+                              +f"Your value is {wt_mol}.")
            
+        if log_metallicity:
+            if ((type(log_metallicity) != type(1)) 
+                and (type(log_metallicity) != type(0.5))):
+                raise ValueError("log_metallicity must be an int or float")
             
         if r_planet:
             if r_planet < 0:
                 raise ValueError("Planet Radius must be positive")
             if r_planet < 20 and not use_jovian_radius:
-                warnings.warn("You specified a planetary radius under 20.  Assuming you meant in units of Jovian radius.  \n set use_jovian_radius=True to supress this warning")
+                warnings.warn("You specified a planetary radius under 20. "
+                              "Assuming you meant in units of Jovian radius. "
+                        "\n set use_jovian_radius=True to supress this warning")
                 use_jovian_radius = True
             if r_planet > 1e3 and use_jovian_radius:
-                raise ValueError(f"The specified planetary radius of {r_planet} jovian radii is too high")
+                raise ValueError(f"The specified planetary radius of "
+                                 f"{r_planet} jovian radii is too high")
             
         if velocity_avg:
             if velocity_avg < 0:
@@ -131,11 +241,9 @@ class Carma:
                 warnings.warn("velocity_avg is ignored in a 1D sim")
         
         
-        
-        
-        
         if surface_grav: self.surface_grav = surface_grav
         if wt_mol: self.wt_mol = wt_mol
+        if log_metallicity: self.log_metallicity = log_metallicity
         if r_planet:
             if use_jovian_radius:
                 self.r_planet = r_planet * JUPITER_RADIUS
@@ -146,18 +254,44 @@ class Carma:
    
     
     def add_kzz(self, levels: ArrayLike) -> None:
+        """Sets eddy diffusion levels.  Checks to see if the provided levels are
+        compatible in array shape with the other inputs already provided to 
+        carma. If NZ is not set, sets NZ. The first element
+        of the levels array should correspond to the bottom of the atmosphere.
+
+        Parameters
+        ----------
+        levels : ArrayLike
+            Eddy diffusion coefficient values at the boundaries of the 
+            atmospheric cells [cm²/s]
+        """
         if self.NZ:
             if len(levels) != self.NZ + 1:
-                raise ValueError(f"levels must be {self.NZ+1} long to be compatible with other inputs.\nYour data was {len(levels)} long.")
+                raise ValueError(f"levels must be {self.NZ+1} long to be "
+                                 f"compatible with other inputs."
+                                 f"\nYour data was {len(levels)} long.")
         else:
             self.NZ = len(levels) - 1
         self.kzz_levels = levels
     
     def add_P(self, levels: ArrayLike) -> None:
+        """Sets pressure levels and centers.  Uses provided 
+        levels to calculate the pressure centers and checks to see if the
+        provided levels are compatible in array shape with the other inputs 
+        already provided to carma. If NZ is not set, sets NZ. The first element
+        of the levels array should correspond to the bottom of the atmosphere.
+
+        Parameters
+        ----------
+        levels : ArrayLike
+            Pressure values at the boundaries of the atmospheric cells [barye]
+        """
         levels = np.array(levels)
         if self.NZ:
           if len(levels) != self.NZ + 1:
-                raise ValueError(f"levels must be {self.NZ+1} long to be compatible with other inputs.\nYour data was {len(levels)} long.")
+                raise ValueError(f"levels must be {self.NZ+1} long to be "
+                                 f"compatible with other inputs."
+                                 f"\nYour data was {len(levels)} long.")
         else:
             self.NZ = len(levels) - 1
 
@@ -165,22 +299,37 @@ class Carma:
         self.P_levels = levels
         
     def add_T(self, levels: ArrayLike) -> None:
+        """Sets temperature levels and centers.  Uses provided 
+        levels to calculate the temperature centers and checks to see if the
+        provided levels are compatible in array shape with the other inputs 
+        already provided to carma. If NZ is not set, sets NZ. The first element
+        of the levels array should correspond to the bottom of the atmosphere.
+
+        Parameters
+        ----------
+        levels : ArrayLike
+            Temperature values at the boundaries of the atmospheric cells [K]
+        """
         levels = np.array(levels)
         if self.NZ:
             if levels.shape[0] != self.NZ + 1:
-                raise ValueError(f"levels must be {self.NZ + 1} long to be compatible with other inputs.\nYour data was {len(levels)} long.")
+                raise ValueError(f"levels must be {self.NZ + 1} long"
+                                 + "to be compatible with other inputs."
+                                 +"\nYour data was {len(levels)} long.")
         else:
            self.NZ = levels.shape[0] - 1
         if self.is_2d:
             if len(levels.shape) != 2:
-                raise ValueError("Carma is in 2-D mode: T centers must be a 2-D array")
+                raise ValueError("Carma is in 2-D mode: "
+                                 +"T centers must be a 2-D array")
             self.NLONGITUDE = levels.shape[1]
 
             self.T_centers = (levels[:-1, :] + levels[1:, :])/2
 
         else:
             if len(levels.shape) != 1:
-                raise ValueError("Carma is in 1-D mode: T centers must be a 1-D array")
+                raise ValueError("Carma is in 1-D mode: "
+                                 +"T centers must be a 1-D array")
             self.T_centers = (levels[:-1] + levels[1:])/2
     
         self.T_levels = levels
@@ -189,9 +338,24 @@ class Carma:
 
         
     def add_z(self,  levels: ArrayLike) -> None:
+        """Sets altitude levels and centers.  Uses provided 
+        levels to calculate the altitude centers and checks to see if the
+        provided levels are compatible in array shape with the other inputs 
+        already provided to carma. If NZ is not set, sets NZ. z=0 should be the
+        first element in the levels array which corresponds to the bottom of the 
+        atmosphere.
+
+        Parameters
+        ----------
+        levels : ArrayLike
+            Altitude values at the boundaries of the atmospheric cells [cm]
+        """
+
         if self.NZ:
              if len(levels) != self.NZ + 1:
-                raise ValueError(f"levels must be {self.NZ+1} long to be compatible with other input.\nYour data was {len(levels)} long.")
+                raise ValueError(f"levels must be {self.NZ+1} long to be "
+                                 f"compatible with other inputs."
+                                 f"\nYour data was {len(levels)} long.")
         else:
             self.NZ = len(levels) - 1
         self.z_centers = (levels[:-1] + levels[1:])/2
@@ -199,14 +363,44 @@ class Carma:
 
     
     def add_het_group(self, 
-                      gas: str, 
-                      seed_group: str, 
+                      gas: Union[str, "Gas"], 
+                      seed_group: Union[str, "Group"], 
                       rmin: float, 
-                      mucos: float | None = None, 
+                      mucos: float = None, 
                       add_coag: bool = False) -> "Group":
+        """Adds a heterogeneously nucleating group to the simulation.  Assumes
+        the gas nucleates on the seed particle. If a string is passed to `gas`, 
+        will use the carmapy default parameters for that gas if that gas does 
+        not already exist in the simulation.  Additionally adds the gas and any 
+        created elements, nuc objects, growth objects, and coag objects to the 
+        simulation.
+
+        Parameters
+        ----------
+        gas : Union[str, Gas]
+            Gas object, name of already created gas, or name of the default 
+            carmapy gas that nucleates on the seed particle
+        seed_group : Union[str, Group]
+            Group object, name of group, or name of gas that formed the group
+            which serves as the seed particle for the condensate
+        rmin : float
+            Minimum radius of the condensate [cm]
+        mucos : float, optional
+            Cosine of the contact angle between the gas and the seed particle, 
+            if not provided defaults to carmapy defaults
+        add_coag : bool, optional
+            If true, allows coagulation of this particle onto itself,
+            by default False
+
+        Returns
+        -------
+        Group
+            The created group consisting of the gas nucleated onto the seed 
+            particle
+        """
         if type(gas) == type(""):
             gas = self.gasses.get(gas, Gas(gas, len(self.gasses) + 1))
-            self.gasses[gas.name] = gas
+        self.gasses[gas.name] = gas
         
         if type(seed_group) == type(""):
             seed_group = self.groups["Pure "+seed_group.split(" ")[-1]]
@@ -239,12 +433,35 @@ class Carma:
         return group
         
     def add_hom_group(self, 
-                      gas: str,
+                      gas: Union[str, "Gas"],
                       rmin: float,
                       add_coag: bool = False) -> "Group":
+        """Adds a heterogeneously nucleating group to the simulation.  Assumes
+        the gas homogeneously nucleates. If a string is passed to `gas`, 
+        will use the carmapy default parameters for that gas if that gas does 
+        not already exist in the simulation.  Additionally adds the gas and any 
+        created elements, nuc objects, growth objects, and coag objects to the 
+        simulation.
+
+        Parameters
+        ----------
+        gas : Union[str, Gas]
+            Gas object, name of already created gas, or name of the default 
+            carmapy gas that homogeneously nucleates
+        rmin : float
+             Minimum radius of the condensate [cm]
+        add_coag : bool, optional
+            If true, allows coagulation of this particle onto itself,
+            by default False
+
+        Returns
+        -------
+        Group
+            The created group consisting of the homogeneously nucleated gas
+        """
         if type(gas) == type(""):
             gas = self.gasses.get(gas, Gas(gas, len(self.gasses) + 1))
-            self.gasses[gas.name] = gas
+        self.gasses[gas.name] = gas
             
         name = "Pure "+ gas.name
         group = Group(len(self.groups)+1, name, rmin)
@@ -266,39 +483,93 @@ class Carma:
         
         return group
     
-    def add_gas(self, gas: str, **kwargs) -> "Gas":
-        self.gasses[gas] = self.gasses.get(gas, Gas(gas, len(self.gasses)+1, **kwargs))
+    def add_gas(self, gas: Union[str, "Gas"], **kwargs) -> "Gas":
+        """Adds a gas to the simulation.  
+        
+        If a string is passed gas then if the gas does not already exist in the 
+        simulation, the carmapy default properties of that gas will be used.  
+        Passes ``**kwargs`` to the Gas constructor if a new gas is created.
+
+        Parameters
+        ----------
+        gas : Union[str, Gas]
+            Gas object or name of the carmapy default gas to be added to the
+            simulation
+
+        Returns
+        -------
+        Gas
+            The gas which was added to the simulation.
+        """
+        if type(gas) == type(""):
+            self.gasses[gas] = self.gasses.get(gas, 
+                                               Gas(gas, len(self.gasses)+1, 
+                                                **kwargs))
+        else:
+            self.gasses[gas] = Gas
         return gas
       
-    def add_coag(self, group: str):
+    def add_coag(self, group: Union[str, "Group"]) -> None:
+        """Adds self coagulation of the given group to the simulation. 
+
+        Parameters
+        ----------
+        group : Union[str, Group]
+            Group object or name of group to add self-coagulation to
+        """
         if type(group) == type(""):
             g = self.groups.get(group, False)
             if g:
-                raise ValueError(f"Group '{group}' not found")
+                raise ValueError(f"Group '{group}' not found in simulation")
         elif type(group) == type(Group(-1, -1, -1)):
             g = group
+            self.groups[group.name] = g
         else:
             raise TypeError("Group must be a group object or a string")
             
         self.coags.append(Coag(g))
         
       
-    def set_nmr(self, nmr_dict: dict):
+    def set_nmr(self, nmr_dict: dict[str, ArrayLike]) -> None:
+        """Sets the gas number mixing ratios of the simulation
+
+        Parameters
+        ----------
+        nmr_dict : dict[str, ArrayLike]
+            The number mixing ratio for each species.  The dictionary keys 
+            should be the name of gasses in the simulation.  The dictionary 
+            values should either be a float representing the mixing ratio at the
+            bottom of the atmosphere or an array representing the mixing ratio
+            at each atmospheric center
+        """
         for key in nmr_dict.keys():
             self.gasses[key].nmr = nmr_dict[key]
     
-    def calculate_z(self, wt_mol: float | None=None):
+    def calculate_z(self, wt_mol: float | ArrayLike =None) -> None:
+        """Calculate and set the altitude structure.  Uses P and T levels to 
+        calculate the altitude structure using scale heights.
+
+        Parameters
+        ----------
+        wt_mol : float | Arraylike, optional
+            Mean molecular weight of the atmosphere.  If an array, must be the
+            same length as "levels" arrays, if not provided instead uses the
+            mean molecular weight stored in the simulation.
+        """
         if wt_mol is None:
             wt_mol = self.wt_mol
         if wt_mol is None:
-            raise RuntimeError("Carma.wt_mol must be set or a mean molecular weight array must be provided")
+            raise RuntimeError("Carma.wt_mol must be set or a mean molecular "
+                               "weight array must be provided")
         
         if (self.T_levels is None or self.P_levels is None):
             raise RuntimeError("T and P levels must be set")
         if (self.surface_grav is None):
             raise RuntimeError("surface_grav must be set")
 
-        H_levels = k_B * self.T_levels/(wt_mol * PROTON_MASS * self.surface_grav)
+        H_levels = k_B * self.T_levels/(wt_mol 
+                                        * PROTON_MASS 
+                                        * self.surface_grav)
 
         self.z_levels = np.zeros(self.NZ + 1)
 
@@ -311,13 +582,30 @@ class Carma:
 
 
     def extend_atmosphere(self, max_P: float) -> None:
-        """
-        Extends the atmosphere P, T, z, and k_zz profiles to the specified depth
-        adiabatically using the fit from Parmentier et al. (2015) to the equation
-        of state described in Saumon (1995).  Requires that the P, T, z, and k_zz
-        levels are set
+        """Extends the atmospheric structure to deeper pressures.  Modifies the
+        pressure, temperature, altitude, and eddy diffusion levels and requires
+        that they have previously been set.
 
+        Parameters
+        ----------
+        max_P : float
+            The pressure to which the atmosphere is extended
+
+        Notes
+        -------
+        Atmosphere is extended adiabatically using the fit from Parmentier et 
+        al. (2015) [1]_ to the equation of state described in Saumon (1995) [2]_
+
+
+        References
+        ----------
+        .. [1] Parmentier, V., Guillot, T., Fortney, J. J., & Marley, 
+           M. S. 2015, A&A, 574, A35
+
+        .. [2] Saumon, D., Chabrier, G., & van Horn, H. M. 1995, The 
+           Astrophysical Journal Supplement Series, 99 (IOP), 713
         """
+
         if (self.P_levels is None or self.T_levels is None or self.kzz_levels is None or self.z_levels is None):
             raise RuntimeError("P_levels, T_levels, z_levels, and/or kzz_levels are not set")
         
@@ -371,23 +659,50 @@ class Carma:
         self.kzz_levels = kzz_new
 
 
-    def calc_H(self, centers=False):
-        
-        if centers:
+    def calc_scale_height(self, calc_centers=False) -> np.ndarray:
+        """Calculates the atmospheric scale height.
+
+        Parameters
+        ----------
+        calc_centers : bool, optional
+            if True calculates scale height at centers, otherwise calculates it
+            at levels, by default False
+
+        Returns
+        -------
+        np.ndarray
+            The scale height of the atmosphere at each center/level point
+        """
+        if calc_centers:
             T = self.T_centers
         else:
             T = self.T_levels
        
         return k_B * T/(self.wt_mol * PROTON_MASS * self.surface_grav)
 
-    def run(self, path=None, suppress_output=False):
+    def run(self, suppress_output=False) -> None:
+        """Runs the CARMA Simulation.
+
+        Creates a directory at the path described by the name of the simulation
+        and populates it with the input files required to run the CARMA 
+        executable.  Runs and print the stdout from the CARMA executable unless
+        suppress_output is true.  The carma executable will also write to output
+        files in the created directory.
+
+        Parameters
+        ----------
+        suppress_output : bool, optional
+            If true, will not print stdout from the CARMA executable,
+            by default False
+
+        """
         if self.is_2d and self.velocity_avg < 0:
             raise RuntimeError("For 2D carma, velocity_avg must be specified")
         
         if (self.wt_mol is None or self.surface_grav is None):
             raise RuntimeError("surface_grav and wt_mol must be set")
         
-        if not path: path = self.name
+        path = self.name
         
         os.makedirs(path, exist_ok=True)
         os.makedirs(os.path.join(path, "inputs"), exist_ok=True)
@@ -418,7 +733,7 @@ class Carma:
                 "grav_set":             self.surface_grav,
                 "rplanet":              self.r_planet,
                 "velocity_avg":         self.velocity_avg,
-                "met":                  self.log_solar_metalicity
+                "met":                  self.log_metallicity
                 },
             "input_params": {
                 "NZ":                   self.NZ,
@@ -546,13 +861,22 @@ class Carma:
             except Exception as e:
                 print(e)
             
-    def read_results(self):
+    def read_results(self) -> None:
+        """Reads in results of the carma simulation.  
+
+        See Also
+        --------
+        carmapy.Results()
+        """
         self.results = Results(self)
         
         
     
     
 class Element:
+    """Elements are the components of groups.  
+    """
+
     def __init__(self, 
                  name: str,
                  ielem: int,
@@ -565,9 +889,9 @@ class Element:
         self.group: "Group" = group
         self.rho:   float   = rho
         self.proc:  str     = proc
-        self.igas:  int     = igas
+        self.igas:  int     = igas #TODO chance to reference gas directly
     
-class Gas:
+class Gas: 
     def __init__(self, 
                  gas_name: str, 
                  igas: int, 

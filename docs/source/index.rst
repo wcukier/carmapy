@@ -8,14 +8,14 @@ carmapy's documentation
 
 carmapy is a python wrapper of the Community Aerosol and Radiation Model for Atmospheres (CARMA), originally developed by Turco et al. (1979) and Toon et al. (1979).  carmapy specifically wraps exoCARMA, a version of CARMA developed by Gao et al. (2018) and Powell et al. (2018) to model clouds on exoplanets.
 
-**NOTE: carmapy IS IN EARLY BETA AND IS NOT YET FULLY TESTED.  USE AT YOUR OWN RISK**
+**NOTE: carmapy IS IN ALPHA AND IS NOT YET FULLY TESTED.  USE AT YOUR OWN RISK**
 
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :hidden:
 
    installation
    tutorials
-
+   api
