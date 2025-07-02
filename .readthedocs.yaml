@@ -17,7 +17,6 @@ build:
   tools:
 
     python: "3.12"
-    sphinx: "7.2.6"  # or latest
   apt_packages:
     - gfortran
 
