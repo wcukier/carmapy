@@ -4,7 +4,16 @@ Installation
 Dependencies
 ------------
 Most dependencies will be automatically installed for you but in order to 
-install 
+install carmapy you must first either have the intel fortran compiler (preferred)
+or gfortran installed.  To check that they are installed you can run the 
+following commands::
+
+   which ifort
+   which gfortran
+
+as long as at least one of those commands returns as file path rather than saying
+"ifort not found" or "gfortran not found" then you should be good to proceed with
+installation
 
 Installation with git
 ---------------------
