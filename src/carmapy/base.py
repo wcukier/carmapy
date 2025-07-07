@@ -76,13 +76,37 @@ def load_carma(path: str, restart: int =0) -> Carma:
     with open(os.path.join(path, io["gases_file"]), "r") as f:
         f.readline()
         for line in f:
-            name, wtmol, ivaprtn, icomp, wtmol_dif = shlex.split(line[:-1])
+            (name, 
+             wtmol, 
+             _, 
+             gcomp, 
+             wtmol_dif,
+             rho_cond,
+             surften_0,
+             coldia,
+             vp_offset,
+             vp_tcoeff,
+             is_typeIII,
+             surften_slope,
+             vp_metcoeff,
+             vp_logpcoeff) = shlex.split(line[:-1])
+            
             name= name[:-len(' Vapor')]
             carma.gasses[name] = Gas(name, 
                                      len(carma.gasses)+1, 
                                      wtmol=float(wtmol), 
-                                     ivaprtn=int(ivaprtn), 
-                                     wtmol_dif=float(wtmol_dif))
+                                     wtmol_dif=float(wtmol_dif),
+                                     gcomp = int(gcomp),
+                                     rho_cond = float(rho_cond),
+                                     surften_0 = float(surften_0),
+                                     surften_slope = float(surften_slope),
+                                     coldia = float(coldia),
+                                     vp_offset = float(vp_offset),
+                                     vp_tcoeff = float(vp_tcoeff),
+                                     vp_metcoeff = float(vp_metcoeff),
+                                     vp_logpcoeff = float(vp_logpcoeff),
+                                     is_typeIII = bool(is_typeIII)
+                                     )
             
     
     with open(os.path.join(path, io["elements_file"]), "r") as f:

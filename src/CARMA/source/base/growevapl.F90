@@ -86,21 +86,20 @@ subroutine growevapl(carma, cstate, iz, rc)
 
     if (igas .ne. 0) then
       ! Only valid for condensing liquid water and sulfric acid currently.
-      ! TODO - WC
-      if ((igas .ne. igash2o) .and. (igas .ne. igash2so4) .and. (igas .ne. igass8) .and. (igas .ne. igass2) &
-	.and. (igas .ne. igaskcl) .and. (igas .ne. igaszns) .and. (igas .ne. igasna2s) &
-        .and. (igas .ne. igasmns) .and. (igas .ne. igascr) .and. (igas .ne. igasfe) &
-        .and. (igas .ne. igasmg2sio4) .and. (igas .ne. igastio2) .and. (igas .ne. igasal2o3) &
-        .and. (igas .ne. igasco)) then
-        if (do_print) write(LUNOPRT,*) 'growevapl::ERROR - Invalid gas (', igas, ').'
-        rc = -1
-        return
-      endif
+  !     if ((igas .ne. igash2o) .and. (igas .ne. igash2so4) .and. (igas .ne. igass8) .and. (igas .ne. igass2) &
+	! .and. (igas .ne. igaskcl) .and. (igas .ne. igaszns) .and. (igas .ne. igasna2s) &
+  !       .and. (igas .ne. igasmns) .and. (igas .ne. igascr) .and. (igas .ne. igasfe) &
+  !       .and. (igas .ne. igasmg2sio4) .and. (igas .ne. igastio2) .and. (igas .ne. igasal2o3) &
+  !       .and. (igas .ne. igasco)) then
+  !       if (do_print) write(LUNOPRT,*) 'growevapl::ERROR - Invalid gas (', igas, ').'
+  !       rc = -1
+  !       return
+  !     endif !WC - commented out
 
       ! Treat condensation of gas <igas> to/from particle group <igroup>.
       !
       ! Bypass calculation if few particles are present 
-      if( pconmax(iz,igroup) .gt. FEW_PC )then
+    if( pconmax(iz,igroup) .gt. FEW_PC )then
         do ibin = 1,NBIN-1
           !write(*,*) igroup, ibin, igas, "before pheat"
           ! Determine the growth rate (dmdt). This calculation may take into account

@@ -774,13 +774,33 @@ class Carma:
                 f.write(f'{name:24s}{self.groups[key].rmin:.15e}\n')
         
         with open(os.path.join(path, io["gases_file"]), "w+") as f:
-            f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\n")
+
+            f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\trho_cond\t"
+                    "surften_0\tcoldia\tvp_offset\tvp_tcoeff\tis_type3\t"
+                    "surften_slope\tvp_metcoeff\tvplogpcoeff\n")
+            
             for key in self.gasses.keys():
+                gas : "Gas" = self.gasses[key]
                 name = '"'+key + ' Vapor"'
-                f.write(f'{name:24s}{self.gasses[key].wtmol:<.6e}\t'
-                        f'{self.gasses[key].ivaprtn:2d}\t'
-                        f'{self.gasses[key].icomp:2d}\t'
-                        f'{self.gasses[key].wtmol_dif:3.4f}\n')
+
+                if   gas.gcomp == 1: vaprtn = I_VAPRTN_H2O_MURPHY2005
+                elif gas.gcomp == 2: vaprtn = I_VAPRTN_H2SO4_AYERS1980
+                else: vaprtn = I_VAPRTN_USER
+
+                f.write(f'{name:24s}{gas.wtmol:<.6e}\t'
+                        f'{vaprtn:2d}\t' 
+                        f'{gas.gcomp:2d}\t'
+                        f'{gas.wtmol_dif:<.10e}\t'
+                        f'{gas.rho_cond:<.10e}\t'
+                        f'{gas.surften_0:<.10e}\t'
+                        f'{gas.coldia:<.10e}\t'
+                        f'{gas.vp_offset:<.10e}\t'
+                        f'{gas.vp_tcoeff:<.10e}\t'
+                        f'{int(gas.is_typeIII):1d}\t'
+                        f'{gas.surften_slope:<.10e}\t'
+                        f'{gas.vp_metcoeff:<.10e}\t'
+                        f'{gas.vp_logpcoeff:<.10e}'
+                        '\n')
         
         with open(os.path.join(path, io["elements_file"]), "w+") as f:
             f.write("igroup\tname\trho\tprocess\tigas\n")
@@ -944,7 +964,8 @@ class Element:
         self.igas:  int     = igas #TODO chance to reference gas directly
     
 class Gas: 
-    """An object representing a limiting gas resevoir for a condensate.
+    """An object representing a limiting gas resevoir for a condensate.  Attributes
+    not defined in ``**kwargs`` will be populated from carmapy defaults, if available
 
     Parameters
     ----------
@@ -953,61 +974,97 @@ class Gas:
         with the name of the condensate, not the gas phase (ie Mg2SiO4 not Mg) 
     igas : int
         The index of the gas in the Carma simulation
-    wtmol : float, optional
-        The molecular weight of the gas in condensate form [amu], if not 
-        provided uses carmapy defaults
-    ivaprtn : int, optional
-        Index of the vapor pressure routine.  Currently, only vapor pressure 
-        routines hardcoded into the CARMA can be used.  See constants.py for a
-        list of vapor pressure routines, if not provided uses
-        carmapy defaults (reccomended).
-    icomp : int, optional
-        Index that describes the gas composition.  Currently, only certain 
-        gasses hardcoded into the CARMA can be used.  See constants.py for a
-        list of gasses allowed, if not provided uses
-        carmapy defaults (reccomended).
-    wtmol_dif : float, optional
-        The molecular weight of the gas in its gas phase (ie the molecular 
-        weight of Mg for Mg2SiO4), uses carmapy defaults if not provided.
     nmr : ArrayLike, optional
         The number mixing ratio.  If a float is provided represents the number
         mixing ratio at the bottom of the atmosphere; if an array then 
         represents the mixing ratio at each "center" location.  Can be provided
         at anytime before simulation run, by default -1 (not initialized)
+
+
+    Notes
+    -----
+    1. The vapor pressure of the condensate is calculated as follows:
+
+        ``vp = 10**(offset - vp_tcoeff/T - vp_metcoeff * met - vp_logp_oeff * log10 P)``
+
+        with ``vp`` in baryes, ``T`` in K, and ``P`` in baryes.
+
+    
+    2. The surface tension of the condensate is calculated as follows:
+
+        ``surften = surften_0 - surften_slope * (T - 273.15)``
+
+        with ``T`` in K and ``surften`` in dyne / cm
+
+    References
+    ----------
+    .. [1] Helling, C., & Woitke, P. 2006, Astronomy and Astrophysics, 
+       Volume 455, Issue 1, August III 2006, pp325-338, 455, 325
     """
     
+
+    wtmol: float 
+    """ Molar mass of the condensate formed by the gas [g/mol] """
+
+    gcomp: int = 0
+    """ Integer that indicates composition (1 Water, 2 H2SO4, 0 other) """
+
+    wtmol_dif: float 
+    """ Molar mass of the gas phase of the gas [g/mol] """
+
+    rho_cond: float 
+    """ Density of the condensate formed by the gas [g/cm³]"""
+
+    surften_0: float 
+    """ Surface tension at 0 K assuming linear trend holds (see notes) [dyne/cm] """
+
+    surften_slope: float = 0
+    """ Slope of surface tension with temperature (see notes) [dyne/cm/K]"""
+
+    coldia: float 
+    """ Collisional diameter of the condensate [cm] """
+
+    vp_offset: float 
+    """ Constant term in vapor pressure equation (see notes)"""
+
+    vp_tcoeff: float 
+    """ Coeficcient to temperature term in vapor pressure equation (see notes) [K]"""
+
+    vp_metcoeff: float = 0
+    """ Coeficcient to metallicity term in vapor pressure equation (see notes)"""
+
+    vp_logpcoeff: float = 0
+    """ Coeficcent to pressure term in vapor pressure equation (see notes)"""
+
+    is_typeIII: bool = False
+    """ True if condensation reaction is a Type III reaction (see Helling & Woitke 2006) [1]_"""
+
+    
+
     def __init__(self, 
                  name: str, 
                  igas: int, 
-                 wtmol: float = None,
-                 ivaprtn: int = None,
-                 icomp: int = None,
-                 wtmol_dif: float = None,
-                 nmr: ArrayLike = -1):
+                 nmr: ArrayLike = -1,
+                 **kwargs):
         self.name: str = name
-        self.igas: int = igas
-
-        if wtmol: 
-            self.wtmol: float = wtmol
-        else:
-            self.wtmol = gas_dict[name]["wtmol"]
-
-        if ivaprtn:
-            self.ivaprtn: int = ivaprtn
-        else:
-            self.ivaprtn = gas_dict[name]["vaprtn"]["rtn"]
-
-        if icomp:
-            self.icomp: int = icomp
-        else:
-            self.icomp = gas_dict[name]["gcomp"]
-
-        if wtmol_dif:
-            self.wtmol_dif: float = wtmol_dif
-        else:
-            self.wtmol_dif = gas_dict[name]["wtmol_dif"]
-        
+        self.igas: int = igas        
         self.nmr: ArrayLike = nmr
+
+        defaults = gas_dict.get(name, kwargs)
+
+        self.wtmol          = kwargs.get("wtmol",         defaults["wtmol"])
+        self.wtmol_dif      = kwargs.get("wtmol_dif",     defaults["wtmol_dif"])
+        self.gcomp          = kwargs.get("gcomp",         defaults["gcomp"])
+        self.rho_cond       = kwargs.get("rho_cond",      defaults["rho_cond"])
+        self.surften_0      = kwargs.get("surften_0",     defaults["surften_0"])
+        self.surften_slope  = kwargs.get("surften_slope", defaults["surften_slope"])
+        self.coldia         = kwargs.get("coldia",        defaults["coldia"])
+        self.vp_offset      = kwargs.get("vp_offset",     defaults["vp_offset"])
+        self.vp_tcoeff      = kwargs.get("vp_tcoeff",     defaults["vp_tcoeff"])
+        self.vp_metcoeff    = kwargs.get("vp_metcoeff",   defaults["vp_metcoeff"])
+        self.vp_logpcoeff   = kwargs.get("vp_logpcoeff",  defaults["vp_logpcoeff"])
+        self.is_typeIII     = kwargs.get("is_typeIII",    defaults["is_typeIII"])
+
         
     
 class Nuc:

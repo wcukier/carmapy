@@ -46,8 +46,10 @@ subroutine supersat(carma, cstate, iz, igas, rc)
 
   ! Add in reaction saturation ratio correction for type III reactions (Helling
   ! and Woitke 2006)
-  if ( (igas .eq. igasna2s) .or. (igas .eq. igasmg2sio4) .or. (igas .eq. igasal2o3) ) then
-    supsatl(iz,igas) = sqrt(gc_cgs * rvap * t(iz) / pvapl(iz,igas)) - 1._f
+  ! if ( (igas .eq. igasna2s) .or. (igas .eq. igasmg2sio4) .or. (igas .eq. igasal2o3) ) then
+  if ( carma%f_gas(igas)%f_is_type3 .eq. 1 ) then ! WC
+    ! note this calculates S_r = sqrt(S) - 1, the below calculation is for S-1
+    supsatl(iz,igas) = sqrt(gc_cgs * rvap * t(iz) / pvapl(iz,igas)) - 1._f 
     supsati(iz,igas) = sqrt(gc_cgs * rvap * t(iz) / pvapi(iz,igas)) - 1._f
   else
     supsatl(iz,igas) = (gc_cgs * rvap * t(iz) - pvapl(iz,igas)) / pvapl(iz,igas)
@@ -88,7 +90,8 @@ subroutine supersat(carma, cstate, iz, igas, rc)
 
   ! supsatl close to 0 causes carma to crash
   if (abs(supsatl(iz,igas)) < 1e-16_f) then
-    supsatl(iz,igas) = -1e-16_f
+    supsatl(iz,igas) = 1e-16_f
+    supsati(iz,igas) = 1e-16
   end if
 
   return

@@ -1,3 +1,4 @@
+import numpy as np
 ## This module is part of the CARMA module and contains enumerations that are part of
 ## the CARMA and CARMASTATE objects.
 ##
@@ -104,7 +105,7 @@ I_VAPRTN_TIO2_LODDERS1999     = 15   ## TiO2, Lodders [1999]
 I_VAPRTN_TIO2_HELLING2001     = 16   ## TiO2, Helling et al. [2001] 
 I_VAPRTN_AL2O3_WAKEFORD2017     = 17   ## Al2O3, Wakeford et al. [2017] 
 I_VAPRTN_CO_WYLIE1958     = 18   ## CO, Wylie thesis [1958] 
-
+I_VAPRTN_USER    = 19 ## User defined
 # Routines to calculate fall velocities
 I_FALLRTN_STD              = 1   ## Standard CARMA 2.3 routine (spherical only)
 I_FALLRTN_STD_SHAPE        = 2   ## Optional CARMA 2.3 routine (supports shapes)
@@ -241,170 +242,201 @@ COLDIA_CO =  3.86e-8  # Ramos-Estrada M. et al. Latin Am Appl Res. 34, 41-47, 20
 
 
 
-# p = 10^(offset - t_coeff/T - met_coeff * met - logp_coeff * log10 p)
+# p = 10^(vp_offset - t_coeff/T - met_coeff * met - vp_logpcoeff * log10 p)
 
 
 
 gas_dict = { #TODO change to predifined gas objects
     "H2O": {
         "cond_rho": RHO_W,
-        "vaprtn": {
-            "rtn": I_VAPRTN_H2O_MURPHY2005,
-            "offset": 0,
-            "T_coeff": 0,
-            "met_coeff": 0,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_H2O_MURPHY2005,
+        "vp_offset": 0,
+        "vp_tcoeff": 0,
+        "vp_metcoeff": 0,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_H2O,
         "wtmol_dif": WTMOL_H2O,
         "gcomp": I_GCOMP_H2O,
         "mucos_dict": {},
         "fastchem_species": "H2O1",
-        "opacity_files": "WS15/H2O_complex.txt"
+        "opacity_files": "WS15/H2O_complex.txt",
+        "rho_cond": RHO_W,
+        "surften_0": np.nan,
+        "surften_slope": np.nan,
+        "coldia": COLDIA_H2O,
+        "is_typeIII": False
+
     },
         "KCl": {
         "cond_rho": RHO_KCL,
-        "vaprtn": {
-            "rtn": I_VAPRTN_KCL_MORLEY2012,
-            "offset": 13.6106,
-            "T_coeff": TCOEFF_KCL,
-            "met_coeff": 0,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_KCL_MORLEY2012,
+        "vp_offset": 13.6106,
+        "vp_tcoeff": TCOEFF_KCL,
+        "vp_metcoeff": 0,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_KCL,
         "wtmol_dif": WTMOL_KCL,
         "gcomp": I_GCOMP_KCL,
         "mucos_dict": {},
         "fastchem_species": "Cl1K1",
-        "opacity_files": "WS15/KCl_complex.txt"
+        "opacity_files": "WS15/KCl_complex.txt",
+        "rho_cond": RHO_KCL,
+        "surften_0": 160.4 + 0.07*273.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
+        "surften_slope": 0.07,
+        "coldia": COLDIA_KCL,
+        "is_typeIII": False
     },
         "ZnS": {
         "cond_rho": RHO_ZNS,
-        "vaprtn": {
-            "rtn": I_VAPRTN_ZNS_MORLEY2012,
-            "offset": 18.812,
-            "T_coeff": TCOEFF_ZNS,
-            "met_coeff": 1,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_ZNS_MORLEY2012,
+        "vp_offset": 18.812,
+        "vp_tcoeff": TCOEFF_ZNS,
+        "vp_metcoeff": 1,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_ZNS,
         "wtmol_dif": WTMOL_ZN,
         "gcomp": I_GCOMP_ZNS,
         "mucos_dict": {"KCl": 0.144356},
         "fastchem_species": "Zn",
-        "opacity_files": "WS15/ZnS_complex.txt"
+        "opacity_files": "WS15/ZnS_complex.txt",
+        "rho_cond": RHO_ZNS,
+        "surften_0": 860.0, #  @Citation: Zhang et al. 2003, J. Phys. Chem. B 2003, 107, 13051-13060 
+        "surften_slope": 0,
+        "coldia": COLDIA_ZNS,
+        "is_typeIII": False
     },
         "Na2S": {
         "cond_rho": RHO_NA2S,
-        "vaprtn": {
-            "rtn": I_VAPRTN_NA2S_MORLEY2012,
-            "offset": 14.55,
-            "T_coeff": TCOEFF_ZNS,
-            "met_coeff": 0.5,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_NA2S_MORLEY2012,
+        "vp_offset": 14.55,
+        "vp_tcoeff": TCOEFF_ZNS,
+        "vp_metcoeff": 0.5,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_NA2S,
         "wtmol_dif": WTMOL_NA,
         "gcomp": I_GCOMP_NA2S,
         "mucos_dict": {"TiO2": 0.48481},
         "fastchem_species": "Na",
-        "opacity_files": "WS15/Na2S_complex.txt"
+        "opacity_files": "WS15/Na2S_complex.txt",
+        "rho_cond": RHO_NA2S,
+        "surften_0": 1033, #  @Citation: Graham Lee's calculations, estimated from enthalpy data
+        "surften_slope": 0,
+        "coldia": COLDIA_NA2S,
+        "is_typeIII": True
     },
         "MnS": {
         "cond_rho": RHO_MNS,
-        "vaprtn": {
-            "rtn": I_VAPRTN_MNS_MORLEY2012,
-            "offset": 17.532,
-            "T_coeff": TCOEFF_MNS,
-            "met_coeff": 1,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_MNS_MORLEY2012,
+        "vp_offset": 17.532,
+        "vp_tcoeff": TCOEFF_MNS,
+        "vp_metcoeff": 1,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_MNS,
         "wtmol_dif": WTMOL_MN,
         "gcomp": I_GCOMP_MNS,
         "mucos_dict": {"TiO2": 0.214735},
-        "fastchem_species": "Na",
-        "opacity_files": "KH18/MnS-KH_complex.txt"
+        "fastchem_species": "Mn1S1",
+        "opacity_files": "KH18/MnS-KH_complex.txt",
+        "rho_cond": RHO_MNS,
+        "surften_0": 2326, #  @Citation:  Graham Lee's calculations, estimated from enthalpy data
+        "surften_slope": 0,
+        "coldia": COLDIA_MNS,
+        "is_typeIII": False
     },
         "Cr": {
         "cond_rho": RHO_CR,
-        "vaprtn": {
-            "rtn": I_VAPRTN_CR_MORLEY2012,
-            "offset": 13.49,
-            "T_coeff": TCOEFF_CR,
-            "met_coeff": 0,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_CR_MORLEY2012,
+        "vp_offset": 13.49,
+        "vp_tcoeff": TCOEFF_CR,
+        "vp_metcoeff": 0,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_CR,
         "wtmol_dif": WTMOL_CR,
         "gcomp": I_GCOMP_CR,
         "mucos_dict": {"TiO2": 0.262189},
         "fastchem_species": "Cr",
-        "opacity_files": "KH18/Cr_complex.txt"
+        "opacity_files": "KH18/Cr_complex.txt",
+        "rho_cond": RHO_CR,
+        "surften_0": 1642 + .2 * 2133.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
+        "surften_slope": 0.2,
+        "coldia": COLDIA_CR,
+        "is_typeIII": False
     },
         "Mg2SiO4": {
         "cond_rho": RHO_MG2SIO4,
-        "vaprtn": {
-            "rtn": I_VAPRTN_MG2SIO4_VISSCHER2010,
-            "offset": 20.88+1.2,
-            "T_coeff": TCOEFF_MG2SIO4,
-            "met_coeff": 1.4,
-            "logp_coeff": 0.2
-        },
+        "rtn": I_VAPRTN_MG2SIO4_VISSCHER2010,
+        "vp_offset": 20.88+0.2*6,
+        "vp_tcoeff": TCOEFF_MG2SIO4,
+        "vp_metcoeff": 1.4,
+        "vp_logpcoeff": 0.2,
         "wtmol": WTMOL_MG2SIO4,
         "wtmol_dif": WTMOL_MG,
         "gcomp": I_GCOMP_MG2SIO4,
         "mucos_dict": {"TiO2": 0.995},
         "fastchem_species": "Mg",
-        "opacity_files": "B21/Mg2SiO4_amorph.txt"
+        "opacity_files": "B21/Mg2SiO4_amorph.txt",
+        "rho_cond": RHO_MG2SIO4,
+        "surften_0": 436, #  @!Kazasa et al. 1989 
+        "surften_slope": 0,
+        "coldia": COLDIA_MG2SIO4,
+        "is_typeIII": True
     },
         "Fe": {
         "cond_rho": RHO_FE,
-        "vaprtn": {
-            "rtn": I_VAPRTN_FE_VISSCHER2010,
-            "offset": 13.23,
-            "T_coeff": TCOEFF_FE,
-            "met_coeff": 0,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_FE_VISSCHER2010,
+        "vp_offset": 13.23,
+        "vp_tcoeff": TCOEFF_FE,
+        "vp_metcoeff": 0,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_FE,
         "wtmol_dif": WTMOL_FE,
         "gcomp": I_GCOMP_FE,
         "mucos_dict": {"TiO2": 0.221548},
         "fastchem_species": "Fe",
-        "opacity_files": "KH18/Fe_complex.txt"
+        "opacity_files": "KH18/Fe_complex.txt",
+        "rho_cond": RHO_FE,
+        "surften_0": 1862 + .39*1803.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
+        "surften_slope": 0.39,
+        "coldia": COLDIA_FE,
+        "is_typeIII": False
     },
         "TiO2": {
         "cond_rho": RHO_TIO2,
-        "vaprtn": {
-            "rtn": I_VAPRTN_TIO2_HELLING2001,
-            "offset": 15.5489,
-            "T_coeff": TCOEFF_TIO2_HELLING,
-            "met_coeff": 0,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_TIO2_HELLING2001,
+        "vp_offset": 15.5489,
+        "vp_tcoeff": TCOEFF_TIO2_HELLING,
+        "vp_metcoeff": 0,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_TIO2,
         "wtmol_dif": WTMOL_TIO2,
         "gcomp": I_GCOMP_TIO2,
         "mucos_dict": {},
         "fastchem_species": "O2Ti1",
-        "opacity_files": "gCMCRT/TiO2[s].txt"
+        "opacity_files": "gCMCRT/TiO2[s].txt",
+        "rho_cond": RHO_TIO2,
+        "surften_0": 535.124, #  @Citation: Lee et al. (2015)
+        "surften_slope": 0.04396,
+        "coldia": COLDIA_TIO2,
+        "is_typeIII": False
     },
         "Al2O3": {
         "cond_rho": RHO_AL2O3,
-        "vaprtn": {
-            "rtn": I_VAPRTN_AL2O3_WAKEFORD2017,
-            "offset": 23.7,
-            "T_coeff": TCOEFF_AL2O3,
-            "met_coeff": 1.66,
-            "logp_coeff": 0
-        },
+        "rtn": I_VAPRTN_AL2O3_WAKEFORD2017,
+        "vp_offset": 23.7,
+        "vp_tcoeff": TCOEFF_AL2O3,
+        "vp_metcoeff": 1.66,
+        "vp_logpcoeff": 0,
         "wtmol": WTMOL_AL2O3,
         "wtmol_dif": WTMOL_AL,
         "gcomp": I_GCOMP_AL2O3,
         "mucos_dict": {"TiO2": 0.724172},
         "fastchem_species": "Al",
-        "opacity_files": "KH18/Al2O3[s].txt"
+        "opacity_files": "KH18/Al2O3[s].txt",
+        "rho_cond": RHO_AL2O3,
+        "surften_0": 690, #  @Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
+        "surften_slope": 0,
+        "coldia": COLDIA_AL2O3,
+        "is_typeIII": True
     }
 }
 

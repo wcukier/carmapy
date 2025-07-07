@@ -64,10 +64,10 @@ def saturation_vapor_pressure(P: float | ArrayLike,
                        log_met: float,
                        gas: str) -> float | ArrayLike:
 
-  offset     = gas_dict[gas]["vaprtn"].get("offset", 0)
-  T_coeff    = gas_dict[gas]["vaprtn"].get("T_coeff", 0)
-  met_coeff  = gas_dict[gas]["vaprtn"].get("met_coeff", 0)
-  logp_coeff = gas_dict[gas]["vaprtn"].get("logp_coeff", 0)
+  offset     = gas_dict[gas].get("vp_offset", 0)
+  T_coeff    = gas_dict[gas].get("vp_tcoeff", 0)
+  met_coeff  = gas_dict[gas].get("vp_metcoeff", 0)
+  logp_coeff = gas_dict[gas].get("vp_logpcoeff", 0)
 
   return 10**(offset
               - T_coeff/T

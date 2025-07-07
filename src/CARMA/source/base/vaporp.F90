@@ -90,6 +90,9 @@ subroutine vaporp(carma, cstate, iz, igas, rc)
     case(I_VAPRTN_CO_WYLIE1958)
       call vaporp_co_wylie1958(carma, cstate, iz, rc, pvapl(iz, igas), pvapi(iz, igas))
 
+    case(I_VAPRTN_USER) ! WC
+      call vaporp_user(carma, cstate, iz, igas, rc, pvapl(iz, igas), pvapi(iz, igas))
+
     case default
       if (do_print) write(LUNOPRT,*) "vaporp:: ERROR - Unknown vapor pressure routine  (", &
 	ivaprtn(igas), ") for gas (", igas, ")."

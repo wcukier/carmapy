@@ -33,18 +33,31 @@ contains
   !!
   !! @see CARMA_AddGas
   !! @see CARMAGAS_Destroy
-  subroutine CARMAGAS_Create(carma, igas, name, wtmol, ivaprtn, icomposition, rc, shortname, dgc_threshold, ds_threshold, wtmol_dif)
+  subroutine CARMAGAS_Create(carma, igas, name, wtmol, ivaprtn, icomposition,  &
+    rho_cond, surften_0, coldia,  vp_offset, vp_tcoeff, rc,&
+    is_type3,  surften_slope, vp_metcoeff, vp_logpcoeff, shortname, &
+    dgc_threshold, ds_threshold, wtmol_dif)
     type(carma_type), intent(inout)       :: carma           !! the carma object
     integer, intent(in)                   :: igas            !! the gas index
     character(*), intent(in)              :: name            !! the gas name, maximum of 255 characters
     real(kind=f), intent(in)              :: wtmol           !! the gas molecular weight [g/mol]
     integer, intent(in)                   :: ivaprtn         !! vapor pressure routine for this gas
     integer, intent(in)                   :: icomposition    !! gas compound specification
+    real(kind=f), intent(in)              :: rho_cond        !! density of condenstate [g/cm^3] WC
+    real(kind=f), intent(in)              :: surften_0       !! surface tension at 0 K (assuming linear extrapolation) [dyne/cm] WC
+    real(kind=f), intent(in)              :: coldia          !! collision diameter [cm] WC
+    real(kind=f), intent(in)              :: vp_offset       !! vapor pressure = 10**(vp_offset - vp_tcoeff/Temperature - vp_metcoeff*metallicity - vp_logpcoeff * log10(Pressure)) WC
+    real(kind=f), intent(in)              :: vp_tcoeff       !! vapor pressure = 10**(vp_offset - vp_tcoeff/Temperature - vp_metcoeff*metallicity - vp_logpcoeff * log10(Pressure)) WC
     integer, intent(out)                  :: rc              !! return code, negative indicates failure
+    integer, optional, intent(in)         :: is_type3        !! 1 for type III reations, 0 otherwise (see Helling and Woitke 2006) WC
+    real(kind=f), optional, intent(in)    :: surften_slope   !! slope of surface tension wrt temperature (surften = surften0 - surften_slope (t - 273.15)) [dyne/cm/K]
+    real(kind=f), optional, intent(in)    :: vp_metcoeff     !! vapor pressure = 10**(vp_offset - vp_tcoeff/Temperature - vp_metcoeff*metallicity - vp_logpcoeff * log10(Pressure))
+    real(kind=f), optional, intent(in)    :: vp_logpcoeff    !! vapor pressure = 10**(vp_offset - vp_tcoeff/Temperature - vp_metcoeff*metallicity - vp_logpcoeff * log10(Pressure))
     character(*), optional, intent(in)    :: shortname       !! the gas shortname, maximum of 6 characters
     real(kind=f), optional, intent(in)    :: dgc_threshold   !! convergence criteria for gas concentration [0 : off; > 0 : percentage change]
     real(kind=f), optional, intent(in)    :: ds_threshold    !! convergence criteria for gas saturation [0 : off; > 0 : percentage change; < 0 : amount past 0 crossing]
     real(kind=f), optional, intent(in)    :: wtmol_dif       !! gas molecular weight in vapor phase [g/mol]
+    
 
     write(*, *) ivaprtn
     ! Assume success.
@@ -63,19 +76,33 @@ contains
     carma%f_gas(igas)%f_wtmol        = wtmol
     carma%f_gas(igas)%f_ivaprtn      = ivaprtn
     carma%f_gas(igas)%f_icomposition = icomposition
-    
+    carma%f_gas(igas)%f_rho_cond     = rho_cond
+    carma%f_gas(igas)%f_surften_0    = surften_0
+    carma%f_gas(igas)%f_coldia       = coldia
+    carma%f_gas(igas)%f_vp_offset    = vp_offset
+    carma%f_gas(igas)%f_vp_tcoeff    = vp_tcoeff
+
+
 
     ! Defaults for optional parameters
     carma%f_gas(igas)%f_shortname       = ""
     carma%f_gas(igas)%f_dgc_threshold   = 0._f
     carma%f_gas(igas)%f_ds_threshold    = 0._f
-    carma%f_gas(igas)%f_wtmol_dif    = wtmol
-    
+    carma%f_gas(igas)%f_wtmol_dif       = wtmol
+    carma%f_gas(igas)%f_is_type3        = 0
+    carma%f_gas(igas)%f_surften_slope    = 0._f
+    carma%f_gas(igas)%f_vp_metcoeff     = 0._f
+    carma%f_gas(igas)%f_vp_logpcoeff    = 0._f
+
     ! Set optional parameters.
     if (present(shortname))     carma%f_gas(igas)%f_shortname      = shortname
     if (present(dgc_threshold)) carma%f_gas(igas)%f_dgc_threshold  = dgc_threshold
     if (present(ds_threshold))  carma%f_gas(igas)%f_ds_threshold   = ds_threshold
     if (present(wtmol_dif))  carma%f_gas(igas)%f_wtmol_dif         = wtmol_dif
+    if (present(is_type3))    carma%f_gas(igas)%f_is_type3        = is_type3
+    if (present(surften_slope))    carma%f_gas(igas)%f_surften_slope    = surften_slope
+    if (present(vp_metcoeff))    carma%f_gas(igas)%f_vp_metcoeff     = vp_metcoeff
+    if (present(vp_logpcoeff))    carma%f_gas(igas)%f_vp_logpcoeff    = vp_logpcoeff
 
 
 

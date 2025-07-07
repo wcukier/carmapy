@@ -92,6 +92,16 @@ module carma_types_mod
     integer                                     :: f_icomposition
     real(kind=f)                                :: f_dgc_threshold
     real(kind=f)                                :: f_ds_threshold
+    real(kind=f)                                :: f_rho_cond      ! WC
+    real(kind=f)                                :: f_surften_0     ! WC
+    real(kind=f)                                :: f_surften_slope ! WC
+    real(kind=f)                                :: f_coldia        ! WC
+    real(kind=f)                                :: f_lat_heat_e    ! WC
+    integer                                     :: f_is_type3      ! WC
+    real(kind=f)                                :: f_vp_offset     ! WC
+    real(kind=f)                                :: f_vp_tcoeff     ! WC
+    real(kind=f)                                :: f_vp_metcoeff   ! WC
+    real(kind=f)                                :: f_vp_logpcoeff  ! WC
   end type carmagas_type
 
 

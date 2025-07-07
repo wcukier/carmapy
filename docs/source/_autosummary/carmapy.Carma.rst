@@ -38,25 +38,25 @@
 
    .. autosummary::
    
-      ~Carma.NBIN
-      ~Carma.NLONGITUDE
-      ~Carma.NZ
-      ~Carma.P_centers
-      ~Carma.P_levels
-      ~Carma.T_centers
-      ~Carma.T_levels
+      ~Carma.dt
       ~Carma.kzz_levels
       ~Carma.log_metallicity
       ~Carma.n_tstep
+      ~Carma.NBIN
+      ~Carma.NLONGITUDE
+      ~Carma.NZ
       ~Carma.output_gap
+      ~Carma.P_centers
+      ~Carma.P_levels
       ~Carma.r_planet
       ~Carma.restart
       ~Carma.surface_grav
+      ~Carma.T_centers
+      ~Carma.T_levels
       ~Carma.velocity_avg
       ~Carma.wt_mol
       ~Carma.z_centers
       ~Carma.z_levels
-      ~Carma.dt
    
    
 

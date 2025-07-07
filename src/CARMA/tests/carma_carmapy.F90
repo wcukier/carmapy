@@ -212,12 +212,15 @@ subroutine test_day()
   character(len=20)   :: file_pos
 
   real(kind=f)          :: distance_btwn_elements, circumference, rotation_counter, slope, intercept
-  real(kind=f)          :: current_distance, closeto_temp_profile, num_steps_btwn, current_step, RPLANET_DAT
+  real(kind=f)          :: current_distance, num_steps_btwn, current_step, RPLANET_DAT
+  integer               :: closeto_temp_profile
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg, met
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend
 
+  real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff
+  integer :: is_type3
 
   real(kind=f), allocatable ::tempr(:), pre(:), prel(:), alt(:), altl(:), wtmol_air(:), grav(:), ekz(:), ekzl(:), wtmol_gas(:)
   real(kind=f), allocatable ::temp_equator(:, :), p_equator_center(:), p_equator_level(:), velocity(:), longitudes(:)
@@ -437,14 +440,19 @@ subroutine test_day()
   read(10, *)
   do i=1, NGAS
 
-    read(10, *) name, wtmol, iroutine, icomposition, wtmol_dif
+    read(10, *) name, wtmol, iroutine, icomposition, wtmol_dif, rho_cond, surften_0, &
+     coldia, vp_offset, vp_tcoeff, is_type3, surften_slope, vp_metcoeff, vp_logpcoeff
 
     write(*,*) "Add "//trim(name) //" ..."
-    if (wtmol == wtmol_dif) then
-      call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rc)
-    else
-      call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rc, wtmol_dif=wtmol_dif)
-    endif
+    call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rho_cond, surften_0, &
+     coldia, vp_offset, vp_tcoeff,  rc, is_type3=INT(is_type3), surften_slope=surften_slope,&
+     vp_metcoeff=vp_metcoeff, vp_logpcoeff=vp_logpcoeff, wtmol_dif=wtmol_dif)
+
+    ! if (wtmol == wtmol_dif) then
+    !   call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rc)
+    ! else
+    !   call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rc, wtmol_dif=wtmol_dif)
+    ! endif
     if (rc < 0) stop "    *** FAILED ***"
 
     wtmol_gas(i) = wtmol_dif
