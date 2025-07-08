@@ -777,7 +777,8 @@ class Carma:
 
             f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\trho_cond\t"
                     "surften_0\tcoldia\tvp_offset\tvp_tcoeff\tis_type3\t"
-                    "surften_slope\tvp_metcoeff\tvplogpcoeff\n")
+                    "surften_slope\tvp_metcoeff\tvplogpcoeff\tlat_heat_e\t"
+                    "stofact\n")
             
             for key in self.gasses.keys():
                 gas : "Gas" = self.gasses[key]
@@ -799,7 +800,9 @@ class Carma:
                         f'{int(gas.is_typeIII):1d}\t'
                         f'{gas.surften_slope:<.10e}\t'
                         f'{gas.vp_metcoeff:<.10e}\t'
-                        f'{gas.vp_logpcoeff:<.10e}'
+                        f'{gas.vp_logpcoeff:<.10e}\t'
+                        f'{gas.lat_heat_e:<.10e}\t'
+                        f'{gas.stofact:2d}'
                         '\n')
         
         with open(os.path.join(path, io["elements_file"]), "w+") as f:
@@ -996,10 +999,15 @@ class Gas:
 
         with ``T`` in K and ``surften`` in dyne / cm
 
+    3. If not directly given, the latent heat of evaportation is calculated
+       folowing Charnay et al. 2015 [2]_
+
     References
     ----------
     .. [1] Helling, C., & Woitke, P. 2006, Astronomy and Astrophysics, 
        Volume 455, Issue 1, August III 2006, pp325-338, 455, 325
+
+    .. [2] Charnay et al. 2015, ApJL 813, L1
     """
     
 
@@ -1039,6 +1047,11 @@ class Gas:
     is_typeIII: bool = False
     """ True if condensation reaction is a Type III reaction (see Helling & Woitke 2006) [1]_"""
 
+    lat_heat_e: float = -1
+    """ Latent heat of evaporation, if not provided derived from other inputs (see notes) """
+
+    stofact: int
+    """ The stoichiometry factor between the gas phase and the condensate """
     
 
     def __init__(self, 
@@ -1064,6 +1077,8 @@ class Gas:
         self.vp_metcoeff    = kwargs.get("vp_metcoeff",   defaults["vp_metcoeff"])
         self.vp_logpcoeff   = kwargs.get("vp_logpcoeff",  defaults["vp_logpcoeff"])
         self.is_typeIII     = kwargs.get("is_typeIII",    defaults["is_typeIII"])
+        self.stofact        = kwargs.get("stofact",       defaults["stofact"])
+        self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults["lat_heat_e"])
 
         
     

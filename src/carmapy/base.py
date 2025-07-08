@@ -89,7 +89,9 @@ def load_carma(path: str, restart: int =0) -> Carma:
              is_typeIII,
              surften_slope,
              vp_metcoeff,
-             vp_logpcoeff) = shlex.split(line[:-1])
+             vp_logpcoeff,
+             lat_heat_e,
+             stofact) = shlex.split(line[:-1])
             
             name= name[:-len(' Vapor')]
             carma.gasses[name] = Gas(name, 
@@ -105,7 +107,9 @@ def load_carma(path: str, restart: int =0) -> Carma:
                                      vp_tcoeff = float(vp_tcoeff),
                                      vp_metcoeff = float(vp_metcoeff),
                                      vp_logpcoeff = float(vp_logpcoeff),
-                                     is_typeIII = bool(is_typeIII)
+                                     is_typeIII = bool(is_typeIII),
+                                     lat_heat_e=float(lat_heat_e),
+                                     stofact=int(stofact)
                                      )
             
     

@@ -102,6 +102,7 @@ module carma_types_mod
     real(kind=f)                                :: f_vp_tcoeff     ! WC
     real(kind=f)                                :: f_vp_metcoeff   ! WC
     real(kind=f)                                :: f_vp_logpcoeff  ! WC
+    integer                                     :: f_stofact       ! WC
   end type carmagas_type
 
 

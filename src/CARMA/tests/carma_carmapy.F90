@@ -37,6 +37,8 @@ subroutine test_day()
   integer   :: NGROWTH, NNUC, NCOAG
   integer   :: IS_2D
   integer   :: igridv
+  integer   :: idocoag
+  logical   :: do_coag
 
   real(kind=f)   :: dtime 
   real(kind=f), parameter   :: deltax = 100._f
@@ -217,15 +219,21 @@ subroutine test_day()
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg, met
-  namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend
+  namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend, idocoag
 
-  real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff
-  integer :: is_type3
+  real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e
+  integer :: is_type3, stofact
 
   real(kind=f), allocatable ::tempr(:), pre(:), prel(:), alt(:), altl(:), wtmol_air(:), grav(:), ekz(:), ekzl(:), wtmol_gas(:)
   real(kind=f), allocatable ::temp_equator(:, :), p_equator_center(:), p_equator_level(:), velocity(:), longitudes(:)
   integer, allocatable :: elem2group(:)
 
+
+  if (idocoag .eq. 0) then
+    DO_COAG = .False.
+  else
+    DO_COAG = .True.
+  endif
 
 
   write(*,*) ""
@@ -441,18 +449,15 @@ subroutine test_day()
   do i=1, NGAS
 
     read(10, *) name, wtmol, iroutine, icomposition, wtmol_dif, rho_cond, surften_0, &
-     coldia, vp_offset, vp_tcoeff, is_type3, surften_slope, vp_metcoeff, vp_logpcoeff
+     coldia, vp_offset, vp_tcoeff, is_type3, surften_slope, vp_metcoeff, vp_logpcoeff, &
+     lat_heat_e, stofact
 
     write(*,*) "Add "//trim(name) //" ..."
     call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rho_cond, surften_0, &
      coldia, vp_offset, vp_tcoeff,  rc, is_type3=INT(is_type3), surften_slope=surften_slope,&
-     vp_metcoeff=vp_metcoeff, vp_logpcoeff=vp_logpcoeff, wtmol_dif=wtmol_dif)
+     vp_metcoeff=vp_metcoeff, vp_logpcoeff=vp_logpcoeff, wtmol_dif=wtmol_dif, &
+     lat_heat_e=lat_heat_e, stofact=stofact)
 
-    ! if (wtmol == wtmol_dif) then
-    !   call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rc)
-    ! else
-    !   call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rc, wtmol_dif=wtmol_dif)
-    ! endif
     if (rc < 0) stop "    *** FAILED ***"
 
     wtmol_gas(i) = wtmol_dif
@@ -512,7 +517,7 @@ subroutine test_day()
   ! Setup the CARMA processes to exercise
   write(*,*) "Initialize CARMA ..."
 
-  call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=.FALSE., do_fixedinit=.TRUE., do_grow=.TRUE., &
+  call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, do_fixedinit=.TRUE., do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
                         do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=20, &
                         itbnd_pc=I_FLUX_SPEC, ibbnd_pc=I_FIXED_CONC, itbnd_gc=I_FLUX_SPEC, ibbnd_gc=I_FIXED_CONC)

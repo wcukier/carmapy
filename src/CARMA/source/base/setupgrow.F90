@@ -114,14 +114,14 @@ subroutine setupgrow(carma, cstate, rc)
         coldia = carma%f_gas(igas)%f_coldia
         wtmol_dif = carma%f_gas(igas)%f_wtmol_dif
         ! Diffusivity
-        diffus(k,igas) = 5._f / (16._f * AVG * coldia**2_f * rhoa_cgs * COLINT) * &
+
+        diffus(k,igas) = 1._f/carma%f_gas(igas)%f_stofact * 5._f / (16._f * AVG * coldia**2_f * rhoa_cgs * COLINT) * &
           sqrt(RGAS * t(k) * wtmol_air(k) * (wtmol_dif + wtmol_air(k)) / (2._f * PI * wtmol_dif)) 
         
         if (carma%f_gas(igas)%f_lat_heat_e .gt. 0) then
-           write(*, *) "ERROR!!!!!!!!"
           rlhe(k,igas) = carma%f_gas(igas)%f_lat_heat_e 
         else 
-          rlhe(k,igas) = carma%f_gas(igas)%f_vp_tcoeff * log(10._f) * RGAS / wtmol_dif
+          rlhe(k,igas) =  carma%f_gas(igas)%f_vp_tcoeff * log(10._f) * RGAS / wtmol_dif
         endif
         rlhm(k,igas) = rlhe(k, igas)
       end if

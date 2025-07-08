@@ -269,7 +269,8 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_slope": np.nan,
         "coldia": COLDIA_H2O,
         "is_typeIII": False,
-        "lat_heat_e": np.nan
+        "lat_heat_e": np.nan, # ignored
+        "stofact": 1
 
     },
         "KCl": {
@@ -290,7 +291,8 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_slope": 0.07,
         "coldia": COLDIA_KCL,
         "is_typeIII": False,
-        "lat_heat_e": -1
+        "lat_heat_e": -1,
+        "stofact": 1
     },
         "ZnS": {
         "cond_rho": RHO_ZNS,
@@ -310,7 +312,8 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_slope": 0,
         "coldia": COLDIA_ZNS,
         "is_typeIII": False,
-        "lat_heat_e": -1
+        "lat_heat_e": -1,
+        "stofact": 1
     },
         "Na2S": {
         "cond_rho": RHO_NA2S,
@@ -330,7 +333,9 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_slope": 0,
         "coldia": COLDIA_NA2S,
         "is_typeIII": True,
-        "lat_heat_e": -1
+        "lat_heat_e": -1,
+        "lat_heat_e": -1,
+        "stofact": 2
     },
         "MnS": {
         "cond_rho": RHO_MNS,
@@ -349,7 +354,9 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 2326, #  @Citation:  Graham Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
         "coldia": COLDIA_MNS,
-        "is_typeIII": False
+        "is_typeIII": False,
+        "lat_heat_e": -1,
+        "stofact": 1
     },
         "Cr": {
         "cond_rho": RHO_CR,
@@ -368,7 +375,9 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 1642 + .2 * 2133.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.2,
         "coldia": COLDIA_CR,
-        "is_typeIII": False
+        "is_typeIII": False,
+        "lat_heat_e": -1,
+        "stofact": 1
     },
         "Mg2SiO4": {
         "cond_rho": RHO_MG2SIO4,
@@ -387,7 +396,9 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 436, #  @!Kazasa et al. 1989 
         "surften_slope": 0,
         "coldia": COLDIA_MG2SIO4,
-        "is_typeIII": True
+        "is_typeIII": True,
+        "lat_heat_e": -1,
+        "stofact": 2
     },
         "Fe": {
         "cond_rho": RHO_FE,
@@ -406,7 +417,9 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 1862 + .39*1803.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.39,
         "coldia": COLDIA_FE,
-        "is_typeIII": False
+        "is_typeIII": False,
+        "lat_heat_e": -1,
+        "stofact": 1
     },
         "TiO2": {
         "cond_rho": RHO_TIO2,
@@ -425,7 +438,9 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 535.124, #  @Citation: Lee et al. (2015)
         "surften_slope": 0.04396,
         "coldia": COLDIA_TIO2,
-        "is_typeIII": False
+        "is_typeIII": False,
+        "lat_heat_e": -1,
+        "stofact": 1
     },
         "Al2O3": {
         "cond_rho": RHO_AL2O3,
@@ -444,7 +459,9 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 690, #  @Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
         "surften_slope": 0,
         "coldia": COLDIA_AL2O3,
-        "is_typeIII": True
+        "is_typeIII": True,
+        "lat_heat_e": -1,
+        "stofact": 1
     }
 }
 

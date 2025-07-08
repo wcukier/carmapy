@@ -1,4 +1,4 @@
-""" functions that interface with fastchem """
+""" Functions that interface with fastchem """
 
 import pyfastchem
 from carmapy.constants import *
@@ -13,9 +13,10 @@ import sys
 
 def get_fastchem_abundances(T : np.ndarray, 
                             P : np.ndarray, 
-                            species : list,
-                            metallicity : float = 1):
-  """Uses fastchem to calculate the abundances of the provided species.
+                            species : list[str],
+                            metallicity : float = 1) -> np.ndarray:
+  """Uses fastchem to calculate the gas phase abundances of the provided 
+  species at the provided T-P points
 
   Parameters
   ----------
@@ -23,22 +24,18 @@ def get_fastchem_abundances(T : np.ndarray,
       Temperature profile of the atmosphere [K]
   P : np.ndarray
       Pressure profile of the atmosphere [barye]
-  species : list
-      List of 
+  species : list[str]
+      List of species in Hill Notation (so TiO2 would be "O2Ti1")
   metallicity : float, optional
-      _description_, by default 1
+      Log solar metallicity, by default 1
 
   Returns
   -------
-  _type_
-      _description_
+  np.ndarray
+      A 1-D (if only 1 species provided) or 2-D (if more than 1 species 
+      provided) array of the number mixing ratio of each species at each 
+      P-T point
 
-  Raises
-  ------
-  RuntimeError
-      _description_
-  ValueError
-      _description_
   """
     
   temperature = T
@@ -86,10 +83,28 @@ def get_fastchem_abundances(T : np.ndarray,
   
   return np.array(ret)
 
-def saturation_vapor_pressure(P: float | ArrayLike, 
-                       T: float | ArrayLike, 
+def saturation_vapor_pressure(P: ArrayLike, 
+                       T:  ArrayLike, 
                        log_met: float,
-                       gas: str) -> float | ArrayLike:
+                       gas: str) -> ArrayLike:
+  """Calculates the saturation vapor pressure for carmapy default gasses.
+
+  Parameters
+  ----------
+  P : ArrayLike
+      Atmospheric Pressure [barye]
+  T : ArrayLike
+      Temperature [K]
+  log_met : float
+      Log solar metallicity
+  gas : str
+      Name of the carmapy default gas
+
+  Returns
+  -------
+  ArrayLike
+      The saturation vapor pressure of the gas at each requested P-T point
+  """
 
   offset     = gas_dict[gas].get("vp_offset", 0)
   T_coeff    = gas_dict[gas].get("vp_tcoeff", 0)

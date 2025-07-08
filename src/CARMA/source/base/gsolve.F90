@@ -54,7 +54,7 @@ subroutine gsolve(carma, cstate, iz, previous_ice, previous_liquid, rc)
   call totalcondensate(carma, cstate, iz, total_ice, total_liquid, rc)
   
   do igas = 1,NGAS
-    stofact = carma%f_gas(igas)%f_wtmol_dif/carma%f_gas(igas)%f_wtmol !WC
+    stofact = carma%f_gas(igas)%f_wtmol_dif/carma%f_gas(igas)%f_wtmol * carma%f_gas(igas)%f_stofact !WC
   !  if (igas .eq. igash2o) then
   !    stofact = 1._f
   !  else if (igas .eq. igash2so4) then
@@ -62,27 +62,27 @@ subroutine gsolve(carma, cstate, iz, previous_ice, previous_liquid, rc)
   !  else if ((igas .eq. igass8) .or. (igas .eq. igass2)) then
   !    stofact = 1._f
   !  else if (igas .eq. igaskcl) then
-  !    stofact = 1._f
-  !  else if (igas .eq. igaszns) then
-  !    stofact = WTMOL_ZN/WTMOL_ZNS
-    if (igas .eq. igasna2s) then
-     stofact = WTMOL_NA2/WTMOL_NA2S
-  !  else if (igas .eq. igasmns) then
-  !    stofact = WTMOL_MN/WTMOL_MNS
-  !  else if (igas .eq. igascr) then
-  !    stofact = 1._f
-  !  else if (igas .eq. igasfe) then
-  !    stofact = 1._f
-    else if (igas .eq. igasmg2sio4) then !TODO: Comment out
-     stofact = WTMOL_MG2/WTMOL_MG2SIO4
-    ! endif
-  !  else if (igas .eq. igastio2) then
-  !    stofact = 1._f
-   else if (igas .eq. igasal2o3) then ! TODO check this
-     stofact = WTMOL_AL2/WTMOL_AL2O3
-  !  else if (igas .eq. igasco) then
-  !    stofact = 1._f
-   endif
+  ! !    stofact = 1._f
+  ! !  else if (igas .eq. igaszns) then
+  ! !    stofact = WTMOL_ZN/WTMOL_ZNS
+  !   if (igas .eq. igasna2s) then
+  !    stofact = WTMOL_NA2/WTMOL_NA2S
+  ! !  else if (igas .eq. igasmns) then
+  ! !    stofact = WTMOL_MN/WTMOL_MNS
+  ! !  else if (igas .eq. igascr) then
+  ! !    stofact = 1._f
+  ! !  else if (igas .eq. igasfe) then
+  ! !    stofact = 1._f
+  !   else if (igas .eq. igasmg2sio4) then !TODO: Comment out
+  !    stofact = WTMOL_MG2/WTMOL_MG2SIO4
+  !   ! endif
+  ! !  else if (igas .eq. igastio2) then
+  ! !    stofact = 1._f
+  !  else if (igas .eq. igasal2o3) then ! TODO check this
+  !    stofact = WTMOL_AL2/WTMOL_AL2O3
+  ! !  else if (igas .eq. igasco) then
+  ! !    stofact = 1._f
+  !  endif
 
 
     ! We do not seem to be conserving mass and energy, so rather than relying upon gasprod
