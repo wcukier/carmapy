@@ -116,7 +116,12 @@ def saturation_vapor_pressure(P: ArrayLike,
               - met_coeff * log_met
               - logp_coeff * np.log10(P))
 
-def populate_fastchem_abundances(carma: "Carma", metallicity=1, override = {"H2O": 0}):
+def populate_fastchem_abundances(carma: "Carma",
+                                  metallicity=1, 
+                                  override = {"H2O": 0}) -> None:
+  """
+  ..dep
+  """
   species = []
   
   
@@ -175,7 +180,7 @@ def populate_abundances_at_cloud_base(carma, metallicity=1):
 
   p_t = interp1d(T, P)
 
-  override= {"H2O": 0}
+  nmr_dict = {"H2O": 0}
 
   for s in list(carma.gasses.keys())[1:]:
 
@@ -184,10 +189,11 @@ def populate_abundances_at_cloud_base(carma, metallicity=1):
     fast_chem_gas = gas_dict[s].get("fastchem_species", -1) 
     if fast_chem_gas == -1: raise ValueError("{s} is not currently supported by the carmapy fastchem interface")
 
-    override[s] = get_fastchem_abundances(np.array([T_int]), np.array([P_int]), [fast_chem_gas], metallicity)[0]
+    
+    nmr_dict[s] = get_fastchem_abundances(np.array([T_int]), np.array([P_int]), [fast_chem_gas], metallicity)[0]
   
-  print(override)
-  populate_fastchem_abundances(carma, metallicity, override)
+    carma.set_nmr(nmr_dict)
+
   
   
         
