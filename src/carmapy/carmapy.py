@@ -12,12 +12,12 @@ from numpy.typing import ArrayLike
 
 from typing import Union
 
-SRC = os.path.dirname(os.path.dirname(__file__))
-
+SRC = os.path.dirname(os.path.dirname(__file__)) # The src/ directory in the package
 
 
 @contextlib.contextmanager
-def _cd(path):
+def _cd(path: str):
+   """ Allows for safe cd in python code """
    old_path = os.getcwd()
    os.chdir(path)
    try:
@@ -38,7 +38,7 @@ class Carma:
         A name identifier for the CARMA simulation. This name is used for output 
         directories and file prefixes.
     is_2d : bool, optional
-        If True, sets the simulation in 2D mode (longitude × vertical). 
+        If True, sets the simulation in 2D mode (longitude x vertical). 
         Defaults to False  (1D vertical column). 
         **Note: `is_2d=True` is not currently supported.**
 

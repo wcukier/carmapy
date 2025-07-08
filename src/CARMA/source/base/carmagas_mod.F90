@@ -93,7 +93,7 @@ contains
     carma%f_gas(igas)%f_surften_slope    = 0._f
     carma%f_gas(igas)%f_vp_metcoeff     = 0._f
     carma%f_gas(igas)%f_vp_logpcoeff    = 0._f
-
+    carma%f_gas(igas)%f_lat_heat_e      = -1.0_f
     ! Set optional parameters.
     if (present(shortname))     carma%f_gas(igas)%f_shortname      = shortname
     if (present(dgc_threshold)) carma%f_gas(igas)%f_dgc_threshold  = dgc_threshold

@@ -1,3 +1,5 @@
+""" functions that interface with fastchem """
+
 import pyfastchem
 from carmapy.constants import *
 import numpy as np
@@ -13,6 +15,31 @@ def get_fastchem_abundances(T : np.ndarray,
                             P : np.ndarray, 
                             species : list,
                             metallicity : float = 1):
+  """Uses fastchem to calculate the abundances of the provided species.
+
+  Parameters
+  ----------
+  T : np.ndarray
+      Temperature profile of the atmosphere [K]
+  P : np.ndarray
+      Pressure profile of the atmosphere [barye]
+  species : list
+      List of 
+  metallicity : float, optional
+      _description_, by default 1
+
+  Returns
+  -------
+  _type_
+      _description_
+
+  Raises
+  ------
+  RuntimeError
+      _description_
+  ValueError
+      _description_
+  """
     
   temperature = T
   pressure = np.array(P) / BAR_TO_BARYE

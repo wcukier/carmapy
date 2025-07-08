@@ -241,6 +241,10 @@ COLDIA_AL2O3 =  3.825e-8  # Estimated from Dobrovinskaya et al. 2009
 COLDIA_CO =  3.86e-8  # Ramos-Estrada M. et al. Latin Am Appl Res. 34, 41-47, 2004
 
 
+RGAS = 8.31430e+07 # Define universal gas constant [ erg / deg_K / mole ]
+
+
+
 
 # p = 10^(vp_offset - t_coeff/T - met_coeff * met - vp_logpcoeff * log10 p)
 
@@ -264,7 +268,8 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": np.nan,
         "surften_slope": np.nan,
         "coldia": COLDIA_H2O,
-        "is_typeIII": False
+        "is_typeIII": False,
+        "lat_heat_e": np.nan
 
     },
         "KCl": {
@@ -284,7 +289,8 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 160.4 + 0.07*273.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.07,
         "coldia": COLDIA_KCL,
-        "is_typeIII": False
+        "is_typeIII": False,
+        "lat_heat_e": -1
     },
         "ZnS": {
         "cond_rho": RHO_ZNS,
@@ -303,13 +309,14 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 860.0, #  @Citation: Zhang et al. 2003, J. Phys. Chem. B 2003, 107, 13051-13060 
         "surften_slope": 0,
         "coldia": COLDIA_ZNS,
-        "is_typeIII": False
+        "is_typeIII": False,
+        "lat_heat_e": -1
     },
         "Na2S": {
         "cond_rho": RHO_NA2S,
         "rtn": I_VAPRTN_NA2S_MORLEY2012,
         "vp_offset": 14.55,
-        "vp_tcoeff": TCOEFF_ZNS,
+        "vp_tcoeff": TCOEFF_NA2S,
         "vp_metcoeff": 0.5,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_NA2S,
@@ -322,7 +329,8 @@ gas_dict = { #TODO change to predifined gas objects
         "surften_0": 1033, #  @Citation: Graham Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
         "coldia": COLDIA_NA2S,
-        "is_typeIII": True
+        "is_typeIII": True,
+        "lat_heat_e": -1
     },
         "MnS": {
         "cond_rho": RHO_MNS,

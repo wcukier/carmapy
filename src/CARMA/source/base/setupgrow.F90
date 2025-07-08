@@ -93,7 +93,7 @@ subroutine setupgrow(carma, cstate, rc)
             ((t(k) - 273.16_f)**2)) * 4.186e7_f
         end if
 
-      ! Properties for H2SO4
+        ! Properties for H2SO4
       else if (igas .eq. igash2so4) then
         ! Diffusivity
         rhoa_cgs = rhoa(k) / (xmet(k) * ymet(k) * zmet(k))
@@ -103,23 +103,28 @@ subroutine setupgrow(carma, cstate, rc)
     
         wtpctf = wtpct(k)/100._f
         ! HACK: make H2SO4 latent heats same as water
-  !      rlhe(k,igash2so4) = rlhe(k, igash2o)
-  !      rlhm(k,igash2so4) = rlhe(k, igash2o)
+        !      rlhe(k,igash2so4) = rlhe(k, igash2o)
+        !      rlhm(k,igash2so4) = rlhe(k, igash2o)
         ! From Jang et al. 2006, Transactions of the Korean Nuclear Society Autumn Meeting
         rlhe(k,igash2so4) = 1364.93*wtpctf**3._f - 1226.46*wtpctf**2._f + 382.23*wtpctf + 540.52
         rlhe(k,igash2so4) = rlhe(k,igash2so4) * 4.184e7_f
         rlhm(k,igash2so4) = rlhe(k,igash2so4)
 
       else ! WC
-      coldia = carma%f_gas(igas)%f_coldia
-      wtmol_dif = carma%f_gas(igas)%f_wtmol_dif
-
-      ! Diffusivity
-      diffus(k,igas) = 5._f / (16._f * AVG * coldia**2_f * rhoa_cgs * COLINT) * &
-        sqrt(RGAS * t(k) * wtmol_air(k) * (wtmol_dif + wtmol_air(k)) / (2._f * PI * wtmol_dif)) 
-      rlhe(k,igas) = carma%f_gas(igas)%f_lat_heat_e 
-      rlhm(k,igas) = rlhe(k, igas)
-    end if
+        coldia = carma%f_gas(igas)%f_coldia
+        wtmol_dif = carma%f_gas(igas)%f_wtmol_dif
+        ! Diffusivity
+        diffus(k,igas) = 5._f / (16._f * AVG * coldia**2_f * rhoa_cgs * COLINT) * &
+          sqrt(RGAS * t(k) * wtmol_air(k) * (wtmol_dif + wtmol_air(k)) / (2._f * PI * wtmol_dif)) 
+        
+        if (carma%f_gas(igas)%f_lat_heat_e .gt. 0) then
+           write(*, *) "ERROR!!!!!!!!"
+          rlhe(k,igas) = carma%f_gas(igas)%f_lat_heat_e 
+        else 
+          rlhe(k,igas) = carma%f_gas(igas)%f_vp_tcoeff * log(10._f) * RGAS / wtmol_dif
+        endif
+        rlhm(k,igas) = rlhe(k, igas)
+      end if
 
       ! ! Properties for S8
       ! if (igass8 .ne. 0) then
