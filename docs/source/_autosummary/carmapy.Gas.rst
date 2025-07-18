@@ -17,9 +17,11 @@
    .. autosummary::
    
       ~Gas.coldia
-      ~Gas.icomp
+      ~Gas.gcomp
       ~Gas.is_typeIII
+      ~Gas.lat_heat_e
       ~Gas.rho_cond
+      ~Gas.stofact
       ~Gas.surften_0
       ~Gas.surften_slope
       ~Gas.vp_logpcoeff

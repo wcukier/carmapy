@@ -30,6 +30,8 @@ subroutine vaporp(carma, cstate, iz, igas, rc)
   integer, intent(in)                  :: igas    !! gas index
   integer, intent(inout)               :: rc      !! return code, negative indicates failure
 
+  real(kind=f)                        :: old_pvapl
+
   ! Each gas should have a vapor pressure routine specified for it.
   !
   ! As new gases are supported, this table should be expanded with new entries for
@@ -99,6 +101,7 @@ subroutine vaporp(carma, cstate, iz, igas, rc)
       rc = RC_ERROR
       return
   end select
+
 
   ! Return to caller with vapor pressures evaluated.
   return

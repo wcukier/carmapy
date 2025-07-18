@@ -38,7 +38,8 @@ subroutine vaporp_mg2sio4_visscher2010(carma, cstate, iz, rc, pvap_liq, pvap_ice
 
   ! Saturation vapor presure of Mg2SiO4 from Visscher notes (Eq 3)
 
-  pvap_liq = 1e6_f * 10._f ** (14.88_f - TCOEFF_MG2SIO4/t(iz) - 1.4_f*met - 0.2*log10(1e-6_f*p(iz)))
+  ! WC — change the 0.2 to 0.2_f
+  pvap_liq = 1e6_f * 10._f ** (14.88_f - TCOEFF_MG2SIO4/t(iz) - 1.4_f*met - 0.2_f*log10(1e-6_f*p(iz)))
   pvap_ice = pvap_liq
 
   return

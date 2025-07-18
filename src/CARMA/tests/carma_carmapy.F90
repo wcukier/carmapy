@@ -940,7 +940,7 @@ subroutine test_day()
           end do
 
           do igas = 1, NGAS
-            write(lun, '(2e11.3)', advance="no") &
+            write(lun, '(2e25.15)', advance="no") &
             real(mmr_gas(i,igas) * 1.0e6_f / (wtmol_gas(igas) / wtmol_air(i))), &
             real(svpliq(i,igas) * 1.0e6_f)
             write(lunp, '(2e11.3)', advance="no") &

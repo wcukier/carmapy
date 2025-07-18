@@ -13,24 +13,99 @@ import os
 from scipy.interpolate import RectBivariateSpline
 
 # petroff 10 color cycle
-petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6", "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
+petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6",
+              "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
+
 SRC = os.path.dirname(os.path.dirname(__file__))
 
 MICRON_TO_CM = 1e-4
 
 class Results:
+    """ An object which stores the results of a CARMA simulation.
+
+    Parameters
+    ----------
+    carma : Carma
+        The carma simulation to load results from
+
+    Notes
+    ------
+    The ``results.clouds`` dictionary is indexed by names of the cloud
+    species (see ``results.group_names``) and stores the following values:
+
+        - ``results.clouds['r']`` is a 1D numpy array of length NBIN which 
+          stores the radii of the cloud particle bins in cm
+        - ``results.clouds['rmass']`` is a 1D numpy array of length NBIN which 
+          stores the mass of the cloud particle bins in g
+        - ``results.clouds['numden']`` is a 3D numpy array of shape 
+          (NZ, NBIN, NT) which stores the number density of each cloud species 
+          in each size bin at each time step in units of cm⁻³
+    """
+
+
+
+    carma : "Carma"
+    """ The carma simulation that generated these results """
+
+    # rmass : np.ndarray
+    # """ Mass of particles in each radius bin [g] (NBIN x NGROUP) """
+
+    # r : np.ndarray
+    # """ Radius of particules in each radius bin [cm] (NBIN x NGROUP) """
+
+    # gas_abund : np.ndarray
+    # """ The number mixing rations of the gasses (NZ x NGAS x NT) """
+
+    sat_vp : np.ndarray
+    """ The saturation mixing ratios of the gasses (NZ x NGAS x NT) """
+
+    ts : np.ndarray
+    """ Time elapsed since start of simulation at each step [s] (NT)"""
+
+    P : np.ndarray
+    """ Pressure centers alias [barye] (NZ) """
+
+    Z : np.ndarray
+    """ Altitude centers alias [cm] (NZ) """
+
+    T : np.ndarray
+    """ Temperature centers alias [K] (NZ) """
+
+    group_names : list[str]
+    """ The name of each of the simulated groups """
+
+    gas_names :  list[str]
+    """ The name of each of the simulated gasses """
+
+    dt_timestep : float
+    """ The length of time between each output [s] """
+
+    path : str
+    """ The path to the CARMA output files """
     
-    def __init__(self, carma):
+    gasses : dict[str, np.ndarray]
+    """ The number mixing ratio for each of the gasses """
+
+    clouds : dict[str, dict[str, np.ndarray]]
+    """ A dictionary storing results for each cloud species (see notes) """
+
+    def __init__(self, carma: "Carma") -> None:
         path = carma.name
         path_end = os.path.basename(path)
         file_path = os.path.join(path, f"bd_{path_end}.txt")
-        
+
         f = open(file_path)
-        NZ, NGROUP, NELEM, NBIN, NGAS, nstep, iskip = np.array(f.readline().split(),
-                                                            dtype=int)
+
+        (NZ,
+         NGROUP,
+         NELEM,
+         NBIN,
+         NGAS,
+         nstep,
+         iskip) = np.array(f.readline().split(), dtype=int)
 
         
-        if ((NZ != carma.NZ) + 
+        if ((NZ != carma.NZ) +
             (NGROUP != len(carma.groups))+
             (NELEM != len(carma.elems))+
             (NBIN != carma.NBIN) +
@@ -45,7 +120,13 @@ class Results:
         
         for i in range(NGROUP):
             for j in range(NBIN):
-                _, _, r[j, i], rmass[j, i], _, _, _ = np.array(f.readline().split(), dtype=float)
+                (_,
+                 _,
+                 r[j, i],
+                 rmass[j, i],
+                 _,
+                 _,
+                 _) = np.array(f.readline().split(), dtype=float)
             
         
         kzz = np.zeros(NZ)
@@ -54,8 +135,13 @@ class Results:
         Z = np.zeros(NZ)
 
         for i in range(NZ):
-            _, Z[i], _, P[i], T[i], kzz[i] = np.array(f.readline().split(), 
-                                                    dtype=float)
+
+            (_,
+             Z[i],
+             _,
+             P[i],
+             T[i],
+             kzz[i]) = np.array(f.readline().split(), dtype=float)
 
         f.readline()
         f.readline()
@@ -63,7 +149,7 @@ class Results:
         for j in range(NBIN):
             for i in range(NZ):
                 f.readline()
-            
+
         NT = int(nstep/iskip)
 
         numden = np.zeros((NZ, NELEM, NBIN, NT))
@@ -84,20 +170,24 @@ class Results:
                             gas_abund[iz, igas, it] = line[NELEM + 2+ 2*igas]
                             sat_vp[iz, igas, it] = line[NELEM + 3 + 2*igas]
             else:
-                break   
-            
+                break
+
         numden_groups = np.zeros((NZ, NGROUP, NBIN, NT))
         
         
         for i, key in enumerate(carma.groups.keys()):
             group = carma.groups[key]
             if group.mantle:
-                numden_groups[:, group.igroup-1, :, :] = numden[:, group.mantle.ielem-1, :, :]
+                g = group.igroup-1
+                e = group.mantle.ielem-1
+                numden_groups[:, g, :, :] = numden[:, e, :, :]
             else:
-                numden_groups[:, group.igroup-1, :, :] = numden[:, group.core.ielem-1, :, :]
+                g = group.igroup-1
+                e = group.core.ielem-1
+                numden_groups[:, g, :, :] = numden[:, e, :, :]
+
             if np.any( numden_groups[:, group.igroup-1, :, :] < 0):
-                print(key, group.mantle, np.max( numden[:, group.core.ielem-1, :, :]))
-                raise
+                raise RuntimeError("Error in reading in number densities")
         
         
         self.carma = carma
@@ -112,7 +202,7 @@ class Results:
         self.T = T
         self.group_names = list(carma.groups.keys())
         self.gas_names = list(carma.gasses.keys())
-        self.dt_timestep = carma.dt * carma.output_gap 
+        self.dt_timestep = carma.dt * carma.output_gap
         self.path = path
 
         self.gasses = {}
@@ -126,17 +216,35 @@ class Results:
                 "r": self.r[:, i] * MICRON_TO_CM,
                 "r_mass": self.rmass[:, i]
             }
-                        
-                        
+
+
     def plot_toa_gas(self, skip_gasses = [0], burn_in = 20, **kwargs):
+        """Plots the gas abundances at the top of the atmosphere.  Useful for 
+        determining whether or not the simulation has converged. ``**kwargs``
+        are passed to pyplot
+
+        Parameters
+        ----------
+        skip_gasses : list, optional
+            A list of gasses, by index, to skip plotting, by default [0] (H2O)
+        burn_in : int, optional
+            The number of timesteps to exclude from the start of the simulation,
+            by default 20
+        """
         plt.close()
         fig, ax = plt.subplots()
         ax.set_prop_cycle(mpl.cycler(color=petroff10))
         j = 0
         for i, gas in enumerate(list(self.gas_names)): #TODO get this from header file
             if i not in skip_gasses:
-                xs = np.arange(burn_in, len(self.gas_abund[-1, i, :]))*self.dt_timestep
-                ax.plot(xs, (self.gas_abund[-1, i, burn_in:]/np.max(self.gas_abund[-1, i, burn_in:])  + j), label=gas, **kwargs)
+                xs = np.arange(burn_in, 
+                               len(self.gas_abund[-1, i, :])) * self.dt_timestep
+                ax.plot(xs, 
+                        (self.gas_abund[-1, i, burn_in:]
+                         / np.max(self.gas_abund[-1, i, burn_in:])  
+                         + j), 
+                         label=gas, 
+                         **kwargs)
                 j -= 1
         plt.xlabel("Time [s]")
         plt.ylabel("Relative gas bundance (offset)")
@@ -144,12 +252,30 @@ class Results:
         plt.tight_layout()
 
 
-    def plot_numdens(self, nlevels=11, min_order = -10, **kwargs):
+    def plot_numdens(self, nlevels=11, min_order = -10, **kwargs) -> None:
+        """Interactively plots the number densities of the cloud species. 
+        Densities are normalized to the peak number density in the plot.  
+        Interactivly change the cloud species which is plotted and the timestep 
+        using the sliders
+
+        Note
+        ----
+        If in a notebook, requires ``%matplotlib ipympl`` to have been invoked
+
+        Parameters
+        ----------
+        nlevels : int, optional
+            The number of contours to plot, by default 11
+        min_order : int, optional
+            The number of orders of magnitude below the peak density to show,
+            by default -10
+
+        """
         plt.close()
 
         # The parametrized function to be plotted
         def f(it, ig):
-            return np.log10(self.numden[:, ig, :, it] * self.rmass[:, ig]+1e-100)
+            return np.log10(self.numden[:, ig, :, it] * self.rmass[:, ig]+1e-99)
 
         t = np.linspace(0, 1, 1000)
 
@@ -180,8 +306,8 @@ class Results:
         # plt.gca().axesPatch.set_alpha(0.0)
 
         text = plt.text((np.log10(r[0, 0])+np.log10(r[-1, 0]))/2,
-                        np.log10(P[-1]) -  (np.log10(P[0]) -np.log10(P[-1]))*.05,  
-                        self.group_names[0], 
+                        np.log10(P[-1]) - (np.log10(P[0]) -np.log10(P[-1]))*.05,
+                        self.group_names[0],
                         ha="center")
 
         # adjust the main plot to make room for the sliders
@@ -219,12 +345,12 @@ class Results:
             vals = f(t_step, group_slider.val)
             maxv = np.ceil(np.max(vals))
             # maxv = -10
-            
+
             cmap = ax.contourf(np.log10(r[:, group_slider.val]),
                                np.log10(P),
-                               vals-maxv, 
-                               levels=np.linspace(min_order, 0, nlevels), 
-                               extend="min", 
+                               vals-maxv,
+                               levels=np.linspace(min_order, 0, nlevels),
+                               extend="min",
                                **kwargs)
             # ax.title(group_names[group_slider.val])
             text.set_text(self.group_names[group_slider.val])
@@ -237,9 +363,9 @@ class Results:
         # # register the update function with each slider
         t_slider.on_changed(update)
         group_slider.on_changed(update)
-            
-            
-    def plot_abundance_profile(self, skip_gasses = [0], **kwargs):
+
+
+    def _plot_abundance_profile(self, skip_gasses = [0], **kwargs):
         plt.close()
         lines = []
         fig, ax = plt.subplots()
@@ -281,7 +407,7 @@ class Results:
         slider.on_changed(update2)
         plt.show()
         
-    def plot_saturation(self, skip_gasses=[0]):
+    def _plot_saturation(self, skip_gasses=[0]):
         plt.close()
         lines = []
         # plt.style.use("petroff10")
@@ -293,7 +419,7 @@ class Results:
                 zs = self.Z
                 lines.append(ax.plot(((self.gas_abund[:, i, -1]/1e6 * self.P)
                                      /self.sat_vp[:, i, -1]),
-                                     self.P, 
+                                     self.P,
                                      label=gas)[0])
         plt.yscale("log")
         plt.xscale("log")
@@ -317,7 +443,7 @@ class Results:
             t_step = int(slider.val / self.dt_timestep)
             for i, gas in enumerate(self.gas_names):
                 if i != 0:
-                    lines[i-1].set_xdata((self.gas_abund[:, i, slider.val]/1e6 
+                    lines[i-1].set_xdata((self.gas_abund[:, i, slider.val]/1e6
                                         * self.P /self.sat_vp[:, i, slider.val]))
 
                     fig.canvas.draw_idle()
@@ -327,7 +453,7 @@ class Results:
 
         plt.show()
 
-    def is_prob_converged(self, burn_in=450, thresh=1e-15):
+    def _is_prob_converged(self, burn_in=450, thresh=1e-15):
         gas_abundances = self.gas_abund[-1, :, burn_in:]
 
 
@@ -356,15 +482,30 @@ class Results:
 
             # print(f"{self.gas_names[i]}\t {np.max(np.abs(mins - np.mean(mins)))/np.mean(mins):.3e}\t {np.max(np.abs(maxes - np.mean(maxes)))/np.mean(maxes):.3e}\t {np.max(np.abs(means - np.mean(means)))/np.mean(means):.3e}")
         return True
-    
-    def gen_picaso_atm_file(self):
+
+    def gen_picaso_atm_file(self, file_path: str = None) -> None:
+        """Generates an atmosphere file for use in picaso.
+        Picaso is a python package which can calculate spectra and is available
+        at https://github.com/natashabatalha/picaso.
+
+        Parameters
+        ----------
+        file_path : str, optional
+            The path to save the file to.  If not provided, creates a file 
+            located in the directory storing the carma simulation.
+
+        """
+
+        if not file_path: file_path = os.path.join({self.path}, 'fastchem.atm')
+
+
         # species = ['H2O1', 'C1H4', 'C1O1', 'C1O2', 'Na', 'K', 'H2S1', 'C1H1N1_1', 'O2S1', 'H', 'H2', 'He', 'H1-', 'H1+', 'e-']
-        species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4',
-                  'C1O1','C1O2','O2',
-                  'N','H1N1','C1N1','C1H1N1_1','N1O1','H2N1','N2','H3N1',
-                  'H1S1','H2O4S1','H2S1','S','S2','O1S1','C1S1','C1O1S1','C1S2','N1S1','O2S1','S4','S8',
-                  'S3','O1S2',
-                  'O1Ti1','Ti','O2Ti1','H1Ti1','C2Ti1','N1Ti1','O1V1','V','He','Na','K', 'H1-', 'H1+', 'e-']
+        species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4', 
+                   'C1O1','C1O2','O2','N','H1N1','C1N1','C1H1N1_1','N1O1',
+                   'H2N1','N2','H3N1','H1S1','H2O4S1','H2S1','S','S2','O1S1',
+                   'C1S1','C1O1S1','C1S2','N1S1','O2S1','S4','S8','S3','O1S2',
+                   'O1Ti1','Ti','O2Ti1','H1Ti1','C2Ti1','N1Ti1','O1V1','V','He',
+                   'Na','K', 'H1-', 'H1+', 'e-']
         # species_labels = ['H2O', 'CH4', 'CO', 'CO2', 'Na', 'K', 'H2S', 'HCN', 'SO2', 'H', 'H2', 'He', 'H-', 'H+', 'e-']
         species_labels = ['OH','H2','H2O','H','O','CH','C','CH2','CH3','CH4',
                   'CO','CO2','O2',
@@ -382,9 +523,36 @@ class Results:
             header += '\t'
             header += s
 
-        np.savetxt(f'{self.path}/fastchem.atm', np.transpose(data), header=header, fmt="%.18e", comments="")
+        np.savetxt(file_path, np.transpose(data), header=header, fmt="%.18e", comments="")
+        print(f"Wrote file: {file_path}")
 
-    def gen_picaso_cloud_file(self, wavelengths, skip_groups=[]):
+    def gen_picaso_cloud_file(self, 
+                              wavelengths: np.ndarray, 
+                              mie_table_path: str = None,
+                              skip_groups=[]):
+        """Generate cloud opacity tables for use in picaso. Picaso is a python 
+        package which can calculate spectra and is available at 
+        https://github.com/natashabatalha/picaso.
+
+        Parameters
+        ----------
+        wavelengths : np.ndarray
+            The wavelengths at which to calculate to opacities [cm]
+        mie_table_path : str
+            The directory in which the mie tables of the species are located.
+            It is assumed that each cloud species used has a .dat file in that 
+            directory named with the name of the cloud species (ie 'Mg2SiO4 on 
+            TiO2.dat'), the first row of the table is a header row, and the 
+            columns are radius[cm], wavelength[cm], extinction efficiency 
+            (Q_ext), scattering efficiency (Q_sca), and asymmetry factor (g). 
+            The  columns must be in that order and separated by whitespace.  If 
+            no path is provided, the carma default tables will be used but these 
+            might be less accurate, even for the same species, as they might not
+            be calculated at the same particle size and wavelengths. 
+        skip_groups : list, optional
+            The indices of any cloud groups to exclude from the opacity 
+            calculation, by default None
+        """
         carma = self.carma
         beta_exts = []
         beta_scas = []
@@ -395,14 +563,17 @@ class Results:
 
         for i in range(len(carma.groups)):
             if i in skip_groups: continue
-            beta_ext, beta_sca, g_avg = get_cloud_opacities(carma, i, wavelengths)
+            beta_ext, beta_sca, g_avg = _get_cloud_opacities(carma, 
+                                                             i, 
+                                                             wavelengths,
+                                                             mie_table_path)
 
             beta_exts.append(beta_ext)
             beta_scas.append(beta_sca)
             g_avgs.append(g_avg)
 
             print(f"{carma.results.group_names[i]}:\t{np.max(beta_ext)}")
-        
+
         beta_ext = np.sum(np.array(beta_exts), axis=0)
         beta_sca = np.sum(np.array(beta_scas), axis=0)
         g_avg = np.sum(np.array(g_avgs) * np.array(beta_scas), axis=0) / beta_sca
@@ -414,7 +585,7 @@ class Results:
         dz = np.abs(carma.z_levels[1:] - carma.z_levels[:-1])
 
         d_tau = beta_ext * dz[:, np.newaxis]
-        
+
         with open(os.path.join(carma.name, "clouds.atm"), "w+") as f:
             f.write("nlayer\tnwave\tpressure\twavenumber\tw0\tg0\topd\n")
             for iz in range(carma.NZ):
@@ -431,20 +602,27 @@ class Results:
 
 
 def _load_cloud_indices(specie_name):
-    data = np.genfromtxt(os.path.join(os.path.dirname(__file__), 
+    data = np.genfromtxt(os.path.join(os.path.dirname(__file__),
                                       "refractive_indices_txt_files",
-                                        opacity_files[specie_name]), 
+                                        opacity_files[specie_name]),
                         comments="#")
     wavelengths = data[:, 0] * 1e-4 # convert to cm
     n_interp = interp1d(wavelengths, data[:, 1])
     k_interp = interp1d(wavelengths, data[:, 2])
     return n_interp, k_interp
 
-def get_cloud_opacities(carma, i, wavelengths, min_columnden = 1e-25):
+def _get_cloud_opacities(carma, 
+                         i, 
+                         wavelengths, 
+                         mie_table_path = None,
+                         min_columnden = 1e-25):
 
     name = carma.results.group_names[i]
 
     
+    if not mie_table_path:
+        mie_table_path = os.path.join(SRC, "mie_tables", f'{name}.dat')
+
     data = np.genfromtxt(os.path.join(SRC, "mie_tables", f'{name}.dat'), delimiter='\t', names=True) #TODO
 
     r = data["rcm"]
@@ -481,7 +659,7 @@ def get_cloud_opacities(carma, i, wavelengths, min_columnden = 1e-25):
         if columndens[ibin] < min_columnden: continue
         for ilambda in range(len(wavelengths)):
             # print(2 * np.pi * carma.results.r[ibin, i]/ wavelengths[ilambda])
-            #        
+            #
 
             r = carma.results.r[ibin, i] * 1e-4
             wavelength = wavelengths[ilambda]
@@ -511,4 +689,3 @@ def get_cloud_opacities(carma, i, wavelengths, min_columnden = 1e-25):
         
 
 
-    

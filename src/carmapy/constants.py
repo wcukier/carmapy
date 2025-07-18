@@ -382,7 +382,7 @@ gas_dict = { #TODO change to predifined gas objects
         "Mg2SiO4": {
         "cond_rho": RHO_MG2SIO4,
         "rtn": I_VAPRTN_MG2SIO4_VISSCHER2010,
-        "vp_offset": 20.88+0.2*6,
+        "vp_offset": 14.88,
         "vp_tcoeff": TCOEFF_MG2SIO4,
         "vp_metcoeff": 1.4,
         "vp_logpcoeff": 0.2,
@@ -424,7 +424,7 @@ gas_dict = { #TODO change to predifined gas objects
         "TiO2": {
         "cond_rho": RHO_TIO2,
         "rtn": I_VAPRTN_TIO2_HELLING2001,
-        "vp_offset": 15.5489,
+        "vp_offset": 9.5489,
         "vp_tcoeff": TCOEFF_TIO2_HELLING,
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,

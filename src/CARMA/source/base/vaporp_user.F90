@@ -33,7 +33,7 @@ subroutine vaporp_user(carma, cstate, iz, igas, rc, pvap_liq, pvap_ice)
   integer, intent(in)                  :: iz        !! z index
   integer, intent(in)                  :: igas      !! gas index
   real(kind=f), intent(out)            :: pvap_liq  !! vapor pressure wrt liquid [dyne/cm2]
-  real(kind=f), intent(out)            :: pvap_ice  !! vapor pressure wrt ice [dyne[cm2]
+  real(kind=f), intent(out)            :: pvap_ice  !! vapor pressure wrt ice [dyne/cm2]
   integer, intent(inout)               :: rc        !! return code, negative indicates failure
   real(kind=f)                         :: offset, tcoeff, metcoeff, logpcoeff
 
@@ -42,7 +42,7 @@ subroutine vaporp_user(carma, cstate, iz, igas, rc, pvap_liq, pvap_ice)
   metcoeff  = carma%f_gas(igas)%f_vp_metcoeff
   logpcoeff = carma%f_gas(igas)%f_vp_logpcoeff
 
-  pvap_liq = 10._f ** (offset - tcoeff/t(iz) - metcoeff*met - logpcoeff*log10(p(iz)))
+  pvap_liq = 1e6_f * 10._f ** (offset - tcoeff/t(iz) - metcoeff*met - logpcoeff*log10(1e-6_f*p(iz)))
   pvap_ice = pvap_liq
 
   return
