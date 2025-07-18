@@ -31,15 +31,12 @@ build:
     pre_install:
       - pip install .
       - git clone https://github.com/natashabatalha/picaso.git
-      - cd picaso
-      - pip install .
-      - cd reference/opacities
-      - curl -o opacities.db.tar.gz 'https://zenodo.org/records/14861730/files/opacities_0.3_15_R15000.db.tar.gz?download=1'
-      - tar -xvzf opacities.db.tar.gz -C opacities.db
-      - mv opacities_0.3_15_R15000.db opacities.db
-      - cd ..
-      - export picaso_refdata=`pwd`
-      - cd ../..
+      - cd picaso && pip install .
+      - cd picaso/reference/opacities && curl -o opacities.db.tar.gz 'https://zenodo.org/records/14861730/files/opacities_0.3_15_R15000.db.tar.gz?download=1'
+      - cd picaso/reference/opacities && tar -xvzf opacities.db.tar.gz -C opacities.db
+      - cd picaso/reference/opacities && mv opacities_0.3_15_R15000.db opacities.db
+      - cd picaso/reference && export picaso_refdata=`pwd`
+
 
 
 
