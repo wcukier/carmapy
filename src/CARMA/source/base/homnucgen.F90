@@ -54,33 +54,38 @@ subroutine homnucgen(carma,cstate, iz, rc)
     
     if ((igas .ne. 0) .and. (inucproc(ielem,ielem) .eq. I_HOMGEN)) then
 
-      if (igas .eq. igash2o) then
-        rho_cond = RHO_W
-      else if (igas .eq. igash2so4) then
+      if (igas .eq. igash2so4) then
         rho_cond = sulfate_density(carma, wtpct(iz), t(iz), rc)
-      else if ((igas .eq. igass8) .or. (igas .eq. igass2)) then
-        rho_cond = RHO_SX
-      else if (igas .eq. igaskcl) then
-	      rho_cond = RHO_KCL
-      else if (igas .eq. igaszns) then
-	      rho_cond = RHO_ZNS
-      else if (igas .eq. igasna2s) then
-        rho_cond = RHO_NA2S
-      else if (igas .eq. igasmns) then
-        rho_cond = RHO_MNS
-      else if (igas .eq. igascr) then
-        rho_cond = RHO_CR
-      else if (igas .eq. igasfe) then
-        rho_cond = RHO_FE
-      else if (igas .eq. igasmg2sio4) then
-        rho_cond = RHO_MG2SIO4
-      else if (igas .eq. igastio2) then
-        rho_cond = RHO_TIO2
-      else if (igas .eq. igasal2o3) then
-        rho_cond = RHO_AL2O3
-      else if (igas .eq. igasco) then
-        rho_cond = RHO_CO
+      else ! WC 
+        rho_cond = carma%f_gas(igas)%f_rho_cond
       endif
+      ! else if (igas .eq. igash2o) then
+      !   rho_cond = RHO_W
+      ! else if (igas .eq. igash2so4) then
+      !   rho_cond = sulfate_density(carma, wtpct(iz), t(iz), rc)
+      ! else if ((igas .eq. igass8) .or. (igas .eq. igass2)) then
+      !   rho_cond = RHO_SX
+      ! else if (igas .eq. igaskcl) then
+	    !   rho_cond = RHO_KCL
+      ! else if (igas .eq. igaszns) then
+	    !   rho_cond = RHO_ZNS
+      ! else if (igas .eq. igasna2s) then
+      !   rho_cond = RHO_NA2S
+      ! else if (igas .eq. igasmns) then
+      !   rho_cond = RHO_MNS
+      ! else if (igas .eq. igascr) then
+      !   rho_cond = RHO_CR
+      ! else if (igas .eq. igasfe) then
+      !   rho_cond = RHO_FE
+      ! else if (igas .eq. igasmg2sio4) then
+      !   rho_cond = RHO_MG2SIO4
+      ! else if (igas .eq. igastio2) then
+      !   rho_cond = RHO_TIO2
+      ! else if (igas .eq. igasal2o3) then
+      !   rho_cond = RHO_AL2O3
+      ! else if (igas .eq. igasco) then
+      !   rho_cond = RHO_CO
+      ! endif
 
       surftens = akelvin(iz,igas) * t(iz) * rho_cond * RGAS / (2._f * gwtmol(igas))
       rvap = RGAS / gwtmol_dif(igas)

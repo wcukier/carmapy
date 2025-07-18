@@ -8,3 +8,5 @@ src/carmapy.egg-info/**
 build/lib/** 
 docs/build/** 
 .DS_Store
+
+src/CARMA/source/base/*.mod

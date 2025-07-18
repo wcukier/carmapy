@@ -105,6 +105,8 @@ module carma_enums_mod
   integer, public, parameter :: I_VAPRTN_TIO2_HELLING2001     = 16   !! TiO2, Helling et al. [2001] 
   integer, public, parameter :: I_VAPRTN_AL2O3_WAKEFORD2017     = 17   !! Al2O3, Wakeford et al. [2017] 
   integer, public, parameter :: I_VAPRTN_CO_WYLIE1958     = 18   !! CO, Wylie thesis [1958] 
+  integer, public, parameter :: I_VAPRTN_USER    = 19   !! User defined, WC
+
 
   ! Routines to calculate fall velocities
   integer, public, parameter :: I_FALLRTN_STD              = 1   !! Standard CARMA 2.3 routine (spherical only)

@@ -19,6 +19,9 @@ module carma_precision_mod
 	integer, parameter      :: f = selected_real_kind(15,307)
 	real(kind=f), parameter :: powmax = 706._f
 	
+
+	! integer, parameter      :: f = selected_real_kind(33,307)
+	! real(kind=f), parameter :: powmax = 706._f
 #endif
 	
 	! Precision control strategy

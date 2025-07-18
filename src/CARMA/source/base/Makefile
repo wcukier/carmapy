@@ -28,7 +28,7 @@ vaporp_s2_lyons2008.o vaporp_kcl_morley2012.o vaporp_zns_morley2012.o \
 vaporp_na2s_morley2012.o vaporp_mns_morley2012.o vaporp_cr_morley2012.o \
 vaporp_fe_visscher2010.o vaporp_mg2sio4_visscher2010.o vaporp_s8_zahnle2016.o \
 vaporp_tio2_lodders1999.o vaporp_tio2_helling2001.o vaporp_al2o3_wakeford2017.o \
-vaporp_co_wylie1958.o sulfate_utils.o sulfnuc.o sulfnucrate.o setupedif.o vertgas.o homnucgen.o 
+vaporp_co_wylie1958.o vaporp_user.o sulfate_utils.o sulfnuc.o sulfnucrate.o setupedif.o vertgas.o homnucgen.o 
 
 #freezglaerl_murray2010.o freezaerl_tabazadeh2000.o freezaerl_koop2000.o \
 #freezaerl_mohler2010.o freezdropl.o hetnucl.o melticel.o gasexchange.o \
@@ -53,7 +53,7 @@ vaporp_s2_lyons2008.html vaporp_kcl_morley2012.html vaporp_zns_morley2012.html \
 vaporp_na2s_morley2012.html vaporp_mns_morley2012.html vaporp_cr_morley2012.html \
 vaporp_fe_visscher2010.html vaporp_mg2sio4_visscher2010.html vaporp_s8_zahnle2016.html \
 vaporp_tio2_lodders1999.html vaporp_tio2_helling2001.html vaporp_al2o3_wakeford2017.html \
-vaporp_co_wylie1958.html sulfate_utils.html sulfnuc.html sulfnucrate.html setupedif.html vertgas.html homnucgen.html 
+vaporp_co_wylie1958.html vaporp_user.html sulfate_utils.html sulfnuc.html sulfnucrate.html setupedif.html vertgas.html homnucgen.html 
 
 #freezglaerl_murray2010.html freezaerl_tabazadeh2000.html freezaerl_koop2000.html \
 #freezaerl_mohler2010.html freezdropl.html hetnucl.html melticel.html gasexchange.html \
@@ -338,6 +338,9 @@ vaporp_h2o_goff1946.o : vaporp_h2o_goff1946.F90 carma_globaer.h carma_mod.mod ca
 	$(FORTRAN) $(FFLAGS) -c $<
 
 vaporp_h2o_murphy2005.o : vaporp_h2o_murphy2005.F90 carma_globaer.h carma_mod.mod carmastate_mod.mod carma_types_mod.mod carma_planet_mod.mod carma_condensate_mod.mod carma_constants_mod.mod carma_enums_mod.mod carma_precision_mod.mod 	
+	$(FORTRAN) $(FFLAGS) -c $<
+
+vaporp_user.o : vaporp_user.F90 carma_globaer.h carma_mod.mod carmastate_mod.mod carma_types_mod.mod carma_planet_mod.mod carma_condensate_mod.mod carma_constants_mod.mod carma_enums_mod.mod carma_precision_mod.mod 	
 	$(FORTRAN) $(FFLAGS) -c $<
 
 versol.o : versol.F90 carma_globaer.h carma_mod.mod carmastate_mod.mod carma_types_mod.mod carma_planet_mod.mod carma_condensate_mod.mod carma_constants_mod.mod carma_enums_mod.mod carma_precision_mod.mod 		

@@ -79,7 +79,8 @@ subroutine setupgkern(carma, cstate, rc)
   real(kind=f)                   :: fv
   real(kind=f)                   :: surf_tens(NZ)  ! surface tension of non-H2O particles
   real(kind=f)                   :: rho_part  ! density of non-H2O particle
-  
+  real(kind=f)                   :: rho_cond
+
 
   ! Calculate gas properties for all of the gases. Better to do them all once, than to
   ! repeat this for multiple groups.
@@ -91,7 +92,6 @@ subroutine setupgkern(carma, cstate, rc)
     !
     rhoa_cgs(:, igas) = rhoa(:) / (xmet(:)*ymet(:)*zmet(:))
 
-    ! TODO - WC
     if (igas .eq. igash2o) then
         
       ! Condensing gas is water vapor
@@ -133,161 +133,176 @@ subroutine setupgkern(carma, cstate, rc)
         ! for water vapor.
         akelvini(k, igas) = akelvini(k, igas)
       end do   
-    else if ((igas .eq. igass8) .or. (igas .eq. igass2)) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+    else ! WC 
+      ! Calculate Kelvin curvature factor for condensate with temperature:
       do k = 1, NZ  
-        surf_tens(k) = 60.8_f ! http://cameochemicals.noaa.gov/chris/SXX.pdf, Fanelli 1950
-        rho_part = 1.96_f ! http://periodictable.com/Elements/016/data.html
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_SX * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
-        
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do 
-    else if (igas .eq. igaskcl) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        surf_tens(k) = 160.4_f - 0.07_f*(t(k)-273.15_f) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
-!        surf_tens(k) = 4._f*(160.4_f - 0.07_f*t(k)) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_KCL * RGAS)
+        surf_tens(k) = carma%f_gas(igas)%f_surften_0 - carma%f_gas(igas)%f_surften_slope*t(k)
+        rho_cond =  carma%f_gas(igas)%f_rho_cond
+        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * rho_cond * RGAS)
         surfacetens(k, igas) = surf_tens(k)
         
         desorption(igas) = 0.5_f
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
+        ! Not doing condensation on ice, so just set it to the value
+        ! for vapor.
         akelvini(k, igas) = akelvin(k, igas)
       end do   
-    else if (igas .eq. igaszns) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        !surf_tens(k) = 1672._f ! Celikkaya & Akinc 1990, Journal of the American Ceramic Society 73, 2360
-        surf_tens(k) = 860._f ! Zhang et al. 2003, J. Phys. Chem. B 2003, 107, 13051-13060
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_ZNS * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+    end if
+!     else if ((igas .eq. igass8) .or. (igas .eq. igass2)) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         surf_tens(k) = 60.8_f ! http://cameochemicals.noaa.gov/chris/SXX.pdf, Fanelli 1950
+!         rho_part = 1.96_f ! http://periodictable.com/Elements/016/data.html
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_SX * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        desorption(igas) = 0.5_f
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do 
+!     else if (igas .eq. igaskcl) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         surf_tens(k) = 160.4_f - 0.07_f*(t(k)-273.15_f) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
+! !        surf_tens(k) = 4._f*(160.4_f - 0.07_f*t(k)) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_KCL * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igasna2s) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        !surf_tens(k) = 160.4_f - 0.07_f*t(k) ! Assume same as KCl 
-        surf_tens(k) = 1033._f ! Graham Lee's calculations, estimated from enthalpy data  
-        !surf_tens(k) = 50._f ! DON'T KNOW
-        surfacetens(k, igas) = surf_tens(k)
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_NA2S * RGAS)
+!         desorption(igas) = 0.5_f
         
-        desorption(igas) = 0.5_f
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do   
+!     else if (igas .eq. igaszns) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         !surf_tens(k) = 1672._f ! Celikkaya & Akinc 1990, Journal of the American Ceramic Society 73, 2360
+!         surf_tens(k) = 860._f ! Zhang et al. 2003, J. Phys. Chem. B 2003, 107, 13051-13060
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_ZNS * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igasmns) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        !surf_tens(k) = 50._f ! DON'T KNOW
-        !surf_tens(k) = 160.4_f - 0.07_f*t(k) ! Assume same as KCl  
-        surf_tens(k) = 2326._f ! Graham Lee's calculations, estimated from enthalpy data  
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_MNS * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+!         desorption(igas) = 0.5_f
         
-        desorption(igas) = 0.5_f
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igasna2s) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         !surf_tens(k) = 160.4_f - 0.07_f*t(k) ! Assume same as KCl 
+!         surf_tens(k) = 1033._f ! Graham Lee's calculations, estimated from enthalpy data  
+!         !surf_tens(k) = 50._f ! DON'T KNOW
+!         surfacetens(k, igas) = surf_tens(k)
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_NA2S * RGAS)
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igascr) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        surf_tens(k) = 1642._f - 0.2_f * ( t(k) - 2133.15_f ) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_CR * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+!         desorption(igas) = 0.5_f
         
-        desorption(igas) = 0.5_f
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igasmns) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         !surf_tens(k) = 50._f ! DON'T KNOW
+!         !surf_tens(k) = 160.4_f - 0.07_f*t(k) ! Assume same as KCl  
+!         surf_tens(k) = 2326._f ! Graham Lee's calculations, estimated from enthalpy data  
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_MNS * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igasfe) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        surf_tens(k) = 1862._f - 0.39_f * ( t(k) - 1803.15_f ) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_FE * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+!         desorption(igas) = 0.5_f
         
-        desorption(igas) = 0.5_f
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igascr) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         surf_tens(k) = 1642._f - 0.2_f * ( t(k) - 2133.15_f ) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_CR * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igasmg2sio4) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        surf_tens(k) = 436._f !Kazasa et al. 1989!1280._f ! Miura et al. (2010)
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_MG2SIO4 * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+!         desorption(igas) = 0.5_f
         
-        desorption(igas) = 0.5_f
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igasfe) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         surf_tens(k) = 1862._f - 0.39_f * ( t(k) - 1803.15_f ) ! http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_FE * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
+        
+!         desorption(igas) = 0.5_f
+        
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igasmg2sio4) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         surf_tens(k) = 436._f !Kazasa et al. 1989!1280._f ! Miura et al. (2010)
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_MG2SIO4 * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
+        
+!         desorption(igas) = 0.5_f
              
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igastio2) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        !surf_tens(k) = 480._f ! Lee et al. (2014)
-        surf_tens(k) = 535.124_f - 0.04396_f * t(k) ! Lee et al. (2015)
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_TIO2 * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igastio2) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         !surf_tens(k) = 480._f ! Lee et al. (2014)
+!         surf_tens(k) = 535.124_f - 0.04396_f * t(k) ! Lee et al. (2015)
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_TIO2 * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        desorption(igas) = 0.5_f
+!         desorption(igas) = 0.5_f
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igasal2o3) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        surf_tens(k) = 690._f !Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_AL2O3 * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igasal2o3) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         surf_tens(k) = 690._f !Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_AL2O3 * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        desorption(igas) = 0.5_f
+!         desorption(igas) = 0.5_f
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else if (igas .eq. igasco) then
-      ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
-      do k = 1, NZ  
-        !surf_tens(k) = 9.8_f ! Bierhals J; Ullmann's Encyclopedia of Industrial Chemistry. (2002).
-        surf_tens(k) = max(27.77_f*(1._f - t(k)/132.92_f)**1.126_f,1e-5_f) ! Sprow & Prausnitz (1965)
-        akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_CO * RGAS)
-        surfacetens(k, igas) = surf_tens(k)
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else if (igas .eq. igasco) then
+!       ! Calculate Kelvin curvature factor for polysulfur interactively with temperature:
+!       do k = 1, NZ  
+!         !surf_tens(k) = 9.8_f ! Bierhals J; Ullmann's Encyclopedia of Industrial Chemistry. (2002).
+!         surf_tens(k) = max(27.77_f*(1._f - t(k)/132.92_f)**1.126_f,1e-5_f) ! Sprow & Prausnitz (1965)
+!         akelvin(k, igas) = 2._f * gwtmol(igas) * surf_tens(k) / (t(k) * RHO_CO * RGAS)
+!         surfacetens(k, igas) = surf_tens(k)
         
-        ! Not doing condensation of h2So4 on ice, so just set it to the value
-        ! for water vapor.
-        akelvini(k, igas) = akelvin(k, igas)
-      end do  
-    else
+!         ! Not doing condensation of h2So4 on ice, so just set it to the value
+!         ! for water vapor.
+!         akelvini(k, igas) = akelvin(k, igas)
+!       end do  
+!     else
 
-      ! Condensing gas is not yet configured.
-      if (do_print) write(LUNOPRT,*) 'setupgkern::ERROR - invalid igas'
-      rc = RC_ERROR
-      return
-    endif
+!       ! Condensing gas is not yet configured.
+!       if (do_print) write(LUNOPRT,*) 'setupgkern::ERROR - invalid igas'
+!       rc = RC_ERROR
+!       return
+!     endif
 
     ! Molecular free path of condensing gas 
     freep(:,igas)  = 3._f*diffus(:,igas) &

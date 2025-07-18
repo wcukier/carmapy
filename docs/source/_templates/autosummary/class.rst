@@ -22,7 +22,7 @@
    .. rubric:: {{ _('Attributes') }}
 
    .. autosummary::
-   {% for item in attributes %}
+   {% for item in attributes|sort %}
       ~{{ name }}.{{ item }}
    {%- endfor %}
    {% endif %}
