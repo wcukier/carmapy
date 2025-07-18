@@ -789,8 +789,8 @@ class Carma:
                 else: vaprtn = I_VAPRTN_USER
 
                 f.write(f'{name:24s}{gas.wtmol:<.6e}\t'
-                        f'{gas_dict[key]["rtn"]:2d}\t' 
-                        # f'{vaprtn:2d}\t' 
+                        # f'{gas_dict[key]["rtn"]:2d}\t' 
+                        f'{vaprtn:2d}\t' 
                         f'{gas.gcomp:2d}\t'
                         f'{gas.wtmol_dif:<.18e}\t'
                         f'{gas.rho_cond:<.18e}\t'
@@ -859,6 +859,10 @@ class Carma:
                     self.T_centers, 
                     delimiter='\t')
         
+        np.savetxt(os.path.join(path, "temp_levels.txt"),
+                    self.T_levels, 
+                    delimiter='\t')
+
         with open(os.path.join(path, io["gas_input_file"]), "w+") as f:
             for key in self.gasses.keys():
                 f.write(key+"\t")

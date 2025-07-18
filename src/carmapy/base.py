@@ -169,6 +169,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.kzz_levels = levels[:, 2]
 
     carma.T_centers = np.genfromtxt(os.path.join(path, io["temps_file"]))
+    carma.T_levels = np.genfromtxt(os.path.join(path, "temp_levels.txt"))
 
 
     gas_input = np.genfromtxt(os.path.join(path, io["gas_input_file"]))

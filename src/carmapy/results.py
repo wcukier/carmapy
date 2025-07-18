@@ -496,7 +496,7 @@ class Results:
 
         """
 
-        if not file_path: file_path = os.path.join({self.path}, 'fastchem.atm')
+        if not file_path: file_path = os.path.join(self.path, 'fastchem.atm')
 
 
         # species = ['H2O1', 'C1H4', 'C1O1', 'C1O2', 'Na', 'K', 'H2S1', 'C1H1N1_1', 'O2S1', 'H', 'H2', 'He', 'H1-', 'H1+', 'e-']
@@ -528,6 +528,7 @@ class Results:
 
     def gen_picaso_cloud_file(self, 
                               wavelengths: np.ndarray, 
+                              file_path: str = None,
                               mie_table_path: str = None,
                               skip_groups=[]):
         """Generate cloud opacity tables for use in picaso. Picaso is a python 
@@ -538,6 +539,9 @@ class Results:
         ----------
         wavelengths : np.ndarray
             The wavelengths at which to calculate to opacities [cm]
+        file_path : str, optional
+            The path to save the file to.  If not provided, creates a file 
+            located in the directory storing the carma simulation.            
         mie_table_path : str
             The directory in which the mie tables of the species are located.
             It is assumed that each cloud species used has a .dat file in that 
@@ -553,6 +557,10 @@ class Results:
             The indices of any cloud groups to exclude from the opacity 
             calculation, by default None
         """
+
+        if not file_path: file_path = os.path.join(self.path, 'clouds.atm')
+
+
         carma = self.carma
         beta_exts = []
         beta_scas = []
@@ -572,21 +580,19 @@ class Results:
             beta_scas.append(beta_sca)
             g_avgs.append(g_avg)
 
-            print(f"{carma.results.group_names[i]}:\t{np.max(beta_ext)}")
-
         beta_ext = np.sum(np.array(beta_exts), axis=0)
         beta_sca = np.sum(np.array(beta_scas), axis=0)
-        g_avg = np.sum(np.array(g_avgs) * np.array(beta_scas), axis=0) / beta_sca
+        g_avg = np.sum(np.array(g_avgs) * np.array(beta_scas), axis=0) / (beta_sca + 1e-100)
         g_avg = np.where(beta_sca==0, 0, g_avg)
 
-        ssas = beta_sca/beta_ext
+        ssas = beta_sca/(beta_ext + 1e-100)
         ssas = np.where(beta_ext==0, 0, ssas)
 
         dz = np.abs(carma.z_levels[1:] - carma.z_levels[:-1])
 
         d_tau = beta_ext * dz[:, np.newaxis]
 
-        with open(os.path.join(carma.name, "clouds.atm"), "w+") as f:
+        with open(file_path, "w+") as f:
             f.write("nlayer\tnwave\tpressure\twavenumber\tw0\tg0\topd\n")
             for iz in range(carma.NZ):
                 for iwave in range(len(wavelengths)):
@@ -597,6 +603,9 @@ class Results:
                     +f"{ssas[iz, iwave]}\t"
                     +f"{g_avg[iz, iwave]}\t"
                     +f"{d_tau[iz, iwave]}\n")
+
+        print(f"Wrote file: {file_path}")
+
 
 
 
@@ -675,7 +684,7 @@ def _get_cloud_opacities(carma,
     
     beta_ext = np.sum(weighted_qext, axis=1)
     beta_sca = np.sum(weighted_qsca, axis=1)
-    g_avg = np.sum(weighted_g, axis=1) / beta_sca
+    g_avg = np.sum(weighted_g, axis=1) / (beta_sca + 1e-100)
     g_avg = np.where(beta_sca==0, 0, g_avg)
     
     # for ilambda in range(len(wavelengths)):
