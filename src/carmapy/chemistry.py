@@ -176,6 +176,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   i = 0
   while(sat_vp[i]/P[i] > abund[i]): 
     i += 1
+    if (i == len(P)): return P[i-1], T[i-1]
   
   guess = T[i]
 
