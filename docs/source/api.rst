@@ -26,5 +26,5 @@ Submodules
 
     carmapy.base
     carmapy.example
-
+    carmapy.chemistry
 

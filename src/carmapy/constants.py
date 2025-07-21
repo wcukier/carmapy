@@ -246,7 +246,7 @@ RGAS = 8.31430e+07 # Define universal gas constant [ erg / deg_K / mole ]
 
 
 
-# p = 10^(vp_offset - t_coeff/T - met_coeff * met - vp_logpcoeff * log10 p)
+# p = 1e6*10^(vp_offset - t_coeff/T - met_coeff * met - vp_logpcoeff * log10(p*1e-6))
 
 
 
@@ -276,7 +276,7 @@ gas_dict = { #TODO change to predifined gas objects
         "KCl": {
         "cond_rho": RHO_KCL,
         "rtn": I_VAPRTN_KCL_MORLEY2012,
-        "vp_offset": 13.6106,
+        "vp_offset": 7.6106,
         "vp_tcoeff": TCOEFF_KCL,
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
@@ -297,7 +297,7 @@ gas_dict = { #TODO change to predifined gas objects
         "ZnS": {
         "cond_rho": RHO_ZNS,
         "rtn": I_VAPRTN_ZNS_MORLEY2012,
-        "vp_offset": 18.812,
+        "vp_offset": 12.812,
         "vp_tcoeff": TCOEFF_ZNS,
         "vp_metcoeff": 1,
         "vp_logpcoeff": 0,
@@ -318,7 +318,7 @@ gas_dict = { #TODO change to predifined gas objects
         "Na2S": {
         "cond_rho": RHO_NA2S,
         "rtn": I_VAPRTN_NA2S_MORLEY2012,
-        "vp_offset": 14.55,
+        "vp_offset": 8.55,
         "vp_tcoeff": TCOEFF_NA2S,
         "vp_metcoeff": 0.5,
         "vp_logpcoeff": 0,
@@ -340,7 +340,7 @@ gas_dict = { #TODO change to predifined gas objects
         "MnS": {
         "cond_rho": RHO_MNS,
         "rtn": I_VAPRTN_MNS_MORLEY2012,
-        "vp_offset": 17.532,
+        "vp_offset": 11.532,
         "vp_tcoeff": TCOEFF_MNS,
         "vp_metcoeff": 1,
         "vp_logpcoeff": 0,
@@ -361,7 +361,7 @@ gas_dict = { #TODO change to predifined gas objects
         "Cr": {
         "cond_rho": RHO_CR,
         "rtn": I_VAPRTN_CR_MORLEY2012,
-        "vp_offset": 13.49,
+        "vp_offset": 7.49,
         "vp_tcoeff": TCOEFF_CR,
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
@@ -403,7 +403,7 @@ gas_dict = { #TODO change to predifined gas objects
         "Fe": {
         "cond_rho": RHO_FE,
         "rtn": I_VAPRTN_FE_VISSCHER2010,
-        "vp_offset": 13.23,
+        "vp_offset": 7.23,
         "vp_tcoeff": TCOEFF_FE,
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
@@ -445,7 +445,7 @@ gas_dict = { #TODO change to predifined gas objects
         "Al2O3": {
         "cond_rho": RHO_AL2O3,
         "rtn": I_VAPRTN_AL2O3_WAKEFORD2017,
-        "vp_offset": 23.7,
+        "vp_offset": 17.7,
         "vp_tcoeff": TCOEFF_AL2O3,
         "vp_metcoeff": 1.66,
         "vp_logpcoeff": 0,

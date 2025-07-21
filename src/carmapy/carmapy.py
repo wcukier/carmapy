@@ -993,7 +993,7 @@ class Gas:
     -----
     1. The vapor pressure of the condensate is calculated as follows:
 
-        ``vp = 10**(offset - vp_tcoeff/T - vp_metcoeff * met - vp_logp_oeff * log10 P)``
+        ``vp = 1e6 * 10**(offset - vp_tcoeff/T - vp_metcoeff * met - vp_logp_oeff * log10(P*1e-6))``
 
         with ``vp`` in baryes, ``T`` in K, and ``P`` in baryes.
 

@@ -116,12 +116,10 @@ def saturation_vapor_pressure(P: ArrayLike,
               - met_coeff * log_met
               - logp_coeff * np.log10(1e-6*P))
 
-def populate_fastchem_abundances(carma: "Carma",
+def _populate_fastchem_abundances(carma: "Carma",
                                   metallicity=1, 
                                   override = {"H2O": 0}) -> None:
-  """
-  .. deprecated:: Do not use at this point
-  """
+ 
   species = []
   
   

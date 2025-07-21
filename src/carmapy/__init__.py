@@ -8,5 +8,4 @@ from .results import *
 from .base import *
 
 
-from .chemistry import populate_fastchem_abundances
 
