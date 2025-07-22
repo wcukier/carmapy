@@ -8,3 +8,4 @@
     ipykernel
     sphinx_autodoc_typehints
     sphinx>=8.2
+    sphinx-book-theme
