@@ -4,3 +4,7 @@ carmapy is a python wrapper of the Community Aerosol and Radiation Model for Atm
 
 Read the documentation (including install instructions) here: [https://carmapy.readthedocs.io](https://carmapy.readthedocs.io)
 
+## Roadmap
+- [ ] 2D CARMApy
+- [ ] Microphysical Process rates in output
+- [ ] Benchmark CARMApy vs CARMA
