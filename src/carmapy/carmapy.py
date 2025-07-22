@@ -399,7 +399,8 @@ class Carma:
             particle
         """
         if type(gas) == type(""):
-            gas = self.gasses.get(gas, Gas(gas, len(self.gasses) + 1))
+            gas = self.gasses.get(gas, gas)
+            if type(gas) == type(""): gas = Gas(gas, len(self.gasses) + 1)
         self.gasses[gas.name] = gas
         
         if type(seed_group) == type(""):
@@ -415,7 +416,7 @@ class Carma:
         self.nucs.append(Nuc(seed_group, group, True, gas, mucos))
         
         mantle_elem = Element(gas.name + " Mantle", len(self.elems)+1, 
-                              group, cond_rho[gas.name], "Volatile", 
+                              group, gas.rho_cond, "Volatile", 
                               self.gasses[gas.name].igas)
         self.elems[mantle_elem.name] = mantle_elem
         group.mantle = mantle_elem
@@ -771,7 +772,7 @@ class Carma:
             f.write("name\trmin\n")
             for key in self.groups.keys():
                 name = '"'+key + '"'
-                f.write(f'{name:24s}{self.groups[key].rmin:.15e}\n')
+                f.write(f'{name:35s}{self.groups[key].rmin:.15e}\n')
         
         with open(os.path.join(path, io["gases_file"]), "w+") as f:
 
@@ -806,12 +807,13 @@ class Carma:
                         f'{gas.stofact:2d}'
                         '\n')
         
+        # TODO: check for names which are too long
         with open(os.path.join(path, io["elements_file"]), "w+") as f:
             f.write("igroup\tname\trho\tprocess\tigas\n")
             for key in self.elems.keys():
                 name = '"'+key + '"'
                 proc = '"'+self.elems[key].proc + '"'
-                f.write(f'{self.elems[key].group.igroup}\t{name:24s}'
+                f.write(f'{self.elems[key].group.igroup}\t{name:35s}'
                         f'{self.elems[key].rho:2.4f}\t{proc:15s}\t'
                         f'{self.elems[key].igas:2d}\n')
         
@@ -1000,12 +1002,16 @@ class Gas:
     
     2. The surface tension of the condensate is calculated as follows:
 
-        ``surften = surften_0 - surften_slope * (T - 273.15)``
+        ``surften = surften_0 - surften_slope * (T)``
 
         with ``T`` in K and ``surften`` in dyne / cm
 
     3. If not directly given, the latent heat of evaportation is calculated
        folowing Charnay et al. 2015 [2]_
+
+       ``lat_heat_e = vp_coeff * log(10) * R/wtmol_dif``
+
+       where R is the ideal gas constant
 
     References
     ----------
@@ -1058,6 +1064,9 @@ class Gas:
     stofact: int
     """ The stoichiometry factor between the gas phase and the condensate """
     
+    hill_formula: str
+    """ The chemical formula of the condensate in hill notation"""
+
 
     def __init__(self, 
                  name: str, 
@@ -1072,7 +1081,7 @@ class Gas:
 
         self.wtmol          = kwargs.get("wtmol",         defaults["wtmol"])
         self.wtmol_dif      = kwargs.get("wtmol_dif",     defaults["wtmol_dif"])
-        self.gcomp          = kwargs.get("gcomp",         defaults["gcomp"])
+        self.gcomp          = kwargs.get("gcomp",         defaults.get("gcomp", 0))
         self.rho_cond       = kwargs.get("rho_cond",      defaults["rho_cond"])
         self.surften_0      = kwargs.get("surften_0",     defaults["surften_0"])
         self.surften_slope  = kwargs.get("surften_slope", defaults["surften_slope"])
@@ -1083,7 +1092,8 @@ class Gas:
         self.vp_logpcoeff   = kwargs.get("vp_logpcoeff",  defaults["vp_logpcoeff"])
         self.is_typeIII     = kwargs.get("is_typeIII",    defaults["is_typeIII"])
         self.stofact        = kwargs.get("stofact",       defaults["stofact"])
-        self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults["lat_heat_e"])
+        self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
+        self.hill_formula   = kwargs.get("hill_formula",  defaults["hill_formula"])
 
         
     
