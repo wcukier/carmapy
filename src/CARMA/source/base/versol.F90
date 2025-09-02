@@ -70,15 +70,8 @@ subroutine versol(carma, cstate, cvert, itbnd, ibbnd, ftop, fbot, cvert_tbnd, cv
     cour = dz(k)/dtime - &
     ( vertdifu(k+1) + vertdifd(k) + vertadvu(k+1) + vertadvd(k) )
 
-    if( cour .lt. 0._f .and. uc .ne. 1._f )then
+    if( cour .lt. 0._f .and. uc .ne. 1._f ) then
       uc = 1.0_f
-    
-
-      ! NOTE: This can happen a lot and clutters up the log. Should we print it out or not?     
-!      write(LUNOPRT,'(a,i3,7(1x,1pe8.1))') &
-!         'in versol: k dz/dt vdifd vdifu vadvd vadvu cour uc = ', &
-!          k, dz(k)/dtime, vertdifd(k), vertdifu(k+1), &
-!          vertadvd(k), vertadvu(k+1), cour, uc
     endif
   enddo
 
@@ -108,7 +101,6 @@ subroutine versol(carma, cstate, cvert, itbnd, ibbnd, ftop, fbot, cvert_tbnd, cv
   ! Calculate coefficients of the transport equation:
   !   al(k)c(k+1) + bl(k)c(k) + ul(k)c(k-1) = dl(k)
 
-    !write(*,*) uc, ctempl(1)
   do k = 1,NZ
     al(k) = uc * ( vertdifd(k+1) + vertadvd(k+1) )
     bl(k) = -( uc*(vertdifd(k)+vertdifu(k+1)+ &
@@ -124,32 +116,30 @@ subroutine versol(carma, cstate, cvert, itbnd, ibbnd, ftop, fbot, cvert_tbnd, cv
       divcor(k) * dz(k)
   enddo
 
-  !if (uc .eq. 1._f) then
-    if( ibbnd .eq. I_FIXED_CONC ) then
-      bl(1) = 1._f      
-      dl(1) = ctempl(1) 
-      al(1) = 0._f
-      ul(1) = 0._f
-    endif
-    if( ibbnd .eq. I_ZERO_CGRAD ) then
-      bl(1) = 1._f      
-      dl(1) = cvert(1) 
-      al(1) = 0._f
-      ul(1) = 0._f
-    endif
-    if( itbnd .eq. I_FIXED_CONC ) then
-      bl(NZ) = 1._f      
-      dl(NZ) = ctempu(NZ) 
-      al(NZ) = 0._f
-      ul(NZ) = 0._f
-    endif
-    if( itbnd .eq. I_ZERO_CGRAD ) then
-      bl(NZ) = 1._f      
-      dl(NZ) = cvert(NZ) 
-      al(NZ) = 0._f
-      ul(NZ) = 0._f
-    endif
-  !endif 
+  if( ibbnd .eq. I_FIXED_CONC ) then
+    bl(1) = 1._f      
+    dl(1) = ctempl(1) 
+    al(1) = 0._f
+    ul(1) = 0._f
+  endif
+  if( ibbnd .eq. I_ZERO_CGRAD ) then
+    bl(1) = 1._f      
+    dl(1) = cvert(1) 
+    al(1) = 0._f
+    ul(1) = 0._f
+  endif
+  if( itbnd .eq. I_FIXED_CONC ) then
+    bl(NZ) = 1._f      
+    dl(NZ) = ctempu(NZ) 
+    al(NZ) = 0._f
+    ul(NZ) = 0._f
+  endif
+  if( itbnd .eq. I_ZERO_CGRAD ) then
+    bl(NZ) = 1._f      
+    dl(NZ) = cvert(NZ) 
+    al(NZ) = 0._f
+    ul(NZ) = 0._f
+  endif
 
   ! Boundary fluxes: <ftop> is the downward flux across the
   ! upper boundary; <fbot> is the upward flux across the
@@ -184,8 +174,6 @@ subroutine versol(carma, cstate, cvert, itbnd, ibbnd, ftop, fbot, cvert_tbnd, cv
     if (ibbnd .eq. I_FLUX_SPEC) pflux(1,ibin,ielem) = fbot
   endif 
 
-  !write(*,*) ftop
-
   ! Calculate recursion relations.
   el(1) = dl(1)/bl(1)
   fl(1) = al(1)/bl(1)
@@ -200,9 +188,6 @@ subroutine versol(carma, cstate, cvert, itbnd, ibbnd, ftop, fbot, cvert_tbnd, cv
   cvert(NZ) = el(NZ)
   do k = NZ-1,1,-1
     cvert(k) = el(k) - fl(k)*cvert(k+1)
-!    if (igas .eq. 2) then
-!      write(*,*) k, el(k), fl(k), cvert(k+1), cvert(k)
-!    endif
   enddo
 
 

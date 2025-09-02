@@ -84,10 +84,6 @@ subroutine pheat(carma, cstate, iz, igroup, iepart, ibin, igas, dmdt, rc)
   real(kind=f)                         :: ddtp                    ! change in particle temperature in last iteration (K)
   real(kind=f)                         :: plkint                  ! planck intensity
   
- ! if (igroup .eq. 3) then
-  !write(*,*) "start pheat", iz, igroup, iepart, ibin, igas
- ! endif 
-
   ! <akas> is combined kelvin (curvature) and solute factors.
   !
   ! Ignore solute factor for ice particles.
@@ -102,7 +98,6 @@ subroutine pheat(carma, cstate, iz, igroup, iepart, ibin, igas, dmdt, rc)
     expon = max(-POWMAX, expon)
     akas  = exp( expon ) * argsol
   else
-   ! write(*,*) "other!"
 
     argsol = 0._f
   
@@ -111,67 +106,60 @@ subroutine pheat(carma, cstate, iz, igroup, iepart, ibin, igas, dmdt, rc)
     ! Treat solute effect first: <asol> is solute factor.
     !
     ! Only need to treat solute effect if <nelemg(igroup)> > 1
-!    if( nelemg(igroup) .gt. 1 )then
+    !    if( nelemg(igroup) .gt. 1 )then
   
       ! <condm> is mass concentration of condensed gas <igas> in particle.
       ! <nother> is number of other elements in group having mass.
       ! <otherm> are mass concentrations of other elements in particle group.
       ! <othermtot> is total mass concentrations of other elements in particle.
-!      nother = 0
-!      othermtot = 0._f
-!      ieother(:) = 0._f
+      !      nother = 0
+      !      othermtot = 0._f
+      !      ieother(:) = 0._f
   
       ! <ieoth_rel> is relative element number of other element in group.
-!      do ieoth_rel  = 2,nelemg(igroup)  
+      !      do ieoth_rel  = 2,nelemg(igroup)  
   
         ! <ieoth_abs> is absolute element number of other element.
-!        ieoth_abs = iepart + ieoth_rel - 1    
-  
-!        if( itype(ieoth_abs) .eq. I_COREMASS )then
-!          nother = nother + 1
-!          ieother(nother) = ieoth_abs
-!          otherm(nother) = pc(iz,ibin,ieoth_abs)
-!          othermtot = othermtot + otherm(nother)
-!        endif
-  
-!      enddo
-  
-!      condm = rmass(ibin,igroup) * pc(iz,ibin,iepart) - othermtot
-  
-!      if( condm .le. 0._f )then
-  
-        ! Zero mass for the condensate -- <asol> is a small value << 1
-!        argsol = 1e6_f     
-  
-!      else
-  
-        ! Sum over masses of other elements in group for argument of solute factor.
-!        do jother = 1,nother
-         
-!          isol = isolelem(ieother(jother))
-          
-          ! Some elements aren't soluble, so skip them.
-!          if (isol .gt. 0 ) then
-!	    argsol = argsol + sol_ions(isol)*otherm(jother)/solwtmol(isol)
-!          endif
-!        enddo 
+      !        ieoth_abs = iepart + ieoth_rel - 1    
+        
+      !        if( itype(ieoth_abs) .eq. I_COREMASS )then
+      !          nother = nother + 1
+      !          ieother(nother) = ieoth_abs
+      !          otherm(nother) = pc(iz,ibin,ieoth_abs)
+      !          othermtot = othermtot + otherm(nother)
+      !        endif
+        
+      !      enddo
+        
+      !      condm = rmass(ibin,igroup) * pc(iz,ibin,iepart) - othermtot
+        
+      !      if( condm .le. 0._f )then
+        
+              ! Zero mass for the condensate -- <asol> is a small value << 1
+      !        argsol = 1e6_f     
+        
+      !      else
+        
+              ! Sum over masses of other elements in group for argument of solute factor.
+      !        do jother = 1,nother
+              
+      !          isol = isolelem(ieother(jother))
+                
+                ! Some elements aren't soluble, so skip them.
+      !          if (isol .gt. 0 ) then
+      !	    argsol = argsol + sol_ions(isol)*otherm(jother)/solwtmol(isol)
+      !          endif
+      !        enddo 
 
-!        argsol = argsol*gwtmol(igas)/condm
+      !        argsol = argsol*gwtmol(igas)/condm
 
-!      endif 
-!    endif    ! nelemg(igroup) > 1
+      !      endif 
+      !    endif    ! nelemg(igroup) > 1
 
     expon = akelvin(iz,igas)  / rup_wet(iz,ibin,igroup) - argsol 
-	!write(*,*) 'pheat', iz, igas, akelvin(iz,igas), expon
     expon = max(-POWMAX, expon)
     akas  = exp( expon )
   endif
-  
-
-
-   ! if ((igroup .eq. 3) .and. (igas .eq. 2)) then
-   !	write(*,*) igroup, igas, ibin, iz, akas, expon, argsol 
-   ! endif
 
   ! Trick for removing haze droplets from droplet bins:
   ! allows haze droplets to exist under supersaturated conditions;
@@ -200,21 +188,9 @@ subroutine pheat(carma, cstate, iz, igroup, iepart, ibin, igas, dmdt, rc)
   ! NOTE: If no optical properties, then can't do the particle heating calculation.
   if ((.not. do_pheat) .or. (.not. do_mie(igroup))) then
 
-    !if (igroup .eq. 3) then
-    !write(*,*) igroup, "checkpoint 7"
-    !endif
-
     ! Ignore the qrad term.
     dmdt = pvap * ( ss + 1._f - akas ) * g0 / ( 1._f + g0 * g1 * pvap )
-!    if (igas .eq. igass8) then
-!	write(*,*) iz, pvap
- !   endif
-         
-  !  if ((igroup .eq. 3) .and. (igas .eq. 2)) then
-    !	write(*,*) 'pheat', igroup, igas, ibin, iz, pvap, ss, akas, g0, g1
-  !  endif
 
-                
   else
   
     ! Latent heat of condensing gas 

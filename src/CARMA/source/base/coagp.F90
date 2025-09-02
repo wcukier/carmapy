@@ -122,7 +122,7 @@ subroutine coagp(carma, cstate, ibin, ielem, rc)
                       itype(iefrom) .eq. I_VOLATILE ) then
 
                 !  Source element is number concentration elem of mixed CN group
-                totmass  = pc(iz,i,iefrom) * rmass(i,ig)
+                totmass  = pc(iz,i,iefrom) * rmass(i,ig) ! TODO: Check Units
                 rmasscore = pc(iz,i,icorelem(1,ig))
                 
                 do ic = 2,ncore(ig)

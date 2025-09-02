@@ -1,0 +1,45 @@
+&input_params
+    is_2d = 1
+    nbin = 80
+    ncoag = 0
+    nelem = 3
+    ngas = 3
+    ngroup = 2
+    ngrowth = 2
+    nlongitude = 128
+    nnuc = 2
+    nsolute = 1
+    nwave = 0
+    nz = 59
+    dtime = 5000
+    iappend = 0
+    idiag = 0
+    igridv = 8
+    irestart = 0
+    iskip = 249999
+    nstep = 250000
+/
+
+&io_files
+    centers_file = 'inputs/centers.txt'
+    coag_file = 'inputs/coagulation.txt'
+    elements_file = 'inputs/elements.txt'
+    filename = '2d_carmapy'
+    filename_restart = '2d_carmapy_restart'
+    fileprefix = 'bd_'
+    gas_input_file = 'inputs/gas_input.txt'
+    gases_file = 'inputs/gasses.txt'
+    groups_file = 'inputs/groups.txt'
+    growth_file = 'inputs/growth.txt'
+    levels_file = 'inputs/levels.txt'
+    nuc_file = 'inputs/nucleation.txt'
+    temps_file = 'inputs/temps.txt'
+/
+
+&physical_params
+    grav_set = 1060
+    met = 3.5
+    rplanet = 1748750000.0
+    velocity_avg = 100000.0
+    wtmol_air_set = 28.7
+/

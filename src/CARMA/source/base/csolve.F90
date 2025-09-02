@@ -63,9 +63,5 @@ subroutine csolve(carma, cstate, ibin, ielem, rc)
   coagprod(:,ibin,ielem) = ppd
   coagloss(:,ibin,ielem) = pls*pc(:,ibin,ielem)
 
-!  do iz = 1, NZ										   						!PETER
-!    write(lundiag,'(2I5,I7,3E11.3)') iz, ibin, ielem, ppd(iz), pc(iz,ibin,ielem)*pls(iz), ppd(iz)-pc(iz,ibin,ielem)*pls(iz)	!PETER
-!  end do																!PETER
-
   return
 end

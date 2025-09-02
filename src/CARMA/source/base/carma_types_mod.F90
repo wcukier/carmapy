@@ -814,7 +814,13 @@ module carma_types_mod
     !  told      Temperature at beginning of time-step
     !  relhum    Hacked in relative humidity from hostmodel
     !  wtpct     Sulfate weight percent
-    !
+    !  rmu_0     Viscosoty scaling term [Poise]
+    !  rmu_t0    Viscosity reference temp [K]
+    !  rmu_c     Viscosity Sutherland constant [K]
+    !  thcond_0  Consant thermal conductivity term [ergs/s/cm/K]
+    !  thcond_1  Coefficient to linear thermal conductivity term [ergs/s/cm/K^2]
+    !  thcond_2  Coefficient to quadratic thermal conductivity term [ergs/s/cm/K^3]
+    !  CP        The specific heat capacity at constant pressure of dy air [cm^2 / s^2 / K]
     real(kind=f), allocatable, dimension(:)     :: f_rhoa       ! (NZ)
     real(kind=f), allocatable, dimension(:)     :: f_rhoa_wet   ! (NZ)
     real(kind=f), allocatable, dimension(:)     :: f_t          ! (NZ)
@@ -830,6 +836,14 @@ module carma_types_mod
     real(kind=f), allocatable, dimension(:)     :: f_grav      ! (NZ)
     real(kind=f)                                :: f_met    
     real(kind=f)                                :: f_t0    
+    real(kind=f)                                :: f_rmu_0  !WC 
+    real(kind=f)                                :: f_rmu_c      !WC
+    real(kind=f)                                :: f_rmu_t0     !WC
+    real(kind=f)                                :: f_thcond_0  !WC 
+    real(kind=f)                                :: f_thcond_1     !WC
+    real(kind=f)                                :: f_thcond_2     !WC
+    real(kind=f)                                :: f_CP     !WC
+
 
     ! Condensational growth parameters
     !

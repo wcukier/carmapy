@@ -1,0 +1,4 @@
+igroup	name	rho	process	igas
+1	"Pure KCl"                         1.9880	"Volatile"     	 2
+2	"ZnS Mantle"                       4.0400	"Volatile"     	 3
+2	"KCl Core (ZnS)"                   1.9880	"Core Mass"    	 2

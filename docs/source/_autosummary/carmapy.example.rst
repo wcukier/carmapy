@@ -10,11 +10,13 @@
       :signatures: short
 
    
+      example_2d_levels
       example_carma
       example_levels
    
 
 
 
+  .. autofunction:: example_2d_levels
   .. autofunction:: example_carma
   .. autofunction:: example_levels

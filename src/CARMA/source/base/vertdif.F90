@@ -46,23 +46,15 @@ subroutine vertdif(carma, cstate, igroup, ibin, itbnd, ibbnd, vertdifu, vertdifd
 
   !  Loop over vertical levels.
   do k = 2, NZ
-
-!    write(*,*) ekz(k)
-
     dz_avg = dz(k)                            ! layer thickness is allowed to change
 
     !  Check the vertical coordinate
 
     if(( igridv .eq. I_CART ) .or. ( igridv .eq. I_LOGP ))then !DPOW check logp later
-      !rhofact = log(  rhoa(k)/rhoa(k-1) &
-      !              * zmet(k-1)/zmet(k) )
       rhofact = log(  rhoa(k)/rhoa(k-1) )
-      !xex = rhoa(k-1)/rhoa(k) * &
-       !     zmet(k)/zmet(k-1)
       xex = rhoa(k-1)/rhoa(k) 
             
       vertdifu(k) = ( rhofact * ekz(k) / dz_avg ) / ( 1._f - xex )
-
       vertdifd(k) = vertdifu(k) * xex 
 
     !  ...else you're in sigma or hybrid coordinates...
@@ -92,9 +84,8 @@ subroutine vertdif(carma, cstate, igroup, ibin, itbnd, ibbnd, vertdifu, vertdifd
   ! Diffusion across boundaries using fixed boundary concentration:
   if( (ibbnd .eq. I_FIXED_CONC) .or. (ibbnd .eq. I_ZERO_CGRAD) ) then
     dz_avg = dz(1)                            ! layer thickness
-    !dz_avg = zc(1) - zl(1)
     rhofact = log( rhoa(itwo)/rhoa(1) )
-    !rhofact = log( p(1)/pl(1) )
+
     ttheta = rhofact
     if( ttheta .ge. 0._f ) then
       ttheta = min(ttheta,POWMAX)
@@ -112,9 +103,8 @@ subroutine vertdif(carma, cstate, igroup, ibin, itbnd, ibbnd, vertdifu, vertdifd
   if( (itbnd .eq. I_FIXED_CONC) .or. (itbnd .eq. I_ZERO_CGRAD) ) then
     dz_avg = dz(NZ)                            ! layer thickness
     rhofact = log( rhoa(NZ)/rhoa(nzm1) )
-    !dz_avg = zl(NZP1) - zc(NZ)                            ! layer thickness
-    !rhofact = log( pl(NZP1)/p(NZ) )
     ttheta = rhofact
+
     if( ttheta .ge. 0._f ) then
       ttheta = min(ttheta,POWMAX)
     else

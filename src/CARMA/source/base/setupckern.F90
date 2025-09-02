@@ -82,6 +82,7 @@ subroutine setupckern(carma, cstate, rc)
 
   real(kind=f) :: r_larg
   real(kind=f) :: r_smal
+  real(kind=f) :: d_smal
   integer :: i_larg
   integer :: i_smal
   integer :: ig_larg
@@ -276,14 +277,15 @@ subroutine setupckern(carma, cstate, rc)
                   Einf = 1._f + sqrt(hp / 3._f) / (1._f + vwb0*sqrt(hp)) + vwb1 * hpln + vwb3 * hpln**3
                   cstick_calc =  Einf / Enot
                 else
-                  cstick_calc = cstick
+                  cstick_calc = cstick ! Default is 1
                 end if
 
-		! Add in charging effects from Lavvas et al. (2010)
-		tau = ((charge*elec/statc2c)**2._f)*(r1*1e4_f)*(r2*1e4_f)/((r1 + r2)*temp1)
-                cstick_calc = tau/(exp(tau) - 1._f)
-
-		!write(*,*) cstick_calc,r1,r2
+                ! WC -- commented out: this does not seem to match the equation 
+                ! in Fuchs and is multiplied into the kernel at seemingly the 
+                ! incorrect place
+                ! ! Add in charging effects from Lavvas et al. (2010)
+                ! tau = ((charge*elec/statc2c)**2._f)*(r1*1e4_f)*(r2*1e4_f)/((r1 + r2)*temp1)
+                ! cstick_calc = tau/(exp(tau) - 1._f)
 
                 !  First calculate thermal coagulation kernel
                 rp  = r1 + r2
@@ -304,6 +306,7 @@ subroutine setupckern(carma, cstate, rc)
                   i_smal = i1
                   ig_larg = j2
                   ig_smal = j1
+                  d_smal = di
                 else
                   r_larg = r1
                   r_smal = r2
@@ -311,6 +314,7 @@ subroutine setupckern(carma, cstate, rc)
                   i_smal = i2
                   ig_larg = j1
                   ig_smal = j2
+                  d_smal = dj
                 endif
                 
                 ! Calculate enhancement of coagulation due to convective diffusion 
@@ -344,11 +348,7 @@ subroutine setupckern(carma, cstate, rc)
                   ! <vfc_{larg,smal}> is the fallspeed in cartesian coordinates.!
                   vfc_smal = vf(k,i_smal,ig_smal) * zmet(k)
                   vfc_larg = vf(k,i_larg,ig_larg) * zmet(k)
-!                  vfc_smal = (vf(k,i_smal,ig_smal) + 8.0e-5_f / rhoa_cgs) * zmet(k)     !PETER
-!                  vfc_larg = (vf(k,i_larg,ig_larg) + 8.0e-5_f / rhoa_cgs) * zmet(k)     !PETER
-  
-!                  sk = vfc_smal * (vfc_larg - vfc_smal) / (r_larg*GRAV)
-!                  sk = abs(vfc_smal * (vfc_larg - vfc_smal)) / (r_larg*grav(k)*(RPLANET/(RPLANET+zc(k)))**2._f)             !PETERz
+
                   sk = abs(vfc_smal * (vfc_larg - vfc_smal)) / (r_larg*grav(k))             !PETERz
      
                   if( sk .lt. 0.08333334_f )then
@@ -499,32 +499,13 @@ subroutine setupckern(carma, cstate, rc)
                 ! of (geometric) gravitational collection efficiency <cgr>.
                 vfc_1 = vf(k,i1,j1) * zmet(k)
                 vfc_2 = vf(k,i2,j2) * zmet(k)
-!                vfc_1 = (vf(k,i1,j1) + 8.0e-5_f / rhoa_cgs) * zmet(k)          !PETER
-!                vfc_2 = (vf(k,i2,j2) + 8.0e-5_f / rhoa_cgs) * zmet(k)          !PETER
+
                 cgr = e_coal * e_coll *  PI * rp**2 * abs( vfc_1 - vfc_2 )
-  
-                ! Long's (1974) kernel that only depends on size of larger droplet
-  !                 if( r_larg .le. 50.e-4 )then
-  !                   cgr = 1.1e10 * vol(i_larg,ig_larg)**2
-  !                 else
-  !                   cgr = 6.33e3 * vol(i_larg,ig_larg)
-  !                 endif
   
                 ! Now combine all the coagulation and collection kernels into the
                 ! overall kernel.
                 ckernel(k,i1,i2,j1,j2) = cbr + ccd + cgr
-		!write(*,*) i1,i2,zc(k),ckernel(k,i1,i2,j1,j2)
 
- 		!write(*,*) cbr + ccd + cgr
- 		!write(*,*) ckernel(k,i1,i2,j1,j2)
-                
-                ! To avoid generation of large, non-physical hydrometeors by
-                ! coagulation, cut down ckernel for large radii
-  !                 if( ( r1 .gt. 0.18 .and. r2 .gt. 10.e-4 ) .or. &
-  !                     ( r2 .gt. 0.18 .and. r1 .gt. 10.e-4 ) ) then
-  !                   ckernel(k,i1,i2,j1,j2) = ckernel(k,i1,i2,j1,j2) / 1.e6
-  !                 endif
-  
               enddo    ! second particle bin
             enddo    ! first particle bin
           endif     ! icoag ne 0 

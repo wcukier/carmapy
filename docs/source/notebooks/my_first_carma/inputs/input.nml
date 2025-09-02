@@ -6,7 +6,7 @@
     ngas = 3
     ngroup = 2
     ngrowth = 2
-    nlongitude = 64
+    nlongitude = -1
     nnuc = 2
     nsolute = 1
     nwave = 0
@@ -34,12 +34,20 @@
     levels_file = 'inputs/levels.txt'
     nuc_file = 'inputs/nucleation.txt'
     temps_file = 'inputs/temps.txt'
+    winds_file = 'inputs/winds.txt'
 /
 
 &physical_params
+    cp = 130000000.0
     grav_set = 31600
-    met = 0
+    met = 1
+    rmu_0 = 8.76e-05
+    rmu_c = 72
+    rmu_t0 = 293.85
     rplanet = 6991000000.0
+    thcond_0 = 71.4857
+    thcond_1 = 0.3912
+    thcond_2 = 3.1607e-05
     velocity_avg = -1
     wtmol_air_set = 2.3239773684490332
 /

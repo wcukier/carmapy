@@ -91,10 +91,12 @@ contains
   !! @see CARMA_Create
   !! @see CARMA_Initialize
   !! @see CARMASTATE_Destroy
-  subroutine CARMASTATE_Create(cstate, carma_ptr, time, dtime, NZ, igridv, igridh,  &
-      lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, grav, rplanet, rc, qh2o, relhum, told, radint, winds, &
-      ekz, ftopp, fbotp, pctop, pcbot, gctop, gcbot, ftopg, fbotg, met, t0, prod, prodgas)        !PETER
-      !lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, rc, qh2o, relhum, told, radint)        
+  subroutine CARMASTATE_Create(cstate, carma_ptr, time, dtime, NZ, igridv, &
+      igridh, lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, grav, &
+      rplanet, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, & ! WC
+      rc, qh2o, relhum, told, radint, winds, ekz, ftopp, fbotp, & 
+      pctop, pcbot, gctop, gcbot, ftopg, fbotg, met, t0, prod, prodgas & !PETER
+      )       
     type(carmastate_type), intent(inout)    :: cstate      !! the carma state object
     type(carma_type), pointer, intent(in)   :: carma_ptr   !! (in) the carma object
     real(kind=f), intent(in)                :: time        !! the model time [s]
@@ -116,13 +118,20 @@ contains
     real(kind=f), intent(in)                :: wtmol_air(NZ)       !! Molecular weight of atmosphere [g/mol]
     real(kind=f), intent(in)                :: grav(NZ)       !! Gravitational acceleration [g/cm2]
     real(kind=f), intent(in)                :: rplanet       !! Planetary radius [cm]
+    real(kind=f), intent(in)                :: rmu_0         !! WC: Viscosoty Scaling term [Poise]
+    real(kind=f), intent(in)                :: rmu_t0        !! WC: Viscosity reference temp [K]
+    real(kind=f), intent(in)                :: rmu_c         !! WC: Viscosity Sutherland constant [K]
+    real(kind=f), intent(in)                :: thcond_0      !! WC: Constant thermal conductivity term [ergs/s/cm/K]
+    real(kind=f), intent(in)                :: thcond_1      !! WC: Coefficient to linear thermal conductivity term [ergs/s/cm/K^2]
+    real(kind=f), intent(in)                :: thcond_2      !! WC: Coefficient to quadratic thermal conductivity term [ergs/s/cm/K^3]
+    real(kind=f), intent(in)                :: CP           !! WC: specific heat of atmosphere [cm^2 / s^2 / K]
     integer, intent(out)                    :: rc          !! return code, negative indicates failure
     real(kind=f), intent(in), optional      :: qh2o(NZ)    !! specific humidity at center [mmr]
     real(kind=f), intent(in), optional      :: relhum(NZ)  !! relative humidity at center [fraction]
     real(kind=f), intent(in), optional      :: told(NZ)    !! previous temperature at center [K]
     real(kind=f), intent(in), optional      :: radint(NZ,carma_ptr%f_NWAVE)  !! radiative intensity [W/m2/sr/cm]
     real(kind=f), intent(in), optional 	    :: winds(NZ)   !! PETER: wind speed [cm/s] - positive is upwards!
-    real(kind=f), intent(in)      	    :: ekz(NZ+1)   !! PETER: eddy diffusion coefficient [cm2/s]
+    real(kind=f), intent(in)      	        :: ekz(NZ+1)   !! PETER: eddy diffusion coefficient [cm2/s]
     real(kind=f), intent(in), optional      :: ftopp(carma_ptr%f_NBIN,carma_ptr%f_NELEM)   !! PETER: top flux boundary condition (particles) [#/cm2/s]
     real(kind=f), intent(in), optional      :: fbotp(carma_ptr%f_NBIN,carma_ptr%f_NELEM)   !! PETER: bottom flux boundary condition (particles) [#/cm2/s]
     real(kind=f), intent(in), optional      :: pctop(carma_ptr%f_NBIN,carma_ptr%f_NELEM)   !! PETER: top particle concentration [#/cm3]
@@ -185,7 +194,6 @@ contains
     cstate%f_grav(:)  = grav(:)
     cstate%f_winds(:) = 0._f
     if (present(winds)) cstate%f_winds(:)  = winds(:)			!PETER
-    cstate%f_ekz(:)  = ekz(:)/ cstate%f_zmetl(:)**2._f  			!PETER !DPOW
     
     cstate%f_pcd(:,:,:)     = 0._f
 
@@ -230,6 +238,8 @@ contains
     call setupatm(carma_ptr, cstate, carma_ptr%f_do_fixedinit, rplanet, rc)
     if (rc < 0) return
     
+    cstate%f_ekz(:)  = ekz(:)/ (cstate%f_zmetl(:)**2._f)			!PETER !DPOW
+
     ! Set the realtive humidity. If necessary, it will be calculated from
     ! the specific humidity.
     if (present(relhum)) then
@@ -271,50 +281,7 @@ contains
       if (present(ftopg)) cstate%f_ftopgas = ftopg 
       if (present(fbotg)) cstate%f_fbotgas = fbotg 
 
-!      cstate%f_pc_botbnd(1,1) = 40._f                                                                !PETER
-!      cstate%f_pc_botbnd(14,1) = 40._f                                                                !PETER
-!      cstate%f_pc_botbnd(22,1) = 40._f	! ZERO CGRAD TEST                                              !PETER
-
-!      cstate%f_ftoppart(1,1)  = 8236.2683_f
-
-!      cstate%f_pc_botbnd(10,1) = 2.075e-06_f                                                          !PETER
-!      cstate%f_pc_botbnd(11,1) = 3.063e-05_f                                                          !PETER
-!      cstate%f_pc_botbnd(12,1) = 0.0003467_f                                                          !PETER
-!      cstate%f_pc_botbnd(13,1) = 0.003041_f                                                           !PETER
-!      cstate%f_pc_botbnd(14,1) = 0.020415_f                                                           !PETER
-!      cstate%f_pc_botbnd(15,1) = 0.10545_f                                                            !PETER
-!      cstate%f_pc_botbnd(16,1) = 0.42067_f                                                            !PETER
-!      cstate%f_pc_botbnd(17,1) = 1.285224_f                                                           !PETER
-!      cstate%f_pc_botbnd(18,1) = 3.024732_f                                                           !PETER
-!      cstate%f_pc_botbnd(19,1) = 5.482022_f                                                           !PETER
-!      cstate%f_pc_botbnd(20,1) = 7.627629_f                                                           !PETER
-!      cstate%f_pc_botbnd(21,1) = 8.181319_f                                                           !PETER
-!      cstate%f_pc_botbnd(22,1) = 6.7755995_f                                                          !PETER
-!      cstate%f_pc_botbnd(23,1) = 4.2422091_f                                                          !PETER
-!      cstate%f_pc_botbnd(24,1) = 2.0866893_f                                                          !PETER
-!      cstate%f_pc_botbnd(25,1) = 0.7778902_f                                                          !PETER
-!      cstate%f_pc_botbnd(26,1) = 0.2261977_f                                                          !PETER
-!      cstate%f_pc_botbnd(27,1) = 0.0501869_f                                                          !PETER
-!      cstate%f_pc_botbnd(28,1) = 0.0084713_f                                                          !PETER
-!      cstate%f_pc_botbnd(29,1) = 0.0011116_f                                                          !PETER
-!      cstate%f_pc_botbnd(30,1) = 0.000109_f                                                           !PETER
-!      cstate%f_pc_botbnd(31,1) = 8.8775e-06_f                                                         !PETER
-
-
-
-!      cstate%f_pc_botbnd(1,3) = 40._f * 1.923 * (4._f / 3._f) * PI * ((0.17e-4_f) ** 3._f)     !PETER
-
-!      cstate%f_gc_botbnd(1) = 30e-6_f * p(1) * 10._f / R_AIR / t(1) * (WTMOL_H2O / WTMOL_AIR)      !PETER
-!      cstate%f_gc_botbnd(2) = 3.0e-6_f * p(1) * 10._f / R_AIR / t(1) * (WTMOL_H2SO4 / WTMOL_AIR)     !PETER
-!      cstate%f_gc_botbnd(2) = 3.0e-6_f * p(1) * 10._f / R_AIR / t(1) * (WTMOL_H2SO4 / WTMOL_AIR)     !PETER
-!      if (carma_ptr%f_igass8 .gt. 0) then
-!        cstate%f_gc_botbnd(3) = 2.0e-8_f * p(1) * 10._f / R_AIR / t(1) * (WTMOL_S8 / WTMOL_AIR)     ! Bezard & de Bergh JGR 112, E04S07, 2007
-!      endif
-
-!      cstate%f_gc_topbnd(1) = 1.0e-25_f * p(NZ) * 10._f / R_AIR / t(NZ) * (WTMOL_H2O / WTMOL_AIR)      !PETER
-!      cstate%f_gc_topbnd(2) = 4.0e-25_f * p(NZ) * 10._f / R_AIR / t(NZ) * (WTMOL_H2SO4 / WTMOL_AIR)      !PETER
-!      cstate%f_pc_topbnd(1,1) = 10._f                                                                !PETER (Hunten et al. 1980, Fig. 4)
-    end if
+ end if
         
     ! Radiative intensity for particle heating.
     !
@@ -323,6 +290,15 @@ contains
       if (present(radint)) cstate%f_radint(:,:) = radint(:,:) * 1e7_f / 1e4_f
     end if
     
+    ! Atmospheric viscosity and thermal conductivity - WC
+    cstate%f_rmu_0      = rmu_0
+    cstate%f_rmu_t0     = rmu_t0
+    cstate%f_rmu_c      = rmu_c
+    cstate%f_thcond_0   = thcond_0
+    cstate%f_thcond_1   = thcond_1
+    cstate%f_thcond_2   = thcond_2
+    cstate%f_CP         = CP
+
     return
   end subroutine CARMASTATE_Create
 
@@ -356,9 +332,10 @@ contains
   !! @see CARMA_Create
   !! @see CARMA_Initialize
   !! @see CARMASTATE_Destroy
-  subroutine CARMASTATE_CreateFromReference(cstate, carma_ptr, time, dtime, NZ, igridv, igridh,  &
-!      lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, rc, qh2o, relhum)
-      lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, grav, rplanet, rc, qh2o, relhum, winds, ekz, met,t0) 				!PETER
+  subroutine CARMASTATE_CreateFromReference(cstate, carma_ptr, time, dtime, NZ,&
+    igridv, igridh,lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, &
+    grav, rplanet, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, rc, & ! WC
+     qh2o, relhum, winds, ekz, met,t0) 				!PETER 
     type(carmastate_type), intent(inout)    :: cstate      !! the carma state object
     type(carma_type), pointer, intent(in)   :: carma_ptr   !! (in) the carma object
     real(kind=f), intent(in)                :: time        !! the model time [s]
@@ -380,6 +357,13 @@ contains
     real(kind=f), intent(in)                :: wtmol_air(NZ)       !! Molecular weight of atmosphere [g/mol]
     real(kind=f), intent(in)                :: grav(NZ)       !! Gravitatinal acceleration [g/cm2]
     real(kind=f), intent(in)                :: rplanet       !! Planetary radius [cm]
+    real(kind=f), intent(in)                :: rmu_0         !! WC: Viscosoty Scaling term [Poise]
+    real(kind=f), intent(in)                :: rmu_t0        !! WC: Viscosity reference temp [K]
+    real(kind=f), intent(in)                :: rmu_c         !! WC: Viscosity Sutherland constant [K]
+    real(kind=f), intent(in)                :: thcond_0      !! WC: Constant thermal conductivity term [ergs/s/cm/K]
+    real(kind=f), intent(in)                :: thcond_1      !! WC: Coefficient to linear thermal conductivity term [ergs/s/cm/K^2]
+    real(kind=f), intent(in)                :: thcond_2      !! WC: Coefficient to quadratic thermal conductivity term [ergs/s/cm/K^3]
+    real(kind=f), intent(in)                :: CP           !! WC: specific heat of atmosphere [cm^2 / s^2 / K]
     integer, intent(out)                    :: rc          !! return code, negative indicates failure
     real(kind=f), intent(in) , optional     :: qh2o(NZ)    !! specific humidity at center [mmr]
     real(kind=f), intent(in) , optional     :: relhum(NZ)  !! relative humidity at center [fraction]
@@ -419,6 +403,16 @@ contains
     cstate%f_lat  = lat
     cstate%f_lon  = lon
     
+    ! Atmospheric viscosity and thermal conductivity - WC
+    cstate%f_rmu_0      = rmu_0
+    cstate%f_rmu_t0     = rmu_t0
+    cstate%f_rmu_c      = rmu_c
+    cstate%f_thcond_0   = thcond_0
+    cstate%f_thcond_1   = thcond_1
+    cstate%f_thcond_2   = thcond_2
+    cstate%f_CP         = CP
+
+
     ! Allocate all the dynamic variables related to state.
     call CARMASTATE_Allocate(cstate, rc)
     if (rc < 0) return
@@ -438,9 +432,7 @@ contains
     cstate%f_grav(:)  = grav(:)
     cstate%f_winds(:) = 0._f
     if (present(winds)) cstate%f_winds(:)  = winds(:)			!PETER
-    write(*,*) cstate%f_zmet(:)
-    cstate%f_ekz(:)  = ekz(:) / cstate%f_zmetl(:)**2._f  			!PETER !DPOW
-    
+
     cstate%f_pcd(:,:,:)     = 0._f
 
     cstate%f_met = 0._f
@@ -467,6 +459,9 @@ contains
     ! Initialize the state of the atmosphere.
     call setupatm(carma_ptr, cstate, .false., rplanet, rc)
     if (rc < 0) return
+
+    cstate%f_ekz(:)  = ekz(:) / (cstate%f_zmetl(:))**2._f  			!PETER !DPOW
+    
 
     ! If the model uses a gas, then set the relative and
     ! specific humidities.
@@ -1272,7 +1267,6 @@ contains
   !! @see CARMASTATE_SetBin
   subroutine CARMASTATE_GetBin(cstate, ielem, ibin, mmr, rc, &
                                nmr, numberDensity, nucleationRate, r_wet, rhop_wet, &
-!                               surface, sedimentationflux, vf, vd, dtpart)
                                surface, sedimentationflux, vf, vd, dtpart, pflux, winds, ekz)                      !PETER
 !                               surface, sedimentationflux, vf, vd, dtpart, pflux)                      !PETER
     type(carmastate_type), intent(in)     :: cstate         !! the carma state object
@@ -1511,7 +1505,7 @@ contains
   !! @author Peter Gao
   !! @version Apr-2013
   subroutine CARMASTATE_GetDiag(cstate, rc, vertpartflux, vertgasflux, gasprod_tot, rnucpeup_tot, rhompe_tot, &
-                                growpe_tot, rnuclg_tot, growlg_tot, evaplg_tot, rnucpe_tot, evappe_tot)      !PETER
+                                growpe_tot, rnuclg_tot, growlg_tot, evaplg_tot, rnucpe_tot, evappe_tot, corefrac)      !PETER
     type(carmastate_type), intent(in)     :: cstate            !! the carma state object			!PETER
     integer, intent(out)                  :: rc                !! return code, negative indicates failure	!PETER
     real(kind=f), optional, intent(out)   :: vertpartflux      !! net column-integrated particle flux		!PETER
@@ -1525,7 +1519,16 @@ contains
     real(kind=f), optional, intent(out)   :: evaplg_tot(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NGROUP)       !! Loss rate from evaporation		!PETER
     real(kind=f), optional, intent(out)   :: rnucpe_tot(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NELEM)      !! Production rate from het nucleation	!PETER
     real(kind=f), optional, intent(out)   :: evappe_tot(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NELEM)       !! Production rate from evaporation		!PETER
-    
+    real(kind=f), optional, intent(out)   :: corefrac(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NGROUP)       !! Core Mass Fraction		!WC
+
+    ! local variables !WC
+    integer ncores
+    integer iecore, iepart
+    integer iz, igroup, icore, ibin
+    real(kind=f) mcore
+
+
+
     ! Assume success.												!PETER
     rc = RC_OK													!PETER
 
@@ -1540,7 +1543,38 @@ contains
     if (present(evaplg_tot))  evaplg_tot(:,:,:)  = cstate%f_evaplg_tot(:,:,:)						!PETER
     if (present(rnucpe_tot))  rnucpe_tot(:,:,:)  = cstate%f_rnucpe_tot(:,:,:)						!PETER
     if (present(evappe_tot))  evappe_tot(:,:,:)  = cstate%f_evappe_tot(:,:,:)						!PETER
+       
     
+    ! Calculate the core mass fraction - WC
+    if (present(corefrac)) then
+      do igroup = 1, cstate%f_carma%f_NGROUP
+
+        iepart = cstate%f_carma%f_group(igroup)%f_ienconc
+        ncores = cstate%f_carma%f_group(igroup)%f_ncore
+        
+        if (ncores < 1) then
+          corefrac(:, :, igroup) = 0  
+        else
+          do iz = 1, cstate%f_NZ
+            do ibin = 1, cstate%f_carma%f_NBIN
+              mcore = 0._f
+
+              do icore = 1, ncores
+                iecore = cstate%f_carma%f_group(igroup)%f_icorelem(icore)
+                mcore = mcore + cstate%f_pc(iz, ibin, iecore)
+              enddo
+              
+              corefrac(iz, ibin, igroup) = mcore &
+              / (cstate%f_carma%f_group(igroup)%f_rmass(ibin) &
+                  * cstate%f_pc(iz, ibin, iepart) + 1e-100_f)
+              if (corefrac(iz, ibin, igroup).gt.1) then
+                corefrac(iz, ibin, igroup) = 1
+              endif
+            enddo
+          enddo
+        endif
+      enddo
+    endif
     return													!PETER
   end subroutine CARMASTATE_GetDiag										!PETER
 

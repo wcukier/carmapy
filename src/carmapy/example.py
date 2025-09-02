@@ -14,19 +14,24 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     arrays is one more than that of the "centers" arrays.
 
     The files are taken from a 1000 K, log g = 4.5, f_sed = 4, log [Fe/H] = 1
-    sonora diamondback run.
+    sonora diamondback [1]_ run. 
 
-    @Citation Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
-        http://arxiv.org/abs/2402.00758
+    References
+    ----------
+    .. [1] Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
+       http://arxiv.org/abs/2402.00758
 
 
-
-    Returns:
-        Tuple of np.ndarray: A tuple containing four 1D numpy arrays
-            - P_levels (np.ndarray):   Pressure levels [barye]
-            - T_levels (np.ndarray):   Temperature levels [K]
-            - kzz_levels (np.ndarray): Eddy diffusion coefficients [cm²/s]
-            - mu_levels (np.ndarray): mean molecular weights [dimensionless]
+    Returns
+    -------
+    P_levels : np.ndarray
+        Pressure levels [barye]
+    T_levels : np.ndarray) 
+        Temperature levels [K]
+    kzz_levels : np.ndarray
+        Eddy diffusion coefficients [cm²/s]
+    mu_levels : np.ndarray
+        mean molecular weights [dimensionless]
     """
     data = np.genfromtxt(os.path.join(SRC, "example_data", "example_levels"), skip_header=1)
 
@@ -37,6 +42,53 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
 
     return P_levels, T_levels, kzz_levels, mu_levels
+
+
+def example_2d_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Loads example atmospheric structure "levels" for a 2d CARMApy run.
+    Atmospheric levels describe the boundaries between atmospheric layers and 
+    thus the length of "levels" arrays is one more than that of the "centers" 
+    arrays.
+
+    The files are taken from a GCM run of GJ1214 b [1]_  
+
+    References
+    ----------
+    .. [1] Maria E. Steinrueck et al 2025 ApJ 985 98
+
+
+    Returns
+    -------
+    P_levels : np.ndarray
+        Pressure levels array (NZ) [barye]
+    T_levels : np.ndarray 
+        Temperature levels array (NZ, NLONGITUDE) [K]
+    kzz_levels : np.ndarray
+        Eddy diffusion coefficients (NZ) [cm²/s]
+    longitudes : np.ndarray
+        Longitude points (NLONGITUDE) [degrees]
+    """
+    levels_data = np.genfromtxt(os.path.join(SRC, 
+                                             "example_data", 
+                                             "2d_levels.txt"), skip_header=1)
+
+    P_levels   = levels_data[:, 0] * 10 # Pa to barye
+    kzz_levels = levels_data[:, 1]
+
+    T_levels = np.genfromtxt(os.path.join(SRC, 
+                                             "example_data", 
+                                             "2d_temps.txt"))
+    
+    longitudes = np.genfromtxt(os.path.join(SRC, 
+                                             "example_data", 
+                                             "2d_longitudes.txt"))
+
+
+
+    return P_levels, T_levels, kzz_levels, longitudes
+
+
 
 
 def example_carma(name):
@@ -75,6 +127,6 @@ def example_carma(name):
     carma.calculate_z(mu_levels)
     carma.extend_atmosphere(1e10)
 
-    populate_abundances_at_cloud_base(carma, metallicity=1)
+    populate_abundances_at_cloud_base(carma)
 
     return carma
