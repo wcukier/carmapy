@@ -519,7 +519,7 @@ subroutine test_day()
 
   call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, do_fixedinit=.TRUE., do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
-                        do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=20, &
+                        do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=10, &
                         itbnd_pc=I_FLUX_SPEC, ibbnd_pc=I_FIXED_CONC, itbnd_gc=I_FLUX_SPEC, ibbnd_gc=I_FIXED_CONC)
   if (rc < 0) stop "    *** FAILED CARMA_Initialize ***"
 
