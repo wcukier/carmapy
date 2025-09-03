@@ -39,7 +39,6 @@ def get_fastchem_abundances(T : np.ndarray,
       P-T point
 
   """
-    
   temperature = T
   pressure = np.array(P) / BAR_TO_BARYE
 
@@ -62,7 +61,8 @@ def get_fastchem_abundances(T : np.ndarray,
     
     #scale the element abundances, except those of H and He
   for j in range(0, fastchem.getElementNumber()):
-    if fastchem.getElementSymbol(j) != 'H' and fastchem.getElementSymbol(j) != 'He':
+    if ((fastchem.getElementSymbol(j) != 'H')
+         and (fastchem.getElementSymbol(j) != 'He')):
       element_abundances[j] *= metallicity
       
   fastchem.setElementAbundances(element_abundances)
@@ -73,7 +73,9 @@ def get_fastchem_abundances(T : np.ndarray,
     
   number_densities = np.array(output_data.number_densities)
 
-  nmr = number_densities / np.repeat((P/(k_B * T))[:, np.newaxis], number_densities.shape[1], axis=1)
+  nmr = number_densities / np.repeat((P/(k_B * T))[:, np.newaxis],
+                                      number_densities.shape[1], 
+                                      axis=1)
   
   ret = []
   for s in species:
@@ -135,10 +137,14 @@ def _populate_fastchem_abundances(carma: "Carma",
       s = gas_dict[gas].get("hill_formula", -1) 
       
       if s == -1:
-          raise ValueError(f"{gas} is not currently supported by the carmapy fastchem interface")
+          raise ValueError(f"{gas} is not currently supported by the carmapy "
+                           "fastchem interface")
       species.append(s)
         
-  abund = get_fastchem_abundances(carma.T_centers, carma.P_centers, species, metallicity)
+  abund = get_fastchem_abundances(carma.T_centers, 
+                                  carma.P_centers, 
+                                  species, 
+                                  metallicity)
   
   
   nmr_dict = {}
@@ -177,15 +183,25 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   P = carma.P_centers
   T = carma.T_centers
 
+  # if carma.is_2d: T = np.mean(T, axis=1)
+  if carma.is_2d: T = T[:, 0] # TODO
+
+
   metallicity = 10**carma.log_metallicity
 
-  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), species)
+  # print(s)
+
+# TODO make T, P ordering consistent
+  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), species) 
   abund = get_fastchem_abundances(T, P, [s], metallicity)[0, :]
 
   i = 0
   while(sat_vp[i]/P[i] > abund[i]): 
     i += 1
-    if (i == len(P)): return P[i-1], T[i-1]
+    # print(f"{i:2d}\t{sat_vp[i]/P[i]:.2e}\t{abund[i]:.2e}\t{T[i]:.0f}\t{P[i]:.2e}\t{sat_vp[i]:2e}")
+    if (i == len(P)): 
+      print(f"{s} does not condense")
+      return P[i-1], T[i-1]
   
   guess = T[i]
 
@@ -193,10 +209,17 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
 
   def _diff(T):
 
-    sat_vp = saturation_vapor_pressure(p_t(T), T, np.log10(metallicity), species)/p_t(T)
-    abund = get_fastchem_abundances(np.array(T), np.array(p_t(T)), [s], metallicity)[0, :]
+    sat_vp = saturation_vapor_pressure(p_t(T),
+                                       T, 
+                                       np.log10(metallicity), 
+                                       species) / p_t(T)
+    
+    abund = get_fastchem_abundances(np.array(T), 
+                                    np.array(p_t(T)), 
+                                    [s], 
+                                    metallicity)[0, :]
 
-    return abund- sat_vp
+    return abund - sat_vp
   
 
   root = scipy.optimize.root(_diff, guess).x[0]
@@ -215,6 +238,8 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   P = carma.P_centers
   T = carma.T_centers
 
+  if carma.is_2d: T = np.mean(T, axis=1)
+
   p_t = interp1d(T, P)
 
   nmr_dict = {"H2O": 0}
@@ -224,10 +249,16 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
     P_int, T_int = find_cloud_base(carma, s)
 
     fast_chem_gas = carma.gasses[s].hill_formula
-    if fast_chem_gas == -1: raise ValueError("{s} is not currently supported by the carmapy fastchem interface")
+    if fast_chem_gas == -1: 
+      raise ValueError("{s} is not currently supported by "
+                        "the carmapy fastchem interface")
 
     metallicity = 10 ** carma.log_metallicity
-    nmr_dict[s] = get_fastchem_abundances(np.array([T_int]), np.array([P_int]), [fast_chem_gas], metallicity)[0]
+
+    nmr_dict[s] = get_fastchem_abundances(np.array([T_int]), 
+                                          np.array([P_int]), 
+                                          [fast_chem_gas], 
+                                          metallicity)[0]
   
     carma.set_nmr(nmr_dict)
 

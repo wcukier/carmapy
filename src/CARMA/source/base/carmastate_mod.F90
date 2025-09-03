@@ -1465,7 +1465,7 @@ contains
   !! @author Peter Gao
   !! @version Apr-2013
   subroutine CARMASTATE_GetDiag(cstate, rc, vertpartflux, vertgasflux, gasprod_tot, rnucpeup_tot, rhompe_tot, &
-                                growpe_tot, rnuclg_tot, growlg_tot, evaplg_tot, rnucpe_tot, evappe_tot)      !PETER
+                                growpe_tot, rnuclg_tot, growlg_tot, evaplg_tot, rnucpe_tot, evappe_tot, corefrac)      !PETER
     type(carmastate_type), intent(in)     :: cstate            !! the carma state object			!PETER
     integer, intent(out)                  :: rc                !! return code, negative indicates failure	!PETER
     real(kind=f), optional, intent(out)   :: vertpartflux      !! net column-integrated particle flux		!PETER
@@ -1479,6 +1479,15 @@ contains
     real(kind=f), optional, intent(out)   :: evaplg_tot(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NGROUP)       !! Loss rate from evaporation		!PETER
     real(kind=f), optional, intent(out)   :: rnucpe_tot(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NELEM)      !! Production rate from het nucleation	!PETER
     real(kind=f), optional, intent(out)   :: evappe_tot(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NELEM)       !! Production rate from evaporation		!PETER
+    real(kind=f), optional, intent(out)   :: corefrac(cstate%f_NZ,cstate%f_carma%f_NBIN,cstate%f_carma%f_NGROUP)       !! Core Mass Fraction		!WC
+
+    ! local variables !WC
+    integer ncores
+    integer iecore, iepart
+    integer iz, igroup, icore, ibin
+    real(kind=f) mcore
+
+
 
     ! Assume success.												!PETER
     rc = RC_OK													!PETER
@@ -1495,6 +1504,37 @@ contains
     if (present(rnucpe_tot))  rnucpe_tot(:,:,:)  = cstate%f_rnucpe_tot(:,:,:)						!PETER
     if (present(evappe_tot))  evappe_tot(:,:,:)  = cstate%f_evappe_tot(:,:,:)						!PETER
        
+    
+    ! Calculate the core mass fraction - WC
+    if (present(corefrac)) then
+      do igroup = 1, cstate%f_carma%f_NGROUP
+
+        iepart = cstate%f_carma%f_group(igroup)%f_ienconc
+        ncores = cstate%f_carma%f_group(igroup)%f_ncore
+        
+        if (ncores < 1) then
+          corefrac(:, :, igroup) = 0  
+        else
+          do iz = 1, cstate%f_NZ
+            do ibin = 1, cstate%f_carma%f_NBIN
+              mcore = 0._f
+
+              do icore = 1, ncores
+                iecore = cstate%f_carma%f_group(igroup)%f_icorelem(icore)
+                mcore = mcore + cstate%f_pc(iz, ibin, iecore)
+              enddo
+              
+              corefrac(iz, ibin, igroup) = mcore &
+              / (cstate%f_carma%f_group(igroup)%f_rmass(ibin) &
+                  * cstate%f_pc(iz, ibin, iepart) + 1e-100_f)
+              if (corefrac(iz, ibin, igroup).gt.1) then
+                corefrac(iz, ibin, igroup) = 1
+              endif
+            enddo
+          enddo
+        endif
+      enddo
+    endif
     return													!PETER
   end subroutine CARMASTATE_GetDiag										!PETER
 

@@ -84,7 +84,7 @@ class Carma:
     """ Log Solar Metallicity (Default 0) """
 
     r_planet:           float   = 6.991e9    
-    """ Planet radius [cm] (Defaults to 1 Jovian radius); ignored in 1D mode? 
+    """ Planet radius [cm] (Defaults to 1 Jovian radius); ignored in 1D mode. 
     """
     velocity_avg:       float   = -1    
     """ Mean longitudinal wind speed at the equator [cm/s]; ignored in 1-D mode 
@@ -306,7 +306,10 @@ class Carma:
         Parameters
         ----------
         levels : ArrayLike
-            Temperature values at the boundaries of the atmospheric cells [K]
+            Temperature values at the boundaries of the atmospheric cells [K].
+            For 1-D CARMApy should be of shape (NZ,).  For 2-D CARMApy should
+            be of shape (NZ, NLONGITUDEz)
+            
         """
         levels = np.array(levels)
         if self.NZ:
@@ -544,6 +547,10 @@ class Carma:
         for key in nmr_dict.keys():
             self.gasses[key].nmr = nmr_dict[key]
     
+
+
+        
+
     def calculate_z(self, wt_mol: float | ArrayLike =None) -> None:
         """Calculate and set the altitude structure.  Uses P and T levels to 
         calculate the altitude structure using scale heights.
@@ -917,14 +924,19 @@ class Carma:
             except Exception as e:
                 print(e)
             
-    def read_results(self) -> None:
+    def read_results(self, read_diag=False) -> None:
         """Reads in results of the carma simulation.  
+
+        Parameters
+        ----------
+        If true reads in the microphysical rates and core mass fraction.
+        Defaults to False.
 
         See Also
         --------
         carmapy.Results()
         """
-        self.results = Results(self)
+        self.results = Results(self, read_diag=read_diag)
         
         
     

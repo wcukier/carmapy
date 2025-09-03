@@ -113,13 +113,18 @@ subroutine test_day()
   real(kind=f), allocatable   :: ftopg(:)
   real(kind=f), allocatable   :: fbotg(:)
 
+  ! Microphysical rates
   real(kind=f), allocatable   :: gasprod(:,:)
   real(kind=f), allocatable   :: rhompe(:,:,:)
+  real(kind=f), allocatable   :: rnucpe(:,:,:)
+  real(kind=f), allocatable   :: rnuclg(:,:,:)
   real(kind=f), allocatable   :: growpe(:,:,:)
-  real(kind=f), allocatable   :: evappe(:,:,:)
   real(kind=f), allocatable   :: growlg(:,:,:)
+  real(kind=f), allocatable   :: evappe(:,:,:)
   real(kind=f), allocatable   :: evaplg(:,:,:)
 
+
+  real(kind=f), allocatable   :: corefrac(:,:,:)
   real(kind=f), allocatable   :: zsubsteps(:)
 
   real(kind=f), allocatable   :: r(:)
@@ -347,17 +352,17 @@ subroutine test_day()
   allocate(ftopg(NGAS))
   allocate(fbotg(NGAS))
 
+  ! Microphysical Rates
   allocate(gasprod(NZ,NGAS))
   allocate(rhompe(NZ,NBIN,NELEM))
+  allocate(rnucpe(NZ,NBIN,NELEM))
+  allocate(rnuclg(NZ,NBIN,NGROUP))
   allocate(growpe(NZ,NBIN,NELEM))
-  allocate(evappe(NZ,NBIN,NELEM))
   allocate(growlg(NZ,NBIN,NGROUP))
+  allocate(evappe(NZ,NBIN,NELEM))
   allocate(evaplg(NZ,NBIN,NGROUP))
 
-
-
-
-
+  allocate(corefrac(NZ,NBIN,NGROUP))
 
 
   ! Define the particle-grid extent of the CARMA test
@@ -831,6 +836,22 @@ subroutine test_day()
 
     if (MOD (istep, iskip) .eq. 0) then
 
+      call CARMASTATE_GetDiag(cstate, &
+      rc, &
+      rhompe_tot=rhompe, &
+      rnucpeup_tot=rnucpe, &
+      rnuclg_tot=rnuclg, &
+      growpe_tot=growpe, &
+      growlg_tot=growlg, &
+      evappe_tot=evappe, &
+      evaplg_tot=evaplg, &
+      corefrac=corefrac, &
+      gasprod_tot=gasprod)
+
+      if (rc < 0) stop "    *** FAILED CARMASTATE_GetDiag ***"
+
+
+
       write(*,*) 'Recorded'
       if (IS_2D .eq. 1) then
         write(lun,*) (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
@@ -871,63 +892,33 @@ subroutine test_day()
           write(lun, '(f8.0)') zsubsteps(i)
           write(lunp, '(f8.0)') zsubsteps(i)
 
+          do ielem = 1, NELEM
+            write(lunrates, '(3i4,7e13.3e3)') j, &
+                              i, &
+                              ielem, &
+                              rhompe(i, j, ielem), &
+                              rnucpe(i, j, ielem), &
+                              growpe(i, j, ielem), &
+                              evappe(i, j, ielem)
+          enddo
+          do igroup = 1, NGROUP
+            write(lunrates, '(3i4,7e13.3e3)') j, &
+                              i, &
+                              igroup, &
+                              rnuclg(i, j, igroup), &
+                              growlg(i, j, igroup), &
+                              evaplg(i, j, igroup), &
+                              corefrac(i, j, igroup)
+          enddo
+
+
+
+
         end do
       end do
 
     !endif
 
-      if (idiag .eq. 1) then
-        do iz = 1, NZ
-          totmass(iz) = sum((mmr(iz,1,:)+mmr(iz,2,:)) * abs((pl(iz+1) - pl(iz))) / 88.7_f) / deltaz / 100._f
-        end do		
-
-        write(lundiagn,*) 'PART 6: TOTAL MASS AT END OF TIME STEP'
-        write(lundiagn,*) '****************************************'						
-        write(lundiagn,*) 'Z: ALTITUDE LEVEL INDEX'								
-        write(lundiagn,*) 'PARTMASS: TOTAL MASS DENSITY OF GAS AT Z [g/cm3]'
-        write(lundiagn,*) 'GASMASS: TOTAL MASS DENSITY OF PARTICLES AT Z [g/cm3]'
-        write(lundiagn,*) '****************************************'						
-        write(lundiagn,'(A6,2A15)') 'Z', 'PARTMASS', 'GASMASS'
-
-        do iz = 1, NZ
-          write(lundiagn,'(i6,2e15.3)') iz, totmass(iz), (mmr_gas(iz,1)+mmr_gas(iz,2)) * abs((pl(iz+1) - pl(iz))) / 88.7_f / deltaz / 100._f
-      end do
-
-        write(lundiagn,*) ' '
-        write(lundiagn,'(A6,2e15.3)') 'TOT:',sum(totmass), &
-                                      sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f / deltaz / 100._f ) 
-        write(lundiagn,*) ' '
-        write(lundiagn,*) 'COLUMN TOTAL MASS = TOT * NZ * deltaz (in meters) * (100 cm / m)'
-          endcd = sum(totmass) * NZ * deltaz * 100._f + sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f ) * NZ
-        write(lundiagn,'(A28,e28.15)') 'COLUMN TOTAL MASS [g/cm2]: ', endcd
-        write(lundiagn,*) ' '
-        write(lundiagn,*) 'PART 7: MASS CONSERVATION SUMMARY'
-        write(lundiagn,*) '******************************************************************************'
-        write(lundiagn,*) ''    
-        write(lundiagn,'(A62)') 'MASS CONSERVATION: Ab - Aa = (B + C + D) * E'
-        write(lundiagn,*) ''
-        write(lundiagn,'(A45,e28.15)') 'Aa. TOTAL COLUMN DENSTY AT START (g/cm2):', startcd
-        write(lundiagn,'(A45,e28.15)') 'Ab. TOTAL COLUMN DENSTY AT END (g/cm2):', endcd
-        write(lundiagn,'(A45,e28.15)') 'B. TOTAL INPUT RATE (g/cm2/s):', inputrate
-        write(lundiagn,'(A45,e28.15)') 'C. TOTAL VERTICAL PARTICLE FLUX (g/cm2/s):', vertpartflux
-        write(lundiagn,'(A45,e28.15)') 'D. TOTAL VERTICAL GAS FLUX (g/cm2/s):', vertgasflux
-        write(lundiagn,'(A45,e28.15)') 'E. TIME STEP (s):', dtime
-        write(lundiagn,*) ''
-        write(lundiagn,'(A45,e28.15)') 'Ab - Aa = ', endcd - startcd
-        write(lundiagn,'(A45,e28.15)') '(B + C + D) * E = ', (inputrate + vertgasflux + vertpartflux) * dtime
-        write(lundiagn,'(A45,e28.15)') 'Ab - Aa -[(B + C + D) * E] = ', endcd - startcd - &
-          [(inputrate + vertpartflux + vertgasflux) * dtime]
-        write(lundiagn,*) ''    
-        write(lundiagn,*) '************************************************************10000000******************'
-        write(lundiagn,*) ''    
-        write(lundiagn,*) ''  
-      end if
-
-
-
-
-
-    !if (istep .ge. 89000) then
         write(lunres) istep+1, xc, dx, yc, dy, &
           zc, zl, p, pl, t, rho_atm_cgs, &
           mmr, mmr_gas, mmr_gas_old, satliq, &

@@ -63,6 +63,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.surface_grav = nml["physical_params"]["grav_set"]
     carma.r_planet = nml["physical_params"]["rplanet"]
     carma.velocity_avg = nml["physical_params"]["velocity_avg"]
+    carma.log_metallicity = nml["physical_params"]["met"]
     
 
     io = nml["io_files"]

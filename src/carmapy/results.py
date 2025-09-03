@@ -12,6 +12,8 @@ import os
 # import PyMieScatt as ps
 from scipy.interpolate import RectBivariateSpline
 
+from collections.abc import Callable
+
 # petroff 10 color cycle
 petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6",
               "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
@@ -27,6 +29,9 @@ class Results:
     ----------
     carma : Carma
         The carma simulation to load results from
+    read_diag : boolean, optional
+        If true reads in the microphysical rates and core mass fraction.
+        Defaults to False.
 
     Notes
     ------
@@ -40,6 +45,36 @@ class Results:
         - ``results.clouds['numden']`` is a 3D numpy array of shape 
           (NZ, NBIN, NT) which stores the number density of each cloud species 
           in each size bin at each time step in units of cm⁻³
+        - ``results.clouds['coremass_frac']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the fraction of mass in each
+           bin stored in the particle core.
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['nuc_gain_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles
+           are added to the bin via nucleation [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+         - ``results.clouds['nuc_loss_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles are 
+           removed from a bin due to nucleation [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['grow_gain_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which 
+           particles are added to a bin due to condensational growth 
+           [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['grow_loss_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which 
+           particles are removed from a bin due to condensational growth
+           [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['evap_gain_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles are 
+           added to a bin due to evaporation [particles/s/cm³]   .
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['evap_loss_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles are 
+           removed from a bin due to evaporation [particles/s/cm³].
+           Only stored if ``read_diag=True``.         
     """
 
 
@@ -57,7 +92,7 @@ class Results:
     # """ The number mixing rations of the gasses (NZ x NGAS x NT) """
 
     sat_vp : np.ndarray
-    """ The saturation mixing ratios of the gasses (NZ x NGAS x NT) """
+    """ The saturation mixing ratios of the gasses (NZ, NGAS, NT, [NLONG]) """
 
     ts : np.ndarray
     """ Time elapsed since start of simulation at each step [s] (NT)"""
@@ -69,7 +104,7 @@ class Results:
     """ Altitude centers alias [cm] (NZ) """
 
     T : np.ndarray
-    """ Temperature centers alias [K] (NZ) """
+    """ Temperature centers alias [K] (NZ, [NLONG]) """
 
     group_names : list[str]
     """ The name of each of the simulated groups """
@@ -89,7 +124,7 @@ class Results:
     clouds : dict[str, dict[str, np.ndarray]]
     """ A dictionary storing results for each cloud species (see notes) """
 
-    def __init__(self, carma: "Carma") -> None:
+    def __init__(self, carma: "Carma", read_diag=False) -> None:
         path = carma.name
         path_end = os.path.basename(path)
         file_path = os.path.join(path, f"bd_{path_end}.txt")
@@ -163,7 +198,8 @@ class Results:
                 ts[it] = t_step
                 for ibin in range(NBIN):
                     for iz in range(NZ):
-                        line = np.array(f.readline().split(), dtype=float)
+                        line = f.readline()
+                        line = np.array(line.split(), dtype=float)
                         for ielem in range(NELEM):
                             numden[iz, ielem, ibin, it] = line[ielem+2]
                         for igas in range(NGAS):
@@ -189,7 +225,10 @@ class Results:
             if np.any( numden_groups[:, group.igroup-1, :, :] < 0):
                 raise RuntimeError("Error in reading in number densities")
         
+        f.close()
         
+        n_tstep = it
+
         self.carma = carma
         self.rmass = rmass
         self.r = r
@@ -205,6 +244,7 @@ class Results:
         self.dt_timestep = carma.dt * carma.output_gap
         self.path = path
 
+
         self.gasses = {}
         for i in range(1, len(self.gas_names)):
             self.gasses[self.gas_names[i]] = gas_abund[:, i, :]
@@ -216,6 +256,69 @@ class Results:
                 "r": self.r[:, i] * MICRON_TO_CM,
                 "r_mass": self.rmass[:, i]
             }
+
+
+
+        if not read_diag: return
+
+        hom_nuc_gain_rates = np.zeros((NZ, NBIN, NELEM, n_tstep))
+        het_nuc_gain_rates = np.zeros((NZ, NBIN, NELEM, n_tstep))
+        grow_gain_rates    = np.zeros((NZ, NBIN, NELEM, n_tstep))
+        evap_gain_rates    = np.zeros((NZ, NBIN, NELEM, n_tstep))
+
+        nuc_loss_rates     = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+        grow_loss_rates    = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+        evap_loss_rates    = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+        coremass_frac      = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+
+
+        file_path = os.path.join(path, f"bd_rates_{path_end}.txt")
+        f = open(file_path)
+
+        for it in range(n_tstep):
+            t_step = f.readline()
+
+            for ibin in range(NBIN):
+                for iz in range(NZ):
+                    for ielem in range(NELEM):
+                        line = np.array(f.readline().split(), dtype=float)
+                        hom_nuc_gain_rates[iz, ibin, ielem, it] = line[3]
+                        het_nuc_gain_rates[iz, ibin, ielem, it] = line[4]
+                        grow_gain_rates[iz, ibin, ielem, it] = line[5]
+                        evap_gain_rates[iz, ibin, ielem, it] = line[6]
+                    
+                    for igroup in range(NGROUP):
+                        line = np.array(f.readline().split(), dtype=float)
+                        
+                        nuc_loss_rates[iz, ibin, igroup, it] = line[3]
+                        grow_loss_rates[iz, ibin, igroup, it] = line[4]
+                        evap_loss_rates[iz, ibin, igroup, it] = line[5]
+                        coremass_frac[iz, ibin, igroup, it] = line[6]
+        
+
+
+        for i, key in enumerate(carma.groups.keys()):
+            group = carma.groups[key]
+
+            self.clouds[key]["nuc_loss_rate"] = nuc_loss_rates[:, :, i, :]
+            self.clouds[key]["grow_loss_rate"] = grow_loss_rates[:, :, i, :]
+            self.clouds[key]["evap_loss_rate"] = evap_loss_rates[:, :, i, :]
+            self.clouds[key]["coremass_frac"] = coremass_frac[:, :, i, :]
+
+            if group.mantle:
+                e = group.mantle.ielem-1
+
+            else:
+                e = group.core.ielem-1
+
+            self.clouds[key]["nuc_gain_rate"] = (
+                            hom_nuc_gain_rates[:, :, e, :] 
+                            + het_nuc_gain_rates[:, :, e, :])
+                
+            self.clouds[key]["grow_gain_rate"] = grow_gain_rates[:, :, e, :]
+            self.clouds[key]["evap_gain_rate"] = evap_gain_rates[:, :, e, :]
+        
+        f.close()
 
 
     def plot_toa_gas(self, skip_gasses = [0], burn_in = 20, **kwargs):
