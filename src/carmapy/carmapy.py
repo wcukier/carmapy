@@ -552,8 +552,9 @@ class Carma:
         
 
     def calculate_z(self, wt_mol: float | ArrayLike =None) -> None:
-        """Calculate and set the altitude structure.  Uses P and T levels to 
-        calculate the altitude structure using scale heights.
+        """Calculate and set the altitude structure in the proper format for the
+        version of carma (1D or 2D) used.  Uses P and T levels to 
+        calculate the altitude structure using scale heights.  
 
         Parameters
         ----------
@@ -573,29 +574,60 @@ class Carma:
         if (self.surface_grav is None):
             raise RuntimeError("surface_grav must be set")
 
-        H_levels = k_B * self.T_levels/(wt_mol 
-                                        * PROTON_MASS 
-                                        * self.surface_grav)
+        if self.is_2d:
+            H_levels = k_B * np.mean(self.T_levels[:, :], axis=1)/(wt_mol 
+                                            * PROTON_MASS 
+                                            * self.surface_grav)
+        else:
+            H_levels = k_B * self.T_levels/(wt_mol 
+                                * PROTON_MASS 
+                                * self.surface_grav)
 
         self.z_levels = np.zeros(self.NZ + 1)
+        self.z_centers = np.zeros(self.NZ)
 
-        for i in range(1, self.NZ+1):
-            dz = H_levels[i] * np.log(self.P_levels[i-1]/self.P_levels[i])
-            self.z_levels[i] = self.z_levels[i-1] + dz
+        if self.igridv == I_CART:
+            if self.is_2d:
+                warnings.warn("carma.igridv is set to I_CART.  For 2d carma it"
+                              "usually is set to I_LOGP.")
+            for i in range(1, self.NZ+1):
+                dz = H_levels[i] * np.log(self.P_levels[i-1]/self.P_levels[i])
+                self.z_levels[i] = self.z_levels[i-1] + dz
 
-        self.z_centers = (self.z_levels[1:] + self.z_levels[:-1])/2
+            self.z_centers = (self.z_levels[1:] + self.z_levels[:-1])/2
+
+        elif self.igridv == I_LOGP:
+            for i in range(self.NZ):
+                self.z_levels[i+1] = (H_levels[0] 
+                        * np.abs(np.log(self.P_levels[i+1]/self.P_levels[0])))
+                self.z_centers[i] =  (H_levels[0] 
+                        * np.abs(np.log(self.P_centers[i]/self.P_levels[0])))
 
 
+        else:
+            raise ("carma.igridv not set (This should not be reached unless"
+                   "you messed with carma's fields manually).")
 
-    def extend_atmosphere(self, max_P: float) -> None:
+
+    def extend_atmosphere(self, max_P: float, #TODO: See if can do non-iteratively b/c now calculating z later
+                          wt_mol=None, 
+                          method="adiabatic") -> None:
         """Extends the atmospheric structure to deeper pressures.  Modifies the
-        pressure, temperature, altitude, and eddy diffusion levels and requires
-        that they have previously been set.
+        pressure, temperature, and eddy diffusion levels and requires
+        that they have previously been set.  If ``max_P`` is less than the 
+        current maximum pressure, this method does nothing
 
         Parameters
         ----------
         max_P : float
             The pressure to which the atmosphere is extended
+        wt_mol : ArrayLike, optional
+            The mean molecular weight of the atmosphere.  If an array, each 
+            entry corresponds to one altitude level. Defaults to the mean 
+            molecular weight stored in the carma object
+        method : string, optional
+            The method to extend the atmosphere.  Options are "adiabatic"
+            and "isothermal"
 
         Notes
         -------
@@ -615,7 +647,7 @@ class Carma:
         """
 
         if ((self.P_levels is None) or (self.T_levels is None)
-             or (self.kzz_levels is None) or (self.z_levels is None)):
+             or (self.kzz_levels is None)):
 
             raise RuntimeError("P_levels, T_levels, z_levels, "
                                "and/or kzz_levels are not set")
@@ -623,51 +655,98 @@ class Carma:
         if (self.surface_grav is None or self.wt_mol is None):
             raise RuntimeError("g and/or wt_mol are not set")
 
+        if wt_mol is None: wt_mol = self.wt_mol
+
         ratio = self.P_levels[0]/self.P_levels[1]
         n = int(np.log(max_P/self.P_levels[0])/np.log(ratio)+1)
+        if n < 0: return
 
         self.NZ = self.NZ + n
 
         P_new = np.zeros(self.NZ + 1)
-        T_new = np.zeros(self.NZ + 1)
         kzz_new = np.zeros(self.NZ + 1)
-        z_new = np.zeros(self.NZ + 1)
 
         P_new[n:] = self.P_levels
-        T_new[n:] = self.T_levels
         kzz_new[n:] = self.kzz_levels
-        z_new[n:] = self.z_levels
 
-        H0 = k_B * self.T_levels[0]/(self.wt_mol * PROTON_MASS * self.surface_grav)
+        if self.is_2d:
+            T_new = np.zeros((self.NZ + 1, self.NLONGITUDE))
+            T_new[n:, :] = self.T_levels
+            H0 = k_B * (np.mean(self.T_levels[0, :])
+                        / (self.wt_mol * PROTON_MASS * self.surface_grav))
+        else:
+            T_new = np.zeros(self.NZ + 1)
+            T_new[n:] = self.T_levels
+            H0 = k_B * (self.T_levels[0]
+                        / (self.wt_mol * PROTON_MASS * self.surface_grav))
 
-        def K(P):
-            return (self.T_levels[0]/(PARMENTIER_A_COEFF 
-                                      - PARMENTIER_B_COEFF * self.T_levels[0])
-                        * (P/self.P_levels[0]) ** PARMENTIER_A_COEFF)
+        def K(P, t0, p0):
+            return (t0/(PARMENTIER_A_COEFF 
+                                      - PARMENTIER_B_COEFF * t0)
+                        * (P/p0) ** PARMENTIER_A_COEFF)
     
-        def new_T(P):
-            return PARMENTIER_A_COEFF * K(P) / (1 + PARMENTIER_B_COEFF * K(P))
+        def new_T(P, t0, p0):
+            return (PARMENTIER_A_COEFF * K(P, t0, p0) 
+                    / (1 + PARMENTIER_B_COEFF * K(P, t0, p0)))
+
+        if method == "adiabatic":
+            for i in range(n-1, -1, -1):
+                P_new[i] = self.P_levels[0] * ratio ** (n - i)
+                
+                if not self.is_2d:
+                    T_new[i] = new_T(P_new[i], 
+                                     self.T_levels[0], 
+                                     self.P_levels[0]) 
+
+                    H = k_B * T_new[i]/(self.wt_mol 
+                                        * PROTON_MASS 
+                                        * self.surface_grav)
+                    
+
+                else:
+                    for j in range(self.NLONGITUDE):
+                        T_new[i, j] = new_T(P_new[i], 
+                                            self.T_levels[0, j], 
+                                            self.P_levels[0])
+                        
+                        H = (k_B * np.mean(T_new[i, :])
+                            / (self.wt_mol * PROTON_MASS * self.surface_grav))
+                        
+                kzz_new[i] = self.kzz_levels[0] * (H/H0)**(1/3)
         
-        for i in range(n-1, -1, -1):
-            P_new[i] = self.P_levels[0] * ratio ** (n - i)
-            T_new[i] = new_T(P_new[i]) 
+        elif method == "isothermal":
+            for i in range(n-1, -1, -1):
+                P_new[i] = self.P_levels[0] * ratio ** (n - i)
+                
+                if not self.is_2d:
+                    T_new[i] = self.T_levels[0]
+                else:
+                    for j in range(self.NLONGITUDE):
+                        T_new[i, j] = self.T_levels[0, j]
+                        
+                kzz_new[i] = self.kzz_levels[0] 
 
-            H = k_B * T_new[i]/(self.wt_mol * PROTON_MASS * self.surface_grav)
-            kzz_new[i] = self.kzz_levels[0] * (H/H0)**(1/3)
 
-            dz = H * np.log(P_new[i]/P_new[i+1])
-            z_new[i] = z_new[i+1] - dz
 
-        z_new -= z_new[0]
+        # z_new -= z_new[0]
 
-        self.z_centers = (z_new[1:] + z_new[:-1])/2
+        # self.z_centers = (z_new[1:] + z_new[:-1])/2
         self.P_centers = (P_new[1:] + P_new[:-1])/2
-        self.T_centers = (T_new[1:] + T_new[:-1])/2
+        
+        if not self.is_2d:
+            self.T_centers = (T_new[1:] + T_new[:-1])/2
+        else:
+            self.T_centers = (T_new[1:, :] + T_new[:-1, :])/2
 
-        self.z_levels = z_new
+        # self.z_levels = z_new
         self.P_levels = P_new
         self.T_levels = T_new
         self.kzz_levels = kzz_new
+
+        wt_mol_new = np.zeros(self.NZ + 1)
+        wt_mol_new[n:] = wt_mol
+        wt_mol_new[:n] = wt_mol_new[n]
+        self.calculate_z(wt_mol=wt_mol_new)
 
 
     def calc_scale_height(self, calc_centers=False) -> np.ndarray:
