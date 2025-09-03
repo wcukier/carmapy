@@ -412,7 +412,7 @@ class Carma:
         self.groups[name] = group
    
         if not mucos:
-            mucos = mucos_dict[gas.name][seed_group.name.split(" ")[-1]]
+            mucos = gas_dict[gas.name]["mucos_dict"][seed_group.name.split(" ")[-1]]
         
         self.nucs.append(Nuc(seed_group, group, True, gas, mucos))
         
@@ -474,7 +474,7 @@ class Carma:
         self.nucs.append(Nuc(group, group, False, gas,  0))
         
         elem = Element("Pure "+ gas.name, len(self.elems)+1, 
-                            group, cond_rho[gas.name], "Volatile", 
+                            group, gas_dict[gas.name]["rho_cond"], "Volatile", 
                             self.gasses[gas.name].igas)
         group.core = elem
         self.elems[elem.name] = elem
