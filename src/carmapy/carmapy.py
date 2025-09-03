@@ -119,6 +119,8 @@ class Carma:
         self.nucs:      list["Nuc"]             = []      # list of carma Nuc objecs
         self.coags:     list["Coag"]            = []      # dictionary of carma Coag objects
 
+        self.winds = None
+
         if is_2d:
             self.igridv: int = I_LOGP
         else:
@@ -361,6 +363,27 @@ class Carma:
             self.NZ = len(levels) - 1
         self.z_centers = (levels[:-1] + levels[1:])/2
         self.z_levels = levels
+
+    def add_vertical_winds(self, wind_centers: ArrayLike):
+        """Sets the vertical wind speeds as a function of altitude.  Note that
+        unlike most other functions, this one requires wind speeds on the centers,
+        not the levels, of the atmosphere
+
+        Parameters
+        ----------
+        wind_centers : ArrayLike
+            The vertical wind speed at each altitude center [cm/s]
+
+        """
+        if self.NZ:
+            if len(wind_centers) != self.NZ:
+                raise ValueError(f"wind_centers must be {self.NZ} long to be "
+                                f"compatible with other inputs."
+                                f"\nYour data was {len(wind_centers)} long.")
+        else:
+            self.NZ = len(wind_centers)
+        
+        self.wind_centers = wind_centers
 
     
     def add_het_group(self, 
@@ -886,7 +909,8 @@ class Carma:
                 "gases_file":          os.path.join("inputs", "gasses.txt"),
                 "growth_file":         os.path.join("inputs", "growth.txt"),
                 "nuc_file":            os.path.join("inputs", "nucleation.txt"),
-                "coag_file":           os.path.join("inputs", "coagulation.txt")
+                "coag_file":           os.path.join("inputs", "coagulation.txt"),
+                "winds_file":          os.path.join("inputs", "winds.txt"),
                 },
             "physical_params" : {
                 "wtmol_air_set":        self.wt_mol,
@@ -1021,10 +1045,18 @@ class Carma:
         np.savetxt(os.path.join(path, io["temps_file"]),
                     self.T_centers, 
                     delimiter='\t')
-        
-        np.savetxt(os.path.join(path, "temp_levels.txt"),
+
+        np.savetxt(os.path.join(path, "temp_levels.txt"), #TODO: fix_path
                     self.T_levels, 
                     delimiter='\t')
+        
+        if not self.winds:
+            self.winds = np.zeros(self.NZ, dtype=float)
+        
+        with open(os.path.join(path, io["winds_file"]), "w+") as f:
+            for w in self.winds:
+                f.write(f'{w}\n')
+
 
         with open(os.path.join(path, io["gas_input_file"]), "w+") as f:
             for key in self.gasses.keys():

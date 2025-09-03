@@ -218,6 +218,8 @@ subroutine test_day()
   character(len=100)  :: growth_file
   character(len=100)  :: nuc_file
   character(len=100)  :: coag_file
+  character(len=100)  :: winds_file
+
   character(len=20)   :: file_pos
 
   real(kind=f)          :: rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
@@ -225,7 +227,7 @@ subroutine test_day()
   real(kind=f)          :: current_distance, num_steps_btwn, current_step, RPLANET_DAT, restart_distance
   integer               :: closeto_temp_profile
 
-  namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file
+  namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file, winds_file
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg, met, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend, idocoag
 
@@ -262,6 +264,7 @@ subroutine test_day()
   allocate(tempr(NZ), pre(NZ), prel(NZP1), alt(NZ), altl(NZP1), wtmol_air(NZ), grav(NZ), ekz(NZP1), ekzl(NZP1), wtmol_gas(NGAS))
   allocate(temp_equator(NZ, NLONGITUDE), p_equator_center(NZ), p_equator_level(NZP1), velocity(NLONGITUDE), longitudes(NLONGITUDE))
   allocate(elem2group(NELEM))
+  allocate(winds(NZ))
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -294,7 +297,13 @@ subroutine test_day()
   close(12)
 
 
+  open(12, file = winds_file) 
 
+  do i=1, NZ
+    read(12,*) winds(i)
+  end do
+
+  close(12)
 
 
   wtmol_air(:) =wtmol_air_set 
@@ -370,6 +379,7 @@ subroutine test_day()
   write(*,*) "Create CARMA Object ..."
 
   if (idiag .eq. 1) then 
+    open(lundiagn)
     call CARMA_Create(carma, NBIN, NELEM, NGROUP, NSOLUTE, NGAS, NWAVE, rc, LUNOPRT=6, lundiag=lundiagn)
   else
     call CARMA_Create(carma, NBIN, NELEM, NGROUP, NSOLUTE, NGAS, NWAVE, rc, LUNOPRT=6)
