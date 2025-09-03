@@ -58,13 +58,24 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.output_gap = nml["input_params"]["iskip"]
     carma.n_tstep  = nml["input_params"]["nstep"]
     carma.dt = nml["input_params"]["dtime"]
+
+
     
     carma.wt_mol = nml["physical_params"]["wtmol_air_set"]
     carma.surface_grav = nml["physical_params"]["grav_set"]
     carma.r_planet = nml["physical_params"]["rplanet"]
     carma.velocity_avg = nml["physical_params"]["velocity_avg"]
     carma.log_metallicity = nml["physical_params"]["met"]
-    
+
+    carma.atmo = {
+        "rmu_0": nml["physical_params"]["rmu_0"],
+        "rmu_t0": nml["physical_params"]["rmu_t0"],
+        "rmu_c": nml["physical_params"]["rmu_c"],
+        "thcond_0": nml["physical_params"]["thcond_0"],
+        "thcond_1": nml["physical_params"]["thcond_1"],
+        "thcond_2": nml["physical_params"]["thcond_2"],
+        "CP" : nml["physical_params"]["CP"]
+    }
 
     io = nml["io_files"]
 

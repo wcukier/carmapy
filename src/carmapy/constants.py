@@ -479,6 +479,18 @@ opacity_files = {
     "Al2O3": "KH18/Al2O3[s].txt"
 }
 
+# Taken from Gao and BVenneke 2018
+atmo_dict = {
+    "Pure H2": {
+        "rmu_0": 8.76e-5,
+        "rmu_t0": 293.85,
+        "rmu_c": 72,
+        "thcond_0": 71.4857,
+        "thcond_1": .3912,
+        "thcond_2": 3.1607e-5,
+        "CP": 1.3e8
+    }
+} 
 
 
 JUPITER_RADIUS = 6.995e9 #cm

@@ -91,10 +91,12 @@ contains
   !! @see CARMA_Create
   !! @see CARMA_Initialize
   !! @see CARMASTATE_Destroy
-  subroutine CARMASTATE_Create(cstate, carma_ptr, time, dtime, NZ, igridv, igridh,  &
-      lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, grav, rplanet, rc, qh2o, relhum, told, radint, winds, &
-      ekz, ftopp, fbotp, pctop, pcbot, gctop, gcbot, ftopg, fbotg, met, t0, prod, prodgas)        !PETER
-      !lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, rc, qh2o, relhum, told, radint)        
+  subroutine CARMASTATE_Create(cstate, carma_ptr, time, dtime, NZ, igridv, &
+      igridh, lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, grav, &
+      rplanet, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, & ! WC
+      rc, qh2o, relhum, told, radint, winds, ekz, ftopp, fbotp, & 
+      pctop, pcbot, gctop, gcbot, ftopg, fbotg, met, t0, prod, prodgas & !PETER
+      )       
     type(carmastate_type), intent(inout)    :: cstate      !! the carma state object
     type(carma_type), pointer, intent(in)   :: carma_ptr   !! (in) the carma object
     real(kind=f), intent(in)                :: time        !! the model time [s]
@@ -116,6 +118,13 @@ contains
     real(kind=f), intent(in)                :: wtmol_air(NZ)       !! Molecular weight of atmosphere [g/mol]
     real(kind=f), intent(in)                :: grav(NZ)       !! Gravitational acceleration [g/cm2]
     real(kind=f), intent(in)                :: rplanet       !! Planetary radius [cm]
+    real(kind=f), intent(in)                :: rmu_0         !! WC: Viscosoty Scaling term [Poise]
+    real(kind=f), intent(in)                :: rmu_t0        !! WC: Viscosity reference temp [K]
+    real(kind=f), intent(in)                :: rmu_c         !! WC: Viscosity Sutherland constant [K]
+    real(kind=f), intent(in)                :: thcond_0      !! WC: Constant thermal conductivity term [ergs/s/cm/K]
+    real(kind=f), intent(in)                :: thcond_1      !! WC: Coefficient to linear thermal conductivity term [ergs/s/cm/K^2]
+    real(kind=f), intent(in)                :: thcond_2      !! WC: Coefficient to quadratic thermal conductivity term [ergs/s/cm/K^3]
+    real(kind=f), intent(in)                :: CP           !! WC: specific heat of atmosphere [cm^2 / s^2 / K]
     integer, intent(out)                    :: rc          !! return code, negative indicates failure
     real(kind=f), intent(in), optional      :: qh2o(NZ)    !! specific humidity at center [mmr]
     real(kind=f), intent(in), optional      :: relhum(NZ)  !! relative humidity at center [fraction]
@@ -279,6 +288,15 @@ contains
     if (carma_ptr%f_do_grow) then
       if (present(radint)) cstate%f_radint(:,:) = radint(:,:) * 1e7_f / 1e4_f
     end if
+    
+    ! Atmospheric viscosity and thermal conductivity - WC
+    cstate%f_rmu_0      = rmu_0
+    cstate%f_rmu_t0     = rmu_t0
+    cstate%f_rmu_c      = rmu_c
+    cstate%f_thcond_0   = thcond_0
+    cstate%f_thcond_1   = thcond_1
+    cstate%f_thcond_2   = thcond_2
+    cstate%f_CP         = CP
 
     return
   end subroutine CARMASTATE_Create
@@ -313,9 +331,10 @@ contains
   !! @see CARMA_Create
   !! @see CARMA_Initialize
   !! @see CARMASTATE_Destroy
-  subroutine CARMASTATE_CreateFromReference(cstate, carma_ptr, time, dtime, NZ, igridv, igridh,  &
-!      lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, rc, qh2o, relhum)
-      lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, grav, rplanet, rc, qh2o, relhum, winds, ekz, met,t0) 				!PETER
+  subroutine CARMASTATE_CreateFromReference(cstate, carma_ptr, time, dtime, NZ,&
+    igridv, igridh,lat, lon, xc, dx, yc, dy, zc, zl, p, pl, t, wtmol_air, &
+    grav, rplanet, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, rc, & ! WC
+     qh2o, relhum, winds, ekz, met,t0) 				!PETER 
     type(carmastate_type), intent(inout)    :: cstate      !! the carma state object
     type(carma_type), pointer, intent(in)   :: carma_ptr   !! (in) the carma object
     real(kind=f), intent(in)                :: time        !! the model time [s]
@@ -337,6 +356,13 @@ contains
     real(kind=f), intent(in)                :: wtmol_air(NZ)       !! Molecular weight of atmosphere [g/mol]
     real(kind=f), intent(in)                :: grav(NZ)       !! Gravitatinal acceleration [g/cm2]
     real(kind=f), intent(in)                :: rplanet       !! Planetary radius [cm]
+    real(kind=f), intent(in)                :: rmu_0         !! WC: Viscosoty Scaling term [Poise]
+    real(kind=f), intent(in)                :: rmu_t0        !! WC: Viscosity reference temp [K]
+    real(kind=f), intent(in)                :: rmu_c         !! WC: Viscosity Sutherland constant [K]
+    real(kind=f), intent(in)                :: thcond_0      !! WC: Constant thermal conductivity term [ergs/s/cm/K]
+    real(kind=f), intent(in)                :: thcond_1      !! WC: Coefficient to linear thermal conductivity term [ergs/s/cm/K^2]
+    real(kind=f), intent(in)                :: thcond_2      !! WC: Coefficient to quadratic thermal conductivity term [ergs/s/cm/K^3]
+    real(kind=f), intent(in)                :: CP           !! WC: specific heat of atmosphere [cm^2 / s^2 / K]
     integer, intent(out)                    :: rc          !! return code, negative indicates failure
     real(kind=f), intent(in) , optional     :: qh2o(NZ)    !! specific humidity at center [mmr]
     real(kind=f), intent(in) , optional     :: relhum(NZ)  !! relative humidity at center [fraction]
@@ -375,6 +401,16 @@ contains
     ! Store away the grid location information.
     cstate%f_lat  = lat
     cstate%f_lon  = lon
+    
+    ! Atmospheric viscosity and thermal conductivity - WC
+    cstate%f_rmu_0      = rmu_0
+    cstate%f_rmu_t0     = rmu_t0
+    cstate%f_rmu_c      = rmu_c
+    cstate%f_thcond_0   = thcond_0
+    cstate%f_thcond_1   = thcond_1
+    cstate%f_thcond_2   = thcond_2
+    cstate%f_CP         = CP
+
 
     ! Allocate all the dynamic variables related to state.
     call CARMASTATE_Allocate(cstate, rc)

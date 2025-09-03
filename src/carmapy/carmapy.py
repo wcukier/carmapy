@@ -770,6 +770,76 @@ class Carma:
        
         return k_B * T/(self.wt_mol * PROTON_MASS * self.surface_grav)
 
+    def set_atmospheric_parameters(self, 
+                                   rmu_0: float, 
+                                   rmu_t0: float, 
+                                   rmu_c: float,
+                                   thcond_0: float,
+                                   thcond_1: float,
+                                   thcond_2: float,
+                                   cp: float) -> None:
+        """Sets the atmospheric viscosity and thermal conductivity
+
+        Notes
+        -----
+        1. Atmospheric viscosity, `rmu`, is set by the following formula
+           (the Sutherland equation): 
+           `rmu = rmu_0 * ((rmu_t0 + tmu_c)/(T + rmu_t0)) * (T/rmu_t0) ** 1.5`
+           where `T` is the local atmospheric temperature
+        
+        2. Atmosphgeric thermal conductivity, `thcond` is set by the following
+           formula:
+           `thcond = thcond_0 + thcond_1*T + thcond_2 * T**2`
+
+        Parameters
+        ----------
+        rmu_0 : float
+            Viscosoty scaling term [Poise]
+        rmu_t0 : float
+             Viscosity reference temp [K]
+        rmu_c : float
+            Viscosity Sutherland constant [K]
+        thcond_0 : float
+            Consant thermal conductivity term [ergs/s/cm/K]
+        thcond_1 : float
+            Coefficient to linear thermal conductivity term [ergs/s/cm/K^2]
+        thcond_2 : float
+            Coefficient to quadratic thermal conductivity term [ergs/s/cm/K^3]
+        cp : float
+            Specific heat capacity of the atmosphere [erg/g/K]
+        """
+        self.atmo = {
+            "rmu_0": rmu_0,
+            "rmu_t0": rmu_t0,
+            "rmu_c": rmu_c,
+            "thcond_0": thcond_0,
+            "thcond_1": thcond_1,
+            "thcond_2": thcond_2,
+            "CP": cp
+        }
+
+    def set_atmospheric_parameters_from_defaults(self, default: str) -> None:
+        """Sets the atmospheric viscosity and thermal conductivity from a 
+        default profile.  Currently available defaults are:
+
+        - "Pure H2"
+
+
+        Parameters
+        ----------
+        default : str
+            The name of the default profile to use
+        """
+        profile = atmo_dict.get(default, -1)
+
+        if profile == -1:
+            raise KeyError(f"{default} is not a known profile.  Known profiles"
+                           f"are {list(atmo_dict.keys())}.")
+        
+        self.atmo = profile
+
+
+
     def run(self, suppress_output=False) -> None:
         """Runs the CARMA Simulation.
 
@@ -823,7 +893,14 @@ class Carma:
                 "grav_set":             self.surface_grav,
                 "rplanet":              self.r_planet,
                 "velocity_avg":         self.velocity_avg,
-                "met":                  self.log_metallicity
+                "met":                  self.log_metallicity,
+                "rmu_0":                self.atmo["rmu_0"],
+                "rmu_t0":               self.atmo["rmu_t0"],
+                "rmu_c":                self.atmo["rmu_c"],
+                "thcond_0":             self.atmo["thcond_0"],
+                "thcond_1":             self.atmo["thcond_1"],
+                "thcond_2":             self.atmo["thcond_2"],
+                "CP":                   self.atmo["CP"]
                 },
             "input_params": {
                 "NZ":                   self.NZ,

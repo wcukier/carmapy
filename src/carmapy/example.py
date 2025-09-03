@@ -14,19 +14,24 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     arrays is one more than that of the "centers" arrays.
 
     The files are taken from a 1000 K, log g = 4.5, f_sed = 4, log [Fe/H] = 1
-    sonora diamondback run.
+    sonora diamondback [1]_ run. 
 
-    @Citation Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
-        http://arxiv.org/abs/2402.00758
+    References
+    ----------
+    .. [1] Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
+       http://arxiv.org/abs/2402.00758
 
 
-
-    Returns:
-        Tuple of np.ndarray: A tuple containing four 1D numpy arrays
-            - P_levels (np.ndarray):   Pressure levels [barye]
-            - T_levels (np.ndarray):   Temperature levels [K]
-            - kzz_levels (np.ndarray): Eddy diffusion coefficients [cm²/s]
-            - mu_levels (np.ndarray): mean molecular weights [dimensionless]
+    Returns
+    -------
+    P_levels : np.ndarray
+        Pressure levels [barye]
+    T_levels : np.ndarray) 
+        Temperature levels [K]
+    kzz_levels : np.ndarray
+        Eddy diffusion coefficients [cm²/s]
+    mu_levels : np.ndarray
+        mean molecular weights [dimensionless]
     """
     data = np.genfromtxt(os.path.join(SRC, "example_data", "example_levels"), skip_header=1)
 
@@ -75,6 +80,6 @@ def example_carma(name):
     carma.calculate_z(mu_levels)
     carma.extend_atmosphere(1e10)
 
-    populate_abundances_at_cloud_base(carma, metallicity=1)
+    populate_abundances_at_cloud_base(carma)
 
     return carma

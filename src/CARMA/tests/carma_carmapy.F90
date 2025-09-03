@@ -220,12 +220,13 @@ subroutine test_day()
   character(len=100)  :: coag_file
   character(len=20)   :: file_pos
 
+  real(kind=f)          :: rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
   real(kind=f)          :: distance_btwn_elements, circumference, rotation_counter, slope, intercept
   real(kind=f)          :: current_distance, num_steps_btwn, current_step, RPLANET_DAT
   integer               :: closeto_temp_profile
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file
-  namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg, met
+  namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg, met, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend, idocoag
 
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e
@@ -714,7 +715,9 @@ subroutine test_day()
                          	      xc(:), dx(:), &
                          	      yc(:), dy(:), &
                          	      zc(:), zl(:), p(:), &
-                         	      pl(:), t(:), wtmol_air(:), grav(:), rplanet, rc, winds=winds(:), ekz=ekz(:), met=met, t0 = t0_in)
+                         	      pl(:), t(:), wtmol_air(:), grav(:), rplanet, &
+                                rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, &
+                         	      rc, winds=winds(:), ekz=ekz(:), met=met, t0 = t0_in)
   if (rc < 0) stop "    *** FAILED CARMASTATE_CreateFromReference ***"
   
   ! Iterate the model over a few time steps.
@@ -752,14 +755,15 @@ subroutine test_day()
     ! substepping; look closer at eddy diffusion machinery, share with Bardeen; read Bardeen's emails more!
 
     ! Create a CARMASTATE for this column.
-    call CARMASTATE_Create(cstate, carma_ptr, time, dtime, NZ, &
-                          ! igridv, I_CART, lat, lon, &
-
+    call CARMASTATE_Create(&
+              cstate, carma_ptr, time, dtime, NZ, &
               I_CART, I_CART, lat, lon, &
               xc(:), dx(:), &
               yc(:), dy(:), &
               zc(:), zl(:), p(:), &
-                           pl(:), t(:), wtmol_air(:), grav(:), rplanet, rc, told=t(:), winds=winds(:), ekz=ekz(:), &
+              pl(:), t(:), wtmol_air(:), grav(:), rplanet, &
+              rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, &
+              rc, told=t(:), winds=winds(:), ekz=ekz(:), &
               ftopp=ftopp,fbotp=fbotp,pctop=pctop,pcbot=pcbot, &
 			   gctop=gctop,gcbot=gcbot,ftopg=ftopg,fbotg=fbotg,met=met)
     if (rc < 0) stop "    *** FAILED CARMASTATE_Create ***"
