@@ -55,7 +55,7 @@ subroutine setupvf(carma, cstate, rc)
       
       case default
         if (do_print) write(LUNOPRT,*) "setupvf:: ERROR - Unknown fall velocity routine  (", &
-	ifallrtn(igroup), ") for group (", igroup, ")."
+	          ifallrtn(igroup), ") for group (", igroup, ")."
         rc = -1
         return
     end select
@@ -95,16 +95,7 @@ subroutine setupvf(carma, cstate, rc)
   ! Set upper boundary before averaging
   vf(NZP1,:,:) = vf(NZ,:,:)
 
-!  if (NZ .gt. 1) then
-!    vf(NZ,:,:) = sqrt(vf(nzm1,:,:) * vf(NZ,:,:))
 
-!    if (NZ .gt. 2) then
-!      do iz = NZ-1, 2, -1
-!        vf(iz,:,:) = sqrt(vf(iz-1,:,:) * vf(iz,:,:))
-!      enddo
-!    endif
-!  endif
-  
 
   if (NZ .gt. 1) then                                         !PETER
     vf(NZ,:,:) = (vf(nzm1,:,:) + vf(NZ,:,:)) / 2._f           !PETER

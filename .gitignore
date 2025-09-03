@@ -11,3 +11,5 @@ docs/build/**
 
 src/CARMA/source/base/*.mod
 docs/source/notebooks/custom_gasses/** 
+docs/source/notebooks/test_coag/** 
+src/example_data/subneptune_3000*

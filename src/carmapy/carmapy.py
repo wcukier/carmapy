@@ -12,7 +12,8 @@ from numpy.typing import ArrayLike
 
 from typing import Union
 
-SRC = os.path.dirname(os.path.dirname(__file__)) # The src/ directory in the package
+# The src/ directory in the package
+SRC = os.path.dirname(os.path.dirname(__file__)) 
 
 
 @contextlib.contextmanager
@@ -213,9 +214,6 @@ class Carma:
         if wt_mol:
             if wt_mol < 0:
                 raise ValueError("Molar Weight must be positive")
-            if wt_mol > 3 or wt_mol < 2:
-                warnings.warn(f"Typical values of wt_mol are between 2 and 3. "
-                              +f"Your value is {wt_mol}.")
            
         if log_metallicity:
             if ((type(log_metallicity) != type(1)) 
@@ -520,7 +518,7 @@ class Carma:
         """
         if type(group) == type(""):
             g = self.groups.get(group, False)
-            if g:
+            if not g:
                 raise ValueError(f"Group '{group}' not found in simulation")
         elif type(group) == type(Group(-1, -1, -1)):
             g = group

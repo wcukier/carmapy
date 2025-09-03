@@ -25,6 +25,7 @@ subroutine test_day()
 
   integer, parameter    :: io = 90
 
+  ! Griz sizes
   integer    :: NZ    
   integer    :: NZP1        
   integer    :: NELEM 
@@ -102,6 +103,7 @@ subroutine test_day()
   real(kind=f), allocatable   :: prodrate_gas(:,:)
   real(kind=f), allocatable   :: totmass(:)
 
+  ! Boundary Conditions
   real(kind=f), allocatable   :: ftopp(:,:)
   real(kind=f), allocatable   :: fbotp(:,:)
   real(kind=f), allocatable   :: pctop(:,:)
@@ -283,7 +285,6 @@ subroutine test_day()
       read (12, *) tempr(i)
     end if
   end do
-
   close(12)
 
 
@@ -324,7 +325,6 @@ subroutine test_day()
   allocate(wtpct(NZ,NGAS))
   allocate(gflux(NZP1,NGAS))
   allocate(pflux(NZP1,NBIN,NELEM))
-  allocate(winds(NZ))
 !  allocate(ekz(NZP1))
   allocate(prodrate(NZ,NBIN,NELEM))
   allocate(prodrate_mass(NZ,NBIN,NELEM))
@@ -336,6 +336,8 @@ subroutine test_day()
   allocate(rup(NBIN))
   allocate(dr(NBIN))
   allocate(rmass(NBIN,NGROUP))
+
+  ! Boundary Conditions
   allocate(ftopp(NBIN,NELEM))
   allocate(fbotp(NBIN,NELEM))
   allocate(pctop(NBIN,NELEM))
@@ -344,6 +346,7 @@ subroutine test_day()
   allocate(gcbot(NGAS))
   allocate(ftopg(NGAS))
   allocate(fbotg(NGAS))
+
   allocate(gasprod(NZ,NGAS))
   allocate(rhompe(NZ,NBIN,NELEM))
   allocate(growpe(NZ,NBIN,NELEM))
@@ -355,7 +358,7 @@ subroutine test_day()
 
 
 
-  
+
 
   ! Define the particle-grid extent of the CARMA test
   write(*,*) "Create CARMA Object ..."
@@ -410,6 +413,7 @@ subroutine test_day()
 
     write(*,*) "Add "// trim(name)// "..."
 
+    ! WC TODO: Handle this in python
     if(trim(type_spec) == "Volatile") then
       itype = I_VOLATILE
     else if(trim(type_spec) == "Core Mass") then
@@ -464,7 +468,6 @@ subroutine test_day()
   enddo
   close(10)
   
-
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -577,7 +580,6 @@ subroutine test_day()
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   ! Setup up a mass mixing ratio of H20 and H2SO4 vapor
-
   mmr_gas(:,:) = 1e-50_f
 
   mmr_gas_old = mmr_gas
@@ -588,22 +590,6 @@ subroutine test_day()
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! Write output for the test
-  if (idiag .eq. 1) then
-    open(unit=lundiagn,file = fileprefix // diag // filename(1:len_trim(filename)) // filesuffix, status="unknown")
-    write(lundiagn,*) 'PART 0: HEADER'
-    write(lundiagn,*) 'SIMULATION TYPE:'
-    write(lundiagn,*) 'VENUS'
-    write(lundiagn,*) 'DIMENSIONS:'
-    write(lundiagn,'(6A9)') 'NZ', 'NGROUP', 'NELEM', 'NBIN', 'NGAS', 'NSTEP'
-    write(lundiagn,'(6I9)') NZ, NGROUP, NELEM, NBIN, NGAS, nstep + 1
-    write(lundiagn,*) 'GROUP INFORMATION:'
-    write(lundiagn,'(A13,2A10,A17,A14,A19,A15)') 'IGROUP', 'IBIN', 'R', 'MASS', 'dR', 'R_LOWBOUND', 'R_UPBOUND' 
-    write(lundiagn,'(A10,A12,A15,A11,A19,2A15)') '','','(microns)', '(g)','(microns)','(microns)','(microns)'
-  end if 
-
-
-
-
 
   write(lun,'(7i10)') NZ, NGROUP, NELEM, NBIN, NGAS, nstep + 1, iskip
 
@@ -614,54 +600,17 @@ subroutine test_day()
     do ibin = 1, NBIN
       write(lun,'(2i4,5e15.5)') igroup, ibin, r(ibin) * 1e4_f, rmass(ibin,igroup), dr(ibin) * 1e4_f, rlow(ibin) * 1e4_f, rup(ibin) * 1e4_f
     
-      if (idiag .eq. 1) then
-        write(lundiagn,'(i10,i12,5e15.5)') igroup, ibin, r(ibin) * 1e4_f, &
-	      rmass(ibin,igroup), dr(ibin) * 1e4_f, rlow(ibin) * 1e4_f, rup(ibin) * 1e4_f
-      end if
-
     end do
-
   end do
 
   
-  if (idiag .eq. 1) then  
-    write(lundiagn,*) 'ELEMENT INFORMATION:'
-    write(lundiagn,'(2A10,A18)') 'IELEM', 'IGROUP', 'NAME' 
-
-    do ielem = 1, NELEM
-      call CARMAELEMENT_Get(carma, ielem, rc, igroup=igroup, name=name)
-      if (rc < 0) stop "    *** FAILED ***"
-      write(lundiagn,'(i8,i10,A35)') ielem, igroup, name
-    end do
-
-    write(lundiagn,*) 'GAS INFORMATION:'
-    write(lundiagn,'(A6,A15,A35)') 'IGAS', 'NAME', 'WTMOL (g/mol)'
-
-    do igas = 1, NGAS
-      call CARMAGAS_Get(carma, igas, rc, name=gname, wtmol=wtmol)
-      if (rc < 0) stop "    *** FAILED ***"
-      write(lundiagn,'(i4,A40,e10.3)') igas, gname, wtmol
-    end do
-
-    write(lundiagn,*) 'ATMOSPHERE INFORMATION:'
-    write(lundiagn,'(A5,4A15)') 'Z', 'ALTITUDE', 'dALT', 'PRESSURE', 'TEMPERATURE'
-    write(lundiagn,'(A5,4A15)') '', '(km)', '(km)', '(mbars)', '(K)'  
-  end if
 
 
 
   do i = 1, NZ
     write(lun,'(i3,5e15.5)') i, zc(i), zl(i+1)-zl(i), p(i) * 10._f, t(i), ekz(i)
-  
-    if (idiag .eq. 1) then
-      write(lundiagn,'(i5,4e15.5)') i, zc(i) / 1000._f, (zl(i+1)-zl(i)) / 1000._f, p(i) / 100._f, t(i)
-    end if
-
   end do
 
-  if (idiag .eq. 1) then
-    write(lundiagn,*) ' '
-  end if
 
   write(*,*) ""
 
@@ -762,11 +711,10 @@ subroutine test_day()
                          	      zc(:), zl(:), p(:), &
                          	      pl(:), t(:), wtmol_air(:), grav(:), rplanet, rc, winds=winds(:), ekz=ekz(:), met=met, t0 = t0_in)
   if (rc < 0) stop "    *** FAILED CARMASTATE_CreateFromReference ***"
-
+  
   ! Iterate the model over a few time steps.
   do istep = 1, nstep
 
-    !open(unit=lunres,file="venus_atmosphere_300z_45bins_noinit_lf_h2ofixed_10nmCNs_t0030et_2.dat",form='unformatted',status="unknown")
     open(unit=lunres,file=fileprefix // filename_restart(1:len_trim(filename_restart)) // filesuffix_restart,form='unformatted',status="unknown")
     open(unit=lunp,file = fileprefix // temp // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
     open(unit=lunfp,file = fileprefix // temp // flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
@@ -776,32 +724,6 @@ subroutine test_day()
     time = (istep - 1) * dtime
 
     write(*,*) 'istep, time', istep, time, filename(1:len_trim(filename))
-
-    if (idiag .eq. 1) then
-      do iz = 1, NZ
-        totmass(iz) = sum((mmr(iz,1,:)+mmr(iz,2,:)) * abs((pl(iz+1) - pl(iz))) / 88.7_f) / deltaz / 100._f
-      end do
-      write(lundiagn,'(A6,I10,A12,f15.2,A8)') 'STEP:', istep, 'TIME:', istep*dtime, 'SECONDS'
-      write(lundiagn,*) ' '		
-      write(lundiagn,*) 'PART 1: TOTAL MASS AT START OF TIME STEP'
-      write(lundiagn,*) '****************************************'						
-      write(lundiagn,*) 'Z: ALTITUDE LEVEL INDEX'								
-      write(lundiagn,*) 'PARTMASS: TOTAL MASS DENSITY OF GAS AT Z [g/cm3]'
-      write(lundiagn,*) 'GASMASS: TOTAL MASS DENSITY OF PARTICLES AT Z [g/cm3]'
-      write(lundiagn,*) '****************************************'						
-      write(lundiagn,'(A6,2A15)') 'Z', 'PARTMASS', 'GASMASS'
-      do iz = 1, NZ
-	      write(lundiagn,'(i6,2e15.3)') iz, totmass(iz), (mmr_gas(iz,1)+mmr_gas(iz,2)) * abs((pl(iz+1) - pl(iz))) / 88.7_f / deltaz / 100._f
-      end do
-      write(lundiagn,*) ' '
-      write(lundiagn,'(A6,2e15.3)') 'TOT:',sum(totmass), &
-                                    sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f / deltaz / 100._f ) 
-      write(lundiagn,*) ' '
-      write(lundiagn,*) 'COLUMN TOTAL MASS = TOT * NZ * deltaz (in meters) * (100 cm / m)'
-      startcd = sum(totmass) * NZ * deltaz * 100._f + sum((mmr_gas(:,1)+mmr_gas(:,2)) * abs(pl(2:NZP1) - pl(1:NZ)) / 88.7_f ) * NZ
-      write(lundiagn,'(A28,e28.15)') 'COLUMN TOTAL MASS [g/cm2]: ', startcd
-      write(lundiagn,*) ' '
-    end if
 
 
     if (IS_2D .eq. 1) then
@@ -818,7 +740,7 @@ subroutine test_day()
         t(:) = temp_equator(:,closeto_temp_profile+1)
       end if
 
-     end if
+    end if
 
 
     ! To do: change gas input rate; add gaussian distribution to size of CNs being added; change nucleation rate with
@@ -828,12 +750,12 @@ subroutine test_day()
     call CARMASTATE_Create(cstate, carma_ptr, time, dtime, NZ, &
                           ! igridv, I_CART, lat, lon, &
 
-                           I_CART, I_CART, lat, lon, &
-                           xc(:), dx(:), &
-                           yc(:), dy(:), &
-                           zc(:), zl(:), p(:), &
+              I_CART, I_CART, lat, lon, &
+              xc(:), dx(:), &
+              yc(:), dy(:), &
+              zc(:), zl(:), p(:), &
                            pl(:), t(:), wtmol_air(:), grav(:), rplanet, rc, told=t(:), winds=winds(:), ekz=ekz(:), &
-			   ftopp=ftopp,fbotp=fbotp,pctop=pctop,pcbot=pcbot, &
+              ftopp=ftopp,fbotp=fbotp,pctop=pctop,pcbot=pcbot, &
 			   gctop=gctop,gcbot=gcbot,ftopg=ftopg,fbotg=fbotg,met=met)
     if (rc < 0) stop "    *** FAILED CARMASTATE_Create ***"
 
@@ -874,9 +796,6 @@ subroutine test_day()
       if (rc < 0) stop "    *** FAILED CARMASTATE_GetGas ***"
     end do
 
-    call CARMASTATE_GetDiag(cstate,rc,rhompe_tot=rhompe,growpe_tot=growpe,evappe_tot=evappe, &
-                            growlg_tot=growlg,evaplg_tot=evaplg,gasprod_tot=gasprod)
-    if (rc < 0) stop "    *** FAILED CARMASTATE_GetDiag ***"
 
     mmr_gas_old = mmr_gas
 
@@ -899,6 +818,7 @@ subroutine test_day()
           mmr_gas(i,j) = min(mmr_gas(i,j) * (wtmol_gas(j)/ wtmol_air(1)), svpliq(i,j) * (wtmol_gas(j) / wtmol_air(1)))
         end do
       end do
+
 
       close(unit=gas_in)
 
@@ -971,7 +891,7 @@ subroutine test_day()
 
         do iz = 1, NZ
           write(lundiagn,'(i6,2e15.3)') iz, totmass(iz), (mmr_gas(iz,1)+mmr_gas(iz,2)) * abs((pl(iz+1) - pl(iz))) / 88.7_f / deltaz / 100._f
-        end do
+      end do
 
         write(lundiagn,*) ' '
         write(lundiagn,'(A6,2e15.3)') 'TOT:',sum(totmass), &
@@ -1008,14 +928,14 @@ subroutine test_day()
 
 
     !if (istep .ge. 89000) then
-       write(lunres) istep+1, xc, dx, yc, dy, &
-         zc, zl, p, pl, t, rho_atm_cgs, &
-         mmr, mmr_gas, mmr_gas_old, satliq, &
-         satice, satliq_old, satice_old, svpliq, wtpct, &
-         zsubsteps, r, rlow, rup, dr, rmass, pflux, gflux, &
-	 prodrate, prodrate_mass, prodrate_gas, totmass, &
-	 winds, ekz, ftopp, fbotp, pctop, pcbot, gctop, &
-	 gcbot, ftopg, fbotg, gasprod, rhompe, growpe, &
+        write(lunres) istep+1, xc, dx, yc, dy, &
+          zc, zl, p, pl, t, rho_atm_cgs, &
+          mmr, mmr_gas, mmr_gas_old, satliq, &
+          satice, satliq_old, satice_old, svpliq, wtpct, &
+          zsubsteps, r, rlow, rup, dr, rmass, pflux, gflux, &
+          prodrate, prodrate_mass, prodrate_gas, totmass, &
+          winds, ekz, ftopp, fbotp, pctop, pcbot, gctop, &
+          gcbot, ftopg, fbotg, gasprod, rhompe, growpe, &
          evappe, growlg, evaplg
        write(*,*)'write restart file'
        rewind(lunres)

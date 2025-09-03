@@ -124,10 +124,10 @@ subroutine setupvf_std_shape(carma, cstate, j, rc)
       else if (ishape(j) .eq. I_FRACTAL) then
         !r_shape = r_wet(k,i,j)
         psi = (r_wet(k,i,j)/rm(i,j))**(fdim(i,j) - 3._f)
-	kappa = 4._f * rm(i,j)**2._f / 18._f / psi / (3._f + 2._f*psi**(5._f/3._f)) * & 
-	  (3._f - 4.5_f*psi**(1._f/3._f) + 4.5_f*psi**(5._f/3._f) - 3._f*psi**2._f)
+	      kappa = 4._f * rm(i,j)**2._f / 18._f / psi / (3._f + 2._f*psi**(5._f/3._f)) * & 
+	        (3._f - 4.5_f*psi**(1._f/3._f) + 4.5_f*psi**(5._f/3._f) - 3._f*psi**2._f)
         beta = r_wet(k,i,j)/sqrt(kappa)
-	omega = 2._f*beta**2._f*(1._f - tanh(beta)/beta)/(2._f*beta**2._f + 3._f*(1._f - tanh(beta)/beta))
+	      omega = 2._f*beta**2._f*(1._f - tanh(beta)/beta)/(2._f*beta**2._f + 3._f*(1._f - tanh(beta)/beta))
         r_shape = r_wet(k,i,j) * omega
       else if (ishape(j) .eq. I_HEXAGON) then
         r_shape = r_wet(k,i,j) * 0.8456_f * eshape(j)**(-ONE/3._f)
