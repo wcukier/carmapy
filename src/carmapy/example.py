@@ -44,6 +44,53 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     return P_levels, T_levels, kzz_levels, mu_levels
 
 
+def example_2d_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Loads example atmospheric structure "levels" for a 2d CARMApy run.
+    Atmospheric levels describe the boundaries between atmospheric layers and 
+    thus the length of "levels" arrays is one more than that of the "centers" 
+    arrays.
+
+    The files are taken from a GCM run of GJ1214 b [1]_  
+
+    References
+    ----------
+    .. [1] Maria E. Steinrueck et al 2025 ApJ 985 98
+
+
+    Returns
+    -------
+    P_levels : np.ndarray
+        Pressure levels array (NZ) [barye]
+    T_levels : np.ndarray 
+        Temperature levels array (NZ, NLONGITUDE) [K]
+    kzz_levels : np.ndarray
+        Eddy diffusion coefficients (NZ) [cm²/s]
+    longitudes : np.ndarray
+        Longitude points (NLONGITUDE) [degrees]
+    """
+    levels_data = np.genfromtxt(os.path.join(SRC, 
+                                             "example_data", 
+                                             "2d_levels.txt"), skip_header=1)
+
+    P_levels   = levels_data[:, 0] * 10 # Pa to barye
+    kzz_levels = levels_data[:, 1]
+
+    T_levels = np.genfromtxt(os.path.join(SRC, 
+                                             "example_data", 
+                                             "2d_temps.txt"))
+    
+    longitudes = np.genfromtxt(os.path.join(SRC, 
+                                             "example_data", 
+                                             "2d_longitudes.txt"))
+
+
+
+    return P_levels, T_levels, kzz_levels, longitudes
+
+
+
+
 def example_carma(name):
     """
     Initializes and returns a Carma object with an example atmospheric structure

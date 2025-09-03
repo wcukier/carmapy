@@ -53,7 +53,7 @@ class Carma:
     """ Number of vertical layers in the atmospheric grid. """
     NBIN:          int         = 80             
     """ Number of particle radius bins (default 80). """
-    NLONGITUDE:    int         = 64        
+    NLONGITUDE:    int         = -1        
     """ Number of longitude bins (used only in 2D mode). """
 
     P_levels:      ArrayLike   = None        

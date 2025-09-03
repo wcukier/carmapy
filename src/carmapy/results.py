@@ -75,6 +75,16 @@ class Results:
            shape (NZ, NBIN, NT) which stores the rate at which particles are 
            removed from a bin due to evaporation [particles/s/cm³].
            Only stored if ``read_diag=True``.         
+
+    In a 2-D CARMApy run two additional items are saved:
+        - ``results.gasses_2d`` stores the same info as ``results.gasses`` but
+          stores (NZ, NLONGITUDE) arrays instead of (NZ, NT) arrays
+        - ``results.longitude_map`` takes in a 3-D array of shape (NZ, NBIN, NT)
+          and transforms it to an array of shape `(NZ, NBIN, NLONGITUDE)` where 
+          each longitude bin in the average of all timesteps corresponding to 
+          that longitude.  This function is designed to work on the 
+          ``results.clouds["numden"]`` array as well as any of the microphysical
+           rates arrays in ``results.clouds``.
     """
 
 
@@ -121,8 +131,14 @@ class Results:
     gasses : dict[str, np.ndarray]
     """ The number mixing ratio for each of the gasses """
 
+    gasses_2d : dict[str, np.ndarray]
+    """ The number mixing ratio for each of the gasses by longitude """
+
     clouds : dict[str, dict[str, np.ndarray]]
     """ A dictionary storing results for each cloud species (see notes) """
+
+    longitude_map : Callable
+    """ A function to transform arrays to be by longitude (see notes) """
 
     def __init__(self, carma: "Carma", read_diag=False) -> None:
         path = carma.name
@@ -191,9 +207,20 @@ class Results:
         gas_abund = np.zeros((NZ, NGAS, NT))
         sat_vp = np.zeros((NZ, NGAS, NT))
         ts = np.zeros(NT)
+        if carma.is_2d: step = np.zeros(NT, dtype=int)
         
-        for it in range(NT):
-            t_step = f.readline()
+        for it in range(NT-1):
+            if carma.is_2d:
+                (t_step, 
+                current_distance, 
+                rotation_counter,
+                current_step,
+                longitude) = f.readline().split()
+
+                step[it] = int(float(current_step))
+            else:
+                t_step = f.readline()
+
             if t_step:
                 ts[it] = t_step
                 for ibin in range(NBIN):
@@ -256,6 +283,56 @@ class Results:
                 "r": self.r[:, i] * MICRON_TO_CM,
                 "r_mass": self.rmass[:, i]
             }
+        if self.carma.is_2d: #TODO: pre nanmean() these.  Maybe have a window for a set number of timesteps
+            _, counts = np.unique(step, return_counts=True)
+            self.gasses_2d = {}
+
+            for i in range(1, len(self.gas_names)):
+                self.gasses_2d[self.gas_names[i]] = (np.zeros((NZ, 
+                                                            carma.NLONGITUDE,
+                                                            np.max(counts))) 
+                                                  * np.nan)
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                for it in range(n_tstep):
+                    self.gasses_2d[self.gas_names[i]][
+                        :, step[it], index[step[it]]] =  gas_abund[:, i, it] 
+                    index[step[it]] += 1 
+                self.gasses_2d[self.gas_names[i]] = np.nanmean(
+                                        self.gasses_2d[self.gas_names[i]], 
+                                        axis=2)
+                                                   
+
+            for i in range(len(self.group_names)):
+                self.clouds[self.group_names[i]]["numden_2d"] = np.zeros(
+                                        (NZ, 
+                                        NBIN, 
+                                        carma.NLONGITUDE, 
+                                        np.max(counts))) * np.nan
+
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                for it in range(n_tstep):
+                    self.clouds[self.group_names[i]]["numden_2d"][
+                      :, :, step[it], index[step[it]]] = (
+                          self.numden[:, i, :, it])
+                    
+                    index[step[it]] += 1 
+                
+                self.clouds[self.group_names[i]]["numden_2d"] = np.nanmean(
+                    self.clouds[self.group_names[i]]["numden_2d"], axis=3)
+                
+
+            def longitude_map(arr):
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                temp_array = np.zeros((NZ, 
+                                       NBIN, 
+                                       carma.NLONGITUDE, 
+                                       np.max(counts)))
+                for it in range(n_tstep):
+                    temp_array[:, :, step[it], index[step[it]]] = arr[:, :, it]
+                    index[step[it]] += 1 
+                
+                return np.nanmean(temp_array, axis=3)
+            self.longitude_map = longitude_map
 
 
 
@@ -319,7 +396,6 @@ class Results:
             self.clouds[key]["evap_gain_rate"] = evap_gain_rates[:, :, e, :]
         
         f.close()
-
 
     def plot_toa_gas(self, skip_gasses = [0], burn_in = 20, **kwargs):
         """Plots the gas abundances at the top of the atmosphere.  Useful for 

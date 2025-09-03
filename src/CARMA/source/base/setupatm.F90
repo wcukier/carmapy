@@ -110,6 +110,7 @@ subroutine setupatm(carma, cstate, rescale, rplanet, rc)
     ! Log-Pressure
     case (I_LOGP)
       zmet(:) = t(:)/t0
+        
       
     ! Sigma
     case (I_SIG)

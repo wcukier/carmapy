@@ -222,7 +222,7 @@ subroutine test_day()
 
   real(kind=f)          :: rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
   real(kind=f)          :: distance_btwn_elements, circumference, rotation_counter, slope, intercept
-  real(kind=f)          :: current_distance, num_steps_btwn, current_step, RPLANET_DAT
+  real(kind=f)          :: current_distance, num_steps_btwn, current_step, RPLANET_DAT, restart_distance
   integer               :: closeto_temp_profile
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file
@@ -701,7 +701,7 @@ subroutine test_day()
 	 prodrate, prodrate_mass, prodrate_gas, totmass, &
 	 winds, ekz, ftopp, fbotp, pctop, pcbot, gctop, &
 	 gcbot, ftopg, fbotg, gasprod, rhompe, growpe, &
-         evappe, growlg, evaplg
+         evappe, growlg, evaplg, restart_distance
      write(*,*)'read restart file'
      rewind(lunres)
      !     istep = istep + 1
@@ -735,7 +735,7 @@ subroutine test_day()
 
 
     if (IS_2D .eq. 1) then
-      current_distance = (velocity_avg*time)/distance_btwn_elements !in grid space
+      current_distance = (velocity_avg*time)/distance_btwn_elements + restart_distance!in grid space
       rotation_counter = int(current_distance/NLONGITUDE)
       current_step = current_distance - (NLONGITUDE*rotation_counter)
       closeto_temp_profile = int(current_step)!int(current_step)+1
@@ -765,7 +765,7 @@ subroutine test_day()
               rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, &
               rc, told=t(:), winds=winds(:), ekz=ekz(:), &
               ftopp=ftopp,fbotp=fbotp,pctop=pctop,pcbot=pcbot, &
-			   gctop=gctop,gcbot=gcbot,ftopg=ftopg,fbotg=fbotg,met=met)
+              gctop=gctop,gcbot=gcbot,ftopg=ftopg,fbotg=fbotg,met=met, t0=t0_in)
     if (rc < 0) stop "    *** FAILED CARMASTATE_Create ***"
 
 
@@ -931,7 +931,7 @@ subroutine test_day()
           prodrate, prodrate_mass, prodrate_gas, totmass, &
           winds, ekz, ftopp, fbotp, pctop, pcbot, gctop, &
           gcbot, ftopg, fbotg, gasprod, rhompe, growpe, &
-         evappe, growlg, evaplg
+          evappe, growlg, evaplg, current_distance
        write(*,*)'write restart file'
        rewind(lunres)
     !endif
