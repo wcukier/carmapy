@@ -1050,7 +1050,7 @@ class Carma:
                     self.T_levels, 
                     delimiter='\t')
         
-        if not self.winds:
+        if self.winds is None:
             self.winds = np.zeros(self.NZ, dtype=float)
         
         with open(os.path.join(path, io["winds_file"]), "w+") as f:

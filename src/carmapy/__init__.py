@@ -7,5 +7,5 @@ import carmapy.example
 from .results import *
 from .base import *
 
-__Version__ = "0.0.16"
+__Version__ = "0.0.17"
 
