@@ -31,7 +31,9 @@
       ~Results.dt_timestep
       ~Results.gas_names
       ~Results.gasses
+      ~Results.gasses_2d
       ~Results.group_names
+      ~Results.longitude_map
       ~Results.P
       ~Results.path
       ~Results.sat_vp
