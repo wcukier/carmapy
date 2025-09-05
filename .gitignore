@@ -21,3 +21,4 @@ docs/source/notebooks/my_first_carma/**
 **/carmapy.exe
 **/*_2d_carmapy.txt
 docs/source/notebooks/2d_carmapy/temp_levels.txt
+dist/** 
