@@ -111,6 +111,8 @@ def example_carma(name):
     carma.set_physical_params(surface_grav=31600,
                               wt_mol=np.mean(mu_levels))
 
+    carma.set_atmospheric_parameters_from_defaults("Pure H2")
+    
     carma.set_stepping(dt=250, output_gap=10, n_tstep=100)
 
     # Optional, here to preserve ordering

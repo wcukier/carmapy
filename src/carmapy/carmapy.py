@@ -1046,7 +1046,7 @@ class Carma:
                     self.T_centers, 
                     delimiter='\t')
 
-        np.savetxt(os.path.join(path, "temp_levels.txt"), #TODO: fix_path
+        np.savetxt(os.path.join(path, "inputs", "temp_levels.txt"),
                     self.T_levels, 
                     delimiter='\t')
         
