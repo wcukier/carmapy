@@ -220,16 +220,29 @@ subroutine test_day()
   character(len=100)  :: coag_file
   character(len=100)  :: winds_file
 
+  character(len=100)  ::  p_bot_bound_file, p_top_bound_file, g_bot_bound_file, g_top_bound_file
+
+
   character(len=20)   :: file_pos
 
-  real(kind=f)          :: rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
-  real(kind=f)          :: distance_btwn_elements, circumference, rotation_counter, slope, intercept
-  real(kind=f)          :: current_distance, num_steps_btwn, current_step, RPLANET_DAT, restart_distance
-  integer               :: closeto_temp_profile
+  real(kind=f)  :: rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
+  real(kind=f)  :: distance_btwn_elements, circumference, rotation_counter, slope, intercept
+  real(kind=f)  :: current_distance, num_steps_btwn, current_step, RPLANET_DAT, restart_distance
+  integer       :: closeto_temp_profile
+  integer       :: ibbnd_pc, itbnd_pc, ibbnd_gc, itbnd_gc
 
-  namelist / io_files / filename, filename_restart, fileprefix, gas_input_file, centers_file, levels_file,temps_file, groups_file, elements_file, gases_file, growth_file, nuc_file, coag_file, winds_file
-  namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg, met, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
-  namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, NCOAG, IS_2D, igridv, iappend, idocoag
+  namelist / io_files / filename, filename_restart, fileprefix, gas_input_file,&
+         centers_file, levels_file,temps_file, groups_file, elements_file, &
+         gases_file, growth_file, nuc_file, coag_file, winds_file, &
+         p_bot_bound_file, p_top_bound_file, g_bot_bound_file, g_top_bound_file
+  
+  namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
+         met, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
+
+  namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
+         NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
+         NCOAG, IS_2D, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
+         ibbnd_gc
 
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e
   integer :: is_type3, stofact
@@ -306,6 +319,92 @@ subroutine test_day()
   close(12)
 
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! Boundary Conditions
+
+  allocate(ftopp(NBIN,NELEM))
+  allocate(fbotp(NBIN,NELEM))
+  allocate(pctop(NBIN,NELEM))
+  allocate(pcbot(NBIN,NELEM))
+  allocate(gctop(NGAS))
+  allocate(gcbot(NGAS))
+  allocate(ftopg(NGAS))
+  allocate(fbotg(NGAS))
+
+  ftopp(:,:) = 0._f
+  fbotp(:,:) = 0._f
+  pctop(:,:) = 0._f
+  pcbot(:,:) = 0._f
+  gctop(:) = 1e-50_f
+  gcbot(:) = 1e-50_f
+  ftopg(:) = 0._f
+  fbotg(:) = 0._f
+
+  open(12, file = p_bot_bound_file) ! Bottom particle boundary
+  if (ibbnd_pc .eq. I_FIXED_CONC) then
+
+    do i=1, NBIN
+      read(12, *) pcbot(i, :)
+    end do
+
+  else if (ibbnd_pc .eq. I_FLUX_SPEC) then
+
+    do i=1, NBIN
+      read(12, *) fbotp(i, :)
+    end do
+
+  end if
+  close(12)
+
+  open(12, file = p_top_bound_file) ! Top particle boundary
+  if (itbnd_pc .eq. I_FIXED_CONC) then
+    
+    do i=1, NBIN
+      read(12, *) pctop(i, :)
+    end do
+
+  else if (itbnd_pc .eq. I_FLUX_SPEC) then
+
+    do i=1, NBIN
+      read(12, *) ftopp(i, :)
+    end do
+
+  end if
+  close(12)
+
+  open(12, file = g_bot_bound_file) ! Bottom gas boundary
+  if (ibbnd_gc .eq. I_FIXED_CONC) then
+    
+    do i=1, NGAS
+      read(12, *) gcbot(i)
+    end do
+
+  else if (ibbnd_gc .eq. I_FLUX_SPEC) then
+
+    do i=1, NGAS
+      read(12, *) fbotg(i)
+    end do
+
+  end if
+  close(12)
+
+  open(12, file = g_top_bound_file) ! Top gas boundary
+  if (itbnd_gc .eq. I_FIXED_CONC) then
+    
+    do i=1, NGAS
+      read(12, *) gctop(i)
+    end do
+
+  else if (itbnd_gc .eq. I_FLUX_SPEC) then
+
+    do i=1, NGAS
+      read(12, *) ftopg(i)
+    end do
+
+  end if
+  close(12)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   wtmol_air(:) =wtmol_air_set 
   grav(:) = grav_set 
 
@@ -314,7 +413,6 @@ subroutine test_day()
   circumference = 2 *PI * rplanet !cm
   distance_btwn_elements = circumference/NLONGITUDE
   
-
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -352,15 +450,6 @@ subroutine test_day()
   allocate(dr(NBIN))
   allocate(rmass(NBIN,NGROUP))
 
-  ! Boundary Conditions
-  allocate(ftopp(NBIN,NELEM))
-  allocate(fbotp(NBIN,NELEM))
-  allocate(pctop(NBIN,NELEM))
-  allocate(pcbot(NBIN,NELEM))
-  allocate(gctop(NGAS))
-  allocate(gcbot(NGAS))
-  allocate(ftopg(NGAS))
-  allocate(fbotg(NGAS))
 
   ! Microphysical Rates
   allocate(gasprod(NZ,NGAS))
@@ -539,7 +628,7 @@ subroutine test_day()
   call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, do_fixedinit=.TRUE., do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
                         do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=10, &
-                        itbnd_pc=I_FLUX_SPEC, ibbnd_pc=I_FIXED_CONC, itbnd_gc=I_FLUX_SPEC, ibbnd_gc=I_FIXED_CONC)
+                        itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc)
   if (rc < 0) stop "    *** FAILED CARMA_Initialize ***"
 
   write(*,*) " "
@@ -652,18 +741,7 @@ subroutine test_day()
   rotation_counter = 0
   current_step = 0
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  ! Boundary Conditions
-
-  ftopp(:,:) = 0._f
-  fbotp(:,:) = 0._f
-  pctop(:,:) = 0._f
-  pcbot(:,:) = 0._f
-  gctop(:) = 1e-50_f
-  gcbot(:) = 1e-50_f
-  ftopg(:) = 0._f
-  fbotg(:) = 0._f
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -841,9 +919,9 @@ subroutine test_day()
 
       close(unit=gas_in)
 
-      do i=1, NGAS
-        gcbot(i) = mmr_gas(1, i) + 1e-50_f
-      end do
+      ! do i=1, NGAS
+      !   gcbot(i) = mmr_gas(1, i) + 1e-50_f
+      ! end do
 
      endif
 

@@ -13,10 +13,14 @@
     nz = 126
     dtime = 100
     iappend = 0
+    ibbnd_gc = 1
+    ibbnd_pc = 1
     idiag = 0
     igridv = 1
     irestart = 0
     iskip = 100
+    itbnd_gc = 2
+    itbnd_pc = 2
     nstep = 3000
 /
 
@@ -27,12 +31,16 @@
     filename = 'my_first_carma'
     filename_restart = 'my_first_carma_restart'
     fileprefix = 'bd_'
+    g_bot_bound_file = 'inputs/gbot.txt'
+    g_top_bound_file = 'inputs/gtop.txt'
     gas_input_file = 'inputs/gas_input.txt'
     gases_file = 'inputs/gasses.txt'
     groups_file = 'inputs/groups.txt'
     growth_file = 'inputs/growth.txt'
     levels_file = 'inputs/levels.txt'
     nuc_file = 'inputs/nucleation.txt'
+    p_bot_bound_file = 'inputs/pbot.txt'
+    p_top_bound_file = 'inputs/ptop.txt'
     temps_file = 'inputs/temps.txt'
     winds_file = 'inputs/winds.txt'
 /
