@@ -214,13 +214,13 @@ subroutine test_day()
   character(len=100)  :: temps_file
   character(len=100)  :: groups_file
   character(len=100)  :: elements_file
-  character(len=100)  :: gases_file
+  character(len=100)  :: gasses_file
   character(len=100)  :: growth_file
   character(len=100)  :: nuc_file
   character(len=100)  :: coag_file
   character(len=100)  :: winds_file
 
-  character(len=100)  ::  p_bot_bound_file, p_top_bound_file, g_bot_bound_file, g_top_bound_file
+  character(len=100)  ::  g_boundary_file, p_boundary_file
 
 
   character(len=20)   :: file_pos
@@ -233,8 +233,8 @@ subroutine test_day()
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file,&
          centers_file, levels_file,temps_file, groups_file, elements_file, &
-         gases_file, growth_file, nuc_file, coag_file, winds_file, &
-         p_bot_bound_file, p_top_bound_file, g_bot_bound_file, g_top_bound_file
+         gasses_file, growth_file, nuc_file, coag_file, winds_file, &
+         g_boundary_file, p_boundary_file
   
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
          met, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
@@ -251,6 +251,8 @@ subroutine test_day()
   real(kind=f), allocatable ::temp_equator(:, :), p_equator_center(:), p_equator_level(:), velocity(:), longitudes(:)
   integer, allocatable :: elem2group(:)
 
+
+  fileprefix = trim(fileprefix)
 
   if (idocoag .eq. 0) then
     DO_COAG = .False.
@@ -340,69 +342,23 @@ subroutine test_day()
   ftopg(:) = 0._f
   fbotg(:) = 0._f
 
-  open(12, file = p_bot_bound_file) ! Bottom particle boundary
-  if (ibbnd_pc .eq. I_FIXED_CONC) then
-
-    do i=1, NBIN
-      read(12, *) pcbot(i, :)
-    end do
-
-  else if (ibbnd_pc .eq. I_FLUX_SPEC) then
-
-    do i=1, NBIN
-      read(12, *) fbotp(i, :)
-    end do
-
-  end if
+  open(12, file = g_boundary_file) 
+  read(12, *)
+  do i=1, NGAS
+    read(12, *) name, gctop(i), gcbot(i), ftopg(i), fbotg(i)
+  enddo
   close(12)
 
-  open(12, file = p_top_bound_file) ! Top particle boundary
-  if (itbnd_pc .eq. I_FIXED_CONC) then
-    
-    do i=1, NBIN
-      read(12, *) pctop(i, :)
-    end do
-
-  else if (itbnd_pc .eq. I_FLUX_SPEC) then
-
-    do i=1, NBIN
-      read(12, *) ftopp(i, :)
-    end do
-
-  end if
+  open(12, file = p_boundary_file) 
+  read(12, *)
+  do i=1, NBIN 
+    do j=1, NELEM
+      read(12, *) name, ibin, pctop(i,j), pcbot(i,j), ftopp(i,j), fbotp(i,j)
+    enddo
+  enddo
   close(12)
 
-  open(12, file = g_bot_bound_file) ! Bottom gas boundary
-  if (ibbnd_gc .eq. I_FIXED_CONC) then
-    
-    do i=1, NGAS
-      read(12, *) gcbot(i)
-    end do
 
-  else if (ibbnd_gc .eq. I_FLUX_SPEC) then
-
-    do i=1, NGAS
-      read(12, *) fbotg(i)
-    end do
-
-  end if
-  close(12)
-
-  open(12, file = g_top_bound_file) ! Top gas boundary
-  if (itbnd_gc .eq. I_FIXED_CONC) then
-    
-    do i=1, NGAS
-      read(12, *) gctop(i)
-    end do
-
-  else if (itbnd_gc .eq. I_FLUX_SPEC) then
-
-    do i=1, NGAS
-      read(12, *) ftopg(i)
-    end do
-
-  end if
-  close(12)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   wtmol_air(:) =wtmol_air_set 
@@ -418,9 +374,9 @@ subroutine test_day()
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   ! Open the output text file
-  open(unit=lun,file = fileprefix // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-  open(unit=lunf,file = fileprefix // flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-  open(unit=lunrates,file = fileprefix // rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+  open(unit=lun,file =  filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+  open(unit=lunf,file =  flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+  open(unit=lunrates,file =  rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
 
   ! Allocate the arrays that we need for the model
   allocate(xc(NZ), dx(NZ), yc(NZ), dy(NZ), &
@@ -553,7 +509,7 @@ subroutine test_day()
   write(*,*) "  Add Gas(es) ..."
   write(*,*) " "
 
-  open(10, file=gases_file)
+  open(10, file=gasses_file)
   read(10, *)
   do i=1, NGAS
 
@@ -780,7 +736,7 @@ subroutine test_day()
   binmultiple = int(NBIN / 10._f)
 
   if (irestart .eq. 1) then
-    open(unit=lunres,file=fileprefix // filename_restart(1:len_trim(filename_restart)) // filesuffix_restart,form='unformatted',status="unknown")
+    open(unit=lunres,file= filename_restart(1:len_trim(filename_restart)) // filesuffix_restart,form='unformatted',status="unknown")
     read(lunres) istep_old, xc, dx, yc, dy, &
          zc, zl, p, pl, t, rho_atm_cgs, &
          mmr, mmr_gas, mmr_gas_old, satliq, &
@@ -811,10 +767,10 @@ subroutine test_day()
   ! Iterate the model over a few time steps.
   do istep = 1, nstep
 
-    open(unit=lunres,file=fileprefix // filename_restart(1:len_trim(filename_restart)) // filesuffix_restart,form='unformatted',status="unknown")
-    open(unit=lunp,file = fileprefix // temp // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-    open(unit=lunfp,file = fileprefix // temp // flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-    open(unit=lunratesp,file = fileprefix // temp // rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+    open(unit=lunres,file= filename_restart(1:len_trim(filename_restart)) // filesuffix_restart,form='unformatted',status="unknown")
+    open(unit=lunp,file =  temp // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+    open(unit=lunfp,file =  temp // flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+    open(unit=lunratesp,file =  temp // rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
 
     ! Calculate the model time.
     time = (istep - 1) * dtime

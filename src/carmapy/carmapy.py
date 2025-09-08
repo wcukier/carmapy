@@ -111,8 +111,6 @@ class Carma:
     n_tstep: int = 1_000_000    
     """ Total number of timesteps """
 
-    _p_bcs_set = False
-    _g_bcs_set = False
 
 
     def __init__(self, name: str, is_2d=False) -> None:        
@@ -131,6 +129,11 @@ class Carma:
         self.coags:     list["Coag"]            = []      # dictionary of carma Coag objects
 
         self.winds = None
+
+        self.bot_bound_type_cloud = "fixed_conc"
+        self.bot_bound_type_gas = "fixed_conc"
+        self.top_bound_type_cloud = "fixed_flux"
+        self.top_bound_type_gas = "fixed_flux"
 
         if is_2d:
             self.igridv: int = I_LOGP
@@ -873,16 +876,14 @@ class Carma:
         self.atmo = profile
 
 
-    def set_cloud_boundary_conditions(self,
-                                      top_boundary_type: str,
-                                      bot_boundary_type: str,
-                                      top_boundary: ArrayLike,
-                                      bot_boundary: ArrayLike
-                                      ) -> None:
-        """Sets the boundary conditions on the cloud particle concentration.  
-        Note that the same boundary condition type must be used for all 
-        cloud species (although different types can be chosen for the bottom of
-        the atmosphere vs the top)
+    def set_cloud_boundary_type(self,
+                                top_boundary_type: str,
+                                bot_boundary_type: str,
+                                ) -> None:
+        """Sets the type of boundary conditions on the cloud particle 
+        concentration.  Note that the same boundary condition type must be used 
+        for all cloud species (although different types can be chosen for the 
+        bottom of the atmosphere vs the top)
 
         Parameters
         ----------
@@ -892,16 +893,6 @@ class Carma:
         bot_boundary_type : str
             Which type of boundary condtion to use at the bottom of the 
             atmosphere. Options are "fixed_conc", "fixed_flux", or "zero_grad"
-        top_boundary : ArrayLike
-            A (NBIN, NELEM) array describing the conditions at the
-            top boundary of the atmosphere.  The array has units of 
-            particles/cm^3 for "fixed_conc", particles/cm^3/s for "fixed_flux",
-            and is disregarded for "zero_grad"
-        bot_boundary : ArrayLike
-            A (NBIN, NELEM) array describing the conditions at the
-            bottom boundary of the atmosphere.  The array has units of 
-            particles/cm^3 for "fixed_conc", particles/cm^3/s for "fixed_flux",
-            and is disregarded for "zero_grad"
         """
 
         if top_boundary_type not in ALLOWED_BCs: 
@@ -913,32 +904,12 @@ class Carma:
 
         self.top_bound_type_cloud = top_boundary_type
         self.bot_bound_type_cloud = bottom_boundary_type
-        
-        if top_boundary_type != "zero_grad":
-            top_boundary = np.array(top_boundary)
-            if top_boundary.shape != (self.NBIN, len(self.elems)):
-                raise ValueError(f"top_boundary must be an array of shape "
-                        f"(NBIN, NELEM) (ie ({self.NBIN}, {len(self.elems)}))."
-                        f"It is currenty of shape {top_boundary.shape}")
 
-        if bot_boundary_type != "zero_grad":
-            bot_boundary = np.array(bot_boundary)
-            if bot_boundary.shape != (self.NBIN, len(self.elems)):
-                raise ValueError(f"bot_boundary must be an array of shape "
-                        f"(NBIN, NELEM) (ie ({self.NBIN}, {len(self.elems)}))."
-                        f"It is currenty of shape {bot_boundary.shape}")
-        
-        self.top_bound_cloud = top_boundary
-        self.bot_bound_cloud = bot_boundary
-        self._p_bcs_set = True
-
-    def set_gas_boundary_conditions(self,
+    def set_gas_boundary_type(self,
                                     top_boundary_type: str,
                                     bot_boundary_type: str,
-                                    top_boundary: ArrayLike,
-                                    bot_boundary: ArrayLike
                                     ) -> None:
-        """Sets the boundary conditions on the gas concentration.  
+        """Sets type of boundary conditions on the gas concentration.  
         Note that the same boundary condition type must be used for all 
         cloud species (although different types can be chosen for the bottom of
         the atmosphere vs the top)
@@ -951,16 +922,6 @@ class Carma:
         bot_boundary_type : str
             Which type of boundary condtion to use at the bottom of the 
             atmosphere. Options are "fixed_conc", "fixed_flux", or "zero_grad"
-        top_boundary : ArrayLike
-            A (NGAS, ) array describing the conditions at the
-            top boundary of the atmosphere.  The array has units of 
-            particles/cm^3 for "fixed_conc", particles/cm^3/s for "fixed_flux",
-            and is disregarded for "zero_grad"
-        bot_boundary : ArrayLike
-            A (NGAS, ) array describing the conditions at the
-            bottom boundary of the atmosphere.  The array has units of 
-            particles/cm^3 for "fixed_conc", particles/cm^3/s for "fixed_flux",
-            and is disregarded for "zero_grad"
         """
         ALLOWED_BCs = ["fixed_conc", "fixed_flux", "zero_grad"]
 
@@ -974,23 +935,67 @@ class Carma:
         self.top_bound_type_gas = top_boundary_type
         self.bot_bound_type_gas = bottom_boundary_type
         
-        if top_boundary_type != "zero_grad":
-            top_boundary = np.array(top_boundary)
-            if top_boundary.shape != (len(self.gasses), ):
-                raise ValueError(f"top_boundary must be an array of shape "
-                                f"(NGAS, ) (ie ({len(self.gasses)}, ))."
-                                f"It is currenty of shape {top_boundary.shape}")
+    def set_clound_boundary(self, 
+                            group: Union[str, "Group"],
+                            bot_conc=0.0, 
+                            top_conc=0.0, 
+                            bot_flux=0.0, 
+                            top_flux=0.0) -> None:
+        """Sets the boundary conditions for the group.  Throws an error if used
+        on a multi-element group (ex. a heterogeneously nucleated group)
 
-        if bot_boundary_type != "zero_grad":
-            bot_boundary = np.array(bot_boundary)
-            if bot_boundary.shape != (len(self.gasses), ):
-                raise ValueError(f"bot_boundary must be an array of shape "
-                                f"(NGAS, ) (ie ({len(self.gasses)}, ))."
-                                f"It is currenty of shape {bot_boundary.shape}")
-        
-        self.top_bound_gas = top_boundary
-        self.bot_bound_gas = bot_boundary
-        self._g_bcs_set = True
+        Parameters
+        ----------
+        group : Union[str, Group]
+            The group to set the boundary conditions for
+        bot_conc : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the concentration of each bin in the group at the bottom of the 
+            atmosphere. Only used if the bottom cloud boundary condition is set 
+            to "fixed_conc". [particles/cm^3]. By default 0 for all bins
+        top_conc : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the concentration of the group at the top of the atmosphere for each  
+            bin. Only used if the top cloud boundary condition is set 
+            to "fixed_conc". [particles/cm^3]. By default 0 for all bins
+        bot_flux : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the upwards flux of the group at the bottom of the atmosphere for  
+            each bin. Only used if the bottom cloud boundary condition is set to 
+            "fixed_flux". [particles/cm^2/s]. By default 0 for all bins
+        top_flux : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the concentration of the group at the bottom of the atmosphere for  
+            each bin. Only used if the cloud boundary condition is set to 
+            "fixed_conc". [particles/cm^3]. By default 0 for all bins.
+        """
+
+        if type(group) == type(""):
+            group = self.groups[group]
+
+        if group.is_het: raise ValueError("Multi-element groups must have boundary"
+                                        "conditions of 0.  The is already the"
+                                        "default behavior so this function does"
+                                        "not need to be called.")
+
+        if np.all(top_conc == 0): top_conc = np.zeros(self.NBIN)
+        if np.all(bot_conc == 0): bot_conc = np.zeros(self.NBIN)
+        if np.all(top_flux == 0): top_flux = np.zeros(self.NBIN)
+        if np.all(bot_flux == 0): bot_flux = np.zeros(self.NBIN)
+
+        if np.shape(top_conc) != (self.NBIN, ): 
+            raise ValueError("top_conc must be 0 or an arraylike of length NBIN")
+        if np.shape(bot_conc) != (self.NBIN, ): 
+            raise ValueError("bot_conc must be 0 or an arraylike of length NBIN")
+        if np.shape(top_flux) != (self.NBIN, ): 
+            raise ValueError("top_flux must be 0 or an arraylike of length NBIN")
+        if np.shape(bot_flux) != (self.NBIN, ): 
+            raise ValueError("bot_flux must be 0 or an arraylike of length NBIN")
+
+        group.boundary["top_conc"] = top_conc
+        group.boundary["bot_conc"] = bot_conc
+        group.boundary["top_flux"] = top_flux
+        group.boundary["bot_flux"] = bot_flux
 
 
     def run(self, suppress_output=False) -> None:
@@ -1015,18 +1020,6 @@ class Carma:
         if (self.wt_mol is None or self.surface_grav is None):
             raise RuntimeError("surface_grav and wt_mol must be set")
         
-        # Handle default boundary condition behavior
-        if not self._g_bcs_set:
-            self.bot_bound_type_gas = "fixed_conc"
-            self.top_bound_type_gas = "fixed_flux"
-            self.top_bound_gas = np.zeros(len(self.gasses))
-        
-        if not self._p_bcs_set:
-            self.bot_bound_type_cloud = "fixed_conc"
-            self.top_bound_type_cloud = "fixed_flux"
-            self.top_bound_cloud = np.zeros((self.NBIN, len(self.elems)))
-            self.bot_bound_cloud = np.zeros((self.NBIN, len(self.elems)))
-
         path = self.name
         
         os.makedirs(path, exist_ok=True)
@@ -1041,22 +1034,20 @@ class Carma:
             "io_files": {
                 "filename":            path_end,
                 "filename_restart":    path_end+"_restart",
-                "fileprefix":          "bd_",
+                "fileprefix":          "",
                 "gas_input_file":      os.path.join("inputs", "gas_input.txt"),
                 "centers_file":        os.path.join("inputs", "centers.txt"),
                 "levels_file":         os.path.join("inputs", "levels.txt"),
                 "temps_file":          os.path.join("inputs", "temps.txt"),
                 "groups_file":         os.path.join("inputs", "groups.txt"),
                 "elements_file":       os.path.join("inputs", "elements.txt"),
-                "gases_file":          os.path.join("inputs", "gasses.txt"),
+                "gasses_file":          os.path.join("inputs", "gasses.txt"),
                 "growth_file":         os.path.join("inputs", "growth.txt"),
                 "nuc_file":            os.path.join("inputs", "nucleation.txt"),
                 "coag_file":           os.path.join("inputs", "coagulation.txt"),
                 "winds_file":          os.path.join("inputs", "winds.txt"),
-                "p_bot_bound_file":    os.path.join("inputs", "pbot.txt"),
-                "p_top_bound_file":    os.path.join("inputs", "ptop.txt"),
-                "g_bot_bound_file":    os.path.join("inputs", "gbot.txt"),
-                "g_top_bound_file":    os.path.join("inputs", "gtop.txt")
+                "p_boundary_file":     os.path.join("inputs", "pbound.txt"),
+                "g_boundary_file":     os.path.join("inputs", "gbound.txt"),
                 },
             "physical_params" : {
                 "wtmol_air_set":        self.wt_mol,
@@ -1109,7 +1100,7 @@ class Carma:
                 name = '"'+key + '"'
                 f.write(f'{name:35s}{self.groups[key].rmin:.15e}\n')
         
-        with open(os.path.join(path, io["gases_file"]), "w+") as f:
+        with open(os.path.join(path, io["gasses_file"]), "w+") as f:
 
             f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\trho_cond\t"
                     "surften_0\tcoldia\tvp_offset\tvp_tcoeff\tis_type3\t"
@@ -1207,7 +1198,7 @@ class Carma:
             for w in self.winds:
                 f.write(f'{w}\n')
 
-        gas_bot_bc = np.zeros(len(self.gasses))
+        gas_conc_bot_bc = np.zeros(len(self.gasses))
 
         with open(os.path.join(path, io["gas_input_file"]), "w+") as f:
             for key in self.gasses.keys():
@@ -1222,10 +1213,10 @@ class Carma:
                                              "was not set.")
                 if len(np.shape(g.nmr)) > 0:
                     f.write(f"{g.nmr[0]:10e}\t")
-                    gas_bot_bc[i] = g.nmr[0] * g.wtmol_dif/self.wt_mol + 1e-50
+                    gas_conc_bot_bc[i] = g.nmr[0] * g.wtmol_dif/self.wt_mol + 1e-50
                 else:
                     f.write(f"{g.nmr:10e}\t")
-                    gas_bot_bc[i] = g.nmr * g.wtmol_dif/self.wt_mol + 1e-50
+                    gas_conc_bot_bc[i] = g.nmr * g.wtmol_dif/self.wt_mol + 1e-50
 
             f.write("\n")
             for i in range(1, self.NZ):
@@ -1242,30 +1233,62 @@ class Carma:
                         f.write(f"{0.:10e}\t")
                 f.write("\n")
         
-        if not self._g_bcs_set:
-            self.bot_bound_gas = gas_bot_bc
+        gas_conc_top_bc = np.zeros(len(self.gasses))
+        gas_flux_bot_bc = np.zeros(len(self.gasses))
+        gas_flux_top_bc = np.zeros(len(self.gasses))
 
-        np.savetxt(os.path.join(path, io["g_top_bound_file"]),
-                   self.top_bound_gas,
-                    delimiter='\t')
-        
-        np.savetxt(os.path.join(path, io["g_bot_bound_file"]),
-            self.bot_bound_gas,
-            delimiter='\t')
-
-        np.savetxt(os.path.join(path, io["p_top_bound_file"]),
-            self.top_bound_cloud,
-            delimiter='\t')
-
-        np.savetxt(os.path.join(path, io["p_bot_bound_file"]),
-            self.bot_bound_cloud,
-            delimiter='\t')
-
-
+        ## handle gas boundary conditions
+        for i, key in enumerate(self.gasses.keys()):
+            g = self.gasses[key] 
+            bc = g.boundary.get("bot_conc", -1)
+            if bc != -1:
+                gas_conc_bot_bc[i] = bc * g.wtmol_dif/self.wt_mol + 1e-50
             
+            gas_flux_bot_bc[i] = g.boundary.get("bot_flux", 0)
+            
+            bc = g.boundary.get("top_conc", -1)
+            if (bc == -1) and (self.top_bound_type_gas == "fixed_conc"): 
+                raise RuntimeError(f"'top_conc' gas boundary condition not"
+                                f"set for {key} even though"
+                                "carma.top_bound_type_gas = 'fixed_conc'")
+            
+            gas_conc_top_bc[i] = bc * g.wtmol_dif/self.wt_mol + 1e-50
+            gas_flux_top_bc[i] = g.boundary.get("top_flux", 0)
+        
+        with open(os.path.join(path, io["g_boundary_file"]), "w+") as f:
+            f.write("gas_name\tgctop\tgcbot\tftopg\tfbotg\n")
+            for i, key in enumerate(self.gasses.keys()):
+                f.write(f'"{key}"\t'
+                        f"{gas_conc_top_bc[i]}\t"
+                        f"{gas_conc_bot_bc[i]}\t"
+                        f"{gas_flux_top_bc[i]}\t"
+                        f"{gas_flux_bot_bc[i]}\n")
 
 
+        ## handle cloud bcs
+        elem_top_conc_bc = np.zeros((self.NBIN, len(self.elems)))
+        elem_bot_conc_bc = np.zeros((self.NBIN, len(self.elems)))
+        elem_top_flux_bc = np.zeros((self.NBIN, len(self.elems)))
+        elem_bot_flux_bc = np.zeros((self.NBIN, len(self.elems)))
+        for i, key in enumerate(self.elems.keys()):
+            e = self.elems[key]
+            g = e.group
+            elem_top_conc_bc[:, i] = g.boundary.get("top_conc", np.zeros(self.NBIN))
+            elem_top_flux_bc[:, i] = g.boundary.get("top_flux", np.zeros(self.NBIN))
+            elem_bot_conc_bc[:, i] = g.boundary.get("bot_conc", np.zeros(self.NBIN))
+            elem_bot_flux_bc[:, i] = g.boundary.get("bot_flux", np.zeros(self.NBIN))
 
+
+        with open(os.path.join(path, io["p_boundary_file"]), "w+") as f:
+            f.write("elem_name\tibin\tpctop\tpcbot\tftopp\tfbotp\n")
+            for ibin in range(self.NBIN):
+                for j, key in enumerate(self.elems.keys()):
+                    f.write(f'"{key}"\t'
+                            f"{ibin}\t"
+                            f"{elem_top_conc_bc[i, j]}\t"
+                            f"{elem_bot_conc_bc[i, j]}\t"
+                            f"{elem_top_flux_bc[i, j]}\t"
+                            f"{elem_bot_flux_bc[i, j]}\n")
 
         with _cd(path):
 
@@ -1350,6 +1373,12 @@ class Element:
         self.proc:  str     = proc
         self.igas:  int     = igas #TODO chance to reference gas directly
     
+
+_DEFAULT_GAS_BC = {"bot_conc": -1,
+                    "top_conc": -1,
+                    "bot_flux": 0,
+                    "top_flux": 0}
+
 class Gas: 
     """An object representing a limiting gas resevoir for a condensate.  Attributes
     not defined in ``**kwargs`` will be populated from carmapy defaults, if available
@@ -1390,6 +1419,22 @@ class Gas:
 
        where R is the ideal gas constant
 
+    4. The ``gas.boundary`` dictionary is structured as follows:
+        - ["bot_conc"] describes the number mixing ratio of the gas at the base
+          of the atmosphere (only used if the bottom gas boundary condition is
+          set to "fixed_conc").  If not set, uses the value of `gas.nmr` at the
+          bottom of the atmosphere instead.
+        - ["top_conc"] describes the number mixing ratio of the gas at the top
+          of the atmosphere (only used if the top gas boundary condition is
+          set to "fixed_conc").  Will throw an error if used but not set.
+        - ["bot_flux"] describes the upwards flux of the gas to the base
+          of the atmosphere (only used if the bottom gas boundary condition is
+          set to "fixed_flux") [g/cm^2/s].  Defaults to 0 if not set.
+        - ["top_flux"] describes the downwards flux of the gas at the top
+          of the atmosphere (only used if the top gas boundary condition is
+          set to "fixed_flux"). [g/cm^2/s] Defaults to 0 if not set.
+
+
     References
     ----------
     .. [1] Helling, C., & Woitke, P. 2006, Astronomy and Astrophysics, 
@@ -1412,31 +1457,31 @@ class Gas:
     """ Density of the condensate formed by the gas [g/cm³]"""
 
     surften_0: float 
-    """ Surface tension at 0 K assuming linear trend holds (see notes) [dyne/cm] """
+    """ Surface tension at 0 K assuming linear trend holds (see note 2) [dyne/cm] """
 
     surften_slope: float = 0
-    """ Slope of surface tension with temperature (see notes) [dyne/cm/K]"""
+    """ Slope of surface tension with temperature (see note 2) [dyne/cm/K]"""
 
     coldia: float 
     """ Collisional diameter of the condensate [cm] """
 
     vp_offset: float 
-    """ Constant term in vapor pressure equation (see notes)"""
+    """ Constant term in vapor pressure equation (see note 1)"""
 
     vp_tcoeff: float 
-    """ Coeficcient to temperature term in vapor pressure equation (see notes) [K]"""
+    """ Coeficcient to temperature term in vapor pressure equation (see note 1) [K]"""
 
     vp_metcoeff: float = 0
-    """ Coeficcient to metallicity term in vapor pressure equation (see notes)"""
+    """ Coeficcient to metallicity term in vapor pressure equation (see note 1)"""
 
     vp_logpcoeff: float = 0
-    """ Coeficcent to pressure term in vapor pressure equation (see notes)"""
+    """ Coeficcent to pressure term in vapor pressure equation (see note 1)"""
 
     is_typeIII: bool = False
     """ True if condensation reaction is a Type III reaction (see Helling & Woitke 2006) [1]_"""
 
     lat_heat_e: float = -1
-    """ Latent heat of evaporation, if not provided derived from other inputs (see notes) """
+    """ Latent heat of evaporation, if not provided derived from other inputs (see note 3) """
 
     stofact: int
     """ The stoichiometry factor between the gas phase and the condensate """
@@ -1444,6 +1489,8 @@ class Gas:
     hill_formula: str
     """ The chemical formula of the condensate in hill notation"""
 
+    boundary: dict
+    """ The boundary conditions for the gas (see note 4) """
 
     def __init__(self, 
                  name: str, 
@@ -1471,6 +1518,7 @@ class Gas:
         self.stofact        = kwargs.get("stofact",       defaults["stofact"])
         self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
         self.hill_formula   = kwargs.get("hill_formula",  defaults["hill_formula"])
+        self.boundary       = kwargs.get("boundary",      _DEFAULT_GAS_BC)
 
         
     
@@ -1535,13 +1583,37 @@ class Group:
         <Core>" (ie "Mg2SiO4 on TiO2") for heterogeneously nucleating groups
     rmin : float
         The minimum size of the condensate
+
+    Notes
+    -----
+    1. The ``group.boundary`` describes the boundary conditions of the 
+    particulate matter in the atmosphere.  Currently, CARMApy only supports 
+    non-zero boundary conditions for single element groups (ex. homogeneously
+    nucleated groups).  Noting that each of these entries is either 0 or an 
+    array of NBIN elements, the structure of the dictionary is as follows:
+        - ["bot_conc"] describes the concentration of the group at the base
+          of the atmosphere (only used if the bottom cloud boundary condition is
+          set to "fixed_conc"). [particles/cm^3]  If not set, defaults to 0.
+        - ["top_conc"] describes the concentration of the group at the top
+          of the atmosphere (only used if the top cloud boundary condition is
+          set to "fixed_conc").  [particles/cm^3] If not set, defaults to 0.
+        - ["bot_flux"] describes the upwards flux of the group to the base
+          of the atmosphere (only used if the bottom cloud boundary condition is
+          set to "fixed_flux") [particles/cm^2/s].  Defaults to 0 if not set.
+        - ["top_flux"] describes the downwards flux of the group at the top
+          of the atmosphere (only used if the top cloud boundary condition is
+          set to "fixed_flux"). [particles/cm^2/s] Defaults to 0 if not set.
+
     """
 
     core : "Element"
-    """The element which represents the original seed particle"""
+    """ The element which represents the original seed particle. """
 
     mantle: "Element"
-    """The element on the surface of the cloud particle"""
+    """ The element on the surface of the cloud particle. """
+
+    boundary: dict
+    """ The boundary conditions for the group (see note 1). """
 
 
     def __init__(self, igroup: int, name: str, rmin: float) -> None:
@@ -1550,6 +1622,7 @@ class Group:
         self.rmin = rmin
         self.core = None
         self.mantle = None
+        self.boundary = {}
     
     def coreify(self, ielem: int, group: "Group", gas_name: str) -> Element:
         """Create a core element from the only element of the current group.
@@ -1581,6 +1654,8 @@ class Group:
         elem = Element(name, ielem, group, core_elem.rho, "Core Mass", core_elem.igas)
         group.core = elem
         return elem
+    
+
 
 
 class Coag:

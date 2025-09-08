@@ -143,7 +143,7 @@ class Results:
     def __init__(self, carma: "Carma", read_diag=False) -> None:
         path = carma.name
         path_end = os.path.basename(path)
-        file_path = os.path.join(path, f"bd_{path_end}.txt")
+        file_path = os.path.join(path, f"{path_end}.txt")
 
         f = open(file_path)
 
@@ -349,7 +349,7 @@ class Results:
         coremass_frac      = np.zeros((NZ, NBIN, NGROUP, n_tstep))
 
 
-        file_path = os.path.join(path, f"bd_rates_{path_end}.txt")
+        file_path = os.path.join(path, f"rates_{path_end}.txt")
         f = open(file_path)
 
         for it in range(n_tstep):

@@ -85,7 +85,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
             name, rmin = shlex.split(line[:-1])
             carma.groups[name] = Group(len(carma.groups)+1, name, float(rmin))
         
-    with open(os.path.join(path, io["gases_file"]), "r") as f:
+    with open(os.path.join(path, io["gasses_file"]), "r") as f:
         f.readline()
         for line in f:
             (name, 
@@ -188,6 +188,49 @@ def load_carma(path: str, restart: int =0) -> Carma:
     for i, key in enumerate(carma.gasses.keys()):
         carma.gasses[key].nmr = gas_input[1:, i]
         
+    winds = np.zeros(carma.NZ)
+    with open(os.path.join(path, io["winds_file"])) as f:
+        for i in range(carma.NZ):
+            winds[i] = float(f.readline())
+
+    with open(os.path.join(path, io["g_boundary_file"])) as f:
+        f.readline()
+        for key in carma.gasses.keys():
+            g = carma.gasses[key]
+            _, gctop, gcbot, ftopg, fbotg = shlex.split(f.readline()[:-1])
+
+            g.boundary = {
+                "top_conc": float(gctop),
+                "bot_conc": float(gcbot),
+                "top_flux": float(ftopg),
+                "bot_flux": float(fbotg)
+            }
+
+    elem_top_conc_bc = np.zeros((carma.NBIN, len(carma.elems)))
+    elem_bot_conc_bc = np.zeros((carma.NBIN, len(carma.elems)))
+    elem_top_flux_bc = np.zeros((carma.NBIN, len(carma.elems)))
+    elem_bot_flux_bc = np.zeros((carma.NBIN, len(carma.elems)))
+
+    with open(os.path.join(path, io["p_boundary_file"])) as f:
+        f.readline()
+        for ibin in range(carma.NBIN):
+            for j in range(len(carma.elems.keys())):
+                line = f.readline()
+                _, _, pctop, pcbot, ftopp, fbotp = shlex.split(line)
+
+                elem_top_conc_bc[ibin, j] = float(pctop)
+                elem_bot_conc_bc[ibin, j] = float(pcbot)
+                elem_top_flux_bc[ibin, j] = float(ftopp)
+                elem_bot_flux_bc[ibin, j] = float(fbotp)
+
+    for j, key in enumerate(carma.elems.keys()):
+        e = carma.elems[key]
+        e.group.boundary["top_conc"] = elem_top_conc_bc[:, j]
+        e.group.boundary["bot_conc"] = elem_bot_conc_bc[:, j]
+        e.group.boundary["top_flux"] = elem_top_flux_bc[:, j]
+        e.group.boundary["bot_flux"] = elem_bot_flux_bc[:, j]
+
+
     return carma
 
 
