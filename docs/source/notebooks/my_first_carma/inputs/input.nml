@@ -33,7 +33,7 @@
     fileprefix = ''
     g_boundary_file = 'inputs/gbound.txt'
     gas_input_file = 'inputs/gas_input.txt'
-    gasses_file = 'inputs/gasses.txt'
+    gases_file = 'inputs/gases.txt'
     groups_file = 'inputs/groups.txt'
     growth_file = 'inputs/growth.txt'
     levels_file = 'inputs/levels.txt'

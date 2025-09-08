@@ -214,7 +214,7 @@ subroutine test_day()
   character(len=100)  :: temps_file
   character(len=100)  :: groups_file
   character(len=100)  :: elements_file
-  character(len=100)  :: gasses_file
+  character(len=100)  :: gases_file
   character(len=100)  :: growth_file
   character(len=100)  :: nuc_file
   character(len=100)  :: coag_file
@@ -233,7 +233,7 @@ subroutine test_day()
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file,&
          centers_file, levels_file,temps_file, groups_file, elements_file, &
-         gasses_file, growth_file, nuc_file, coag_file, winds_file, &
+         gases_file, growth_file, nuc_file, coag_file, winds_file, &
          g_boundary_file, p_boundary_file
   
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
@@ -509,7 +509,7 @@ subroutine test_day()
   write(*,*) "  Add Gas(es) ..."
   write(*,*) " "
 
-  open(10, file=gasses_file)
+  open(10, file=gases_file)
   read(10, *)
   do i=1, NGAS
 

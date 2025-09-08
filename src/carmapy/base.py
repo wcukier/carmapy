@@ -85,7 +85,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
             name, rmin = shlex.split(line[:-1])
             carma.groups[name] = Group(len(carma.groups)+1, name, float(rmin))
         
-    with open(os.path.join(path, io["gasses_file"]), "r") as f:
+    with open(os.path.join(path, io["gases_file"]), "r") as f:
         f.readline()
         for line in f:
             (name, 
@@ -106,8 +106,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
              stofact) = shlex.split(line[:-1])
             
             name= name[:-len(' Vapor')]
-            carma.gasses[name] = Gas(name, 
-                                     len(carma.gasses)+1, 
+            carma.gases[name] = Gas(name, 
+                                     len(carma.gases)+1, 
                                      wtmol=float(wtmol), 
                                      wtmol_dif=float(wtmol_dif),
                                      gcomp = int(gcomp),
@@ -152,7 +152,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
                 is_het = True
             group_core = carma.elems[list(carma.elems.keys())[int(ele_from)-1]].group
             group_mantle = carma.elems[list(carma.elems.keys())[int(ele_to)-1]].group
-            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
+            gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
             carma.nucs.append(Nuc(group_core, group_mantle, is_het, gas, float(mucos)))
             
     with open(os.path.join(path, io["growth_file"])) as f:
@@ -160,7 +160,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
         for line in f:
             ielem, igas = shlex.split(line[:-1])
             elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]
-            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
+            gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
             carma.growth.append(Growth(elem, gas))
             
     with open(os.path.join(path, io["coag_file"])) as f:
@@ -185,8 +185,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
 
 
     gas_input = np.genfromtxt(os.path.join(path, io["gas_input_file"]))
-    for i, key in enumerate(carma.gasses.keys()):
-        carma.gasses[key].nmr = gas_input[1:, i]
+    for i, key in enumerate(carma.gases.keys()):
+        carma.gases[key].nmr = gas_input[1:, i]
         
     winds = np.zeros(carma.NZ)
     with open(os.path.join(path, io["winds_file"])) as f:
@@ -195,8 +195,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
 
     with open(os.path.join(path, io["g_boundary_file"])) as f:
         f.readline()
-        for key in carma.gasses.keys():
-            g = carma.gasses[key]
+        for key in carma.gases.keys():
+            g = carma.gases[key]
             _, gctop, gcbot, ftopg, fbotg = shlex.split(f.readline()[:-1])
 
             g.boundary = {

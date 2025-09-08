@@ -124,7 +124,7 @@ class Carma:
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
         self.growth:    list["Growth"]          = []      # list of carma Growth objects
         self.elems:     dict[str, "Element"]    = {}      # dictionary of carma Element objects
-        self.gasses:    dict[str, "Element"]    = {}      # dictionary of carma Gas objects
+        self.gases:    dict[str, "Element"]    = {}      # dictionary of carma Gas objects
         self.nucs:      list["Nuc"]             = []      # list of carma Nuc objecs
         self.coags:     list["Coag"]            = []      # dictionary of carma Coag objects
 
@@ -437,9 +437,9 @@ class Carma:
             particle
         """
         if type(gas) == type(""):
-            gas = self.gasses.get(gas, gas)
-            if type(gas) == type(""): gas = Gas(gas, len(self.gasses) + 1)
-        self.gasses[gas.name] = gas
+            gas = self.gases.get(gas, gas)
+            if type(gas) == type(""): gas = Gas(gas, len(self.gases) + 1)
+        self.gases[gas.name] = gas
         
         if type(seed_group) == type(""):
             seed_group = self.groups["Pure "+seed_group.split(" ")[-1]]
@@ -455,7 +455,7 @@ class Carma:
         
         mantle_elem = Element(gas.name + " Mantle", len(self.elems)+1, 
                               group, gas.rho_cond, "Volatile", 
-                              self.gasses[gas.name].igas)
+                              self.gases[gas.name].igas)
         self.elems[mantle_elem.name] = mantle_elem
         group.mantle = mantle_elem
 
@@ -499,8 +499,8 @@ class Carma:
             The created group consisting of the homogeneously nucleated gas
         """
         if type(gas) == type(""):
-            gas = self.gasses.get(gas, Gas(gas, len(self.gasses) + 1))
-        self.gasses[gas.name] = gas
+            gas = self.gases.get(gas, Gas(gas, len(self.gases) + 1))
+        self.gases[gas.name] = gas
             
         name = "Pure "+ gas.name
         group = Group(len(self.groups)+1, name, rmin)
@@ -512,7 +512,7 @@ class Carma:
         
         elem = Element("Pure "+ gas.name, len(self.elems)+1, 
                             group, gas_dict[gas.name]["rho_cond"], "Volatile", 
-                            self.gasses[gas.name].igas)
+                            self.gases[gas.name].igas)
         group.core = elem
         self.elems[elem.name] = elem
         self.growth.append(Growth(elem, gas))
@@ -541,11 +541,11 @@ class Carma:
             The gas which was added to the simulation.
         """
         if type(gas) == type(""):
-            self.gasses[gas] = self.gasses.get(gas, 
-                                               Gas(gas, len(self.gasses)+1, 
+            self.gases[gas] = self.gases.get(gas, 
+                                               Gas(gas, len(self.gases)+1, 
                                                 **kwargs))
         else:
-            self.gasses[gas] = Gas
+            self.gases[gas] = Gas
         return gas
       
     def add_coag(self, group: Union[str, "Group"]) -> None:
@@ -576,13 +576,13 @@ class Carma:
         ----------
         nmr_dict : dict[str, ArrayLike]
             The number mixing ratio for each species.  The dictionary keys 
-            should be the name of gasses in the simulation.  The dictionary 
+            should be the name of gases in the simulation.  The dictionary 
             values should either be a float representing the mixing ratio at the
             bottom of the atmosphere or an array representing the mixing ratio
             at each atmospheric center
         """
         for key in nmr_dict.keys():
-            self.gasses[key].nmr = nmr_dict[key]
+            self.gases[key].nmr = nmr_dict[key]
     
 
 
@@ -1041,7 +1041,7 @@ class Carma:
                 "temps_file":          os.path.join("inputs", "temps.txt"),
                 "groups_file":         os.path.join("inputs", "groups.txt"),
                 "elements_file":       os.path.join("inputs", "elements.txt"),
-                "gasses_file":          os.path.join("inputs", "gasses.txt"),
+                "gases_file":          os.path.join("inputs", "gases.txt"),
                 "growth_file":         os.path.join("inputs", "growth.txt"),
                 "nuc_file":            os.path.join("inputs", "nucleation.txt"),
                 "coag_file":           os.path.join("inputs", "coagulation.txt"),
@@ -1067,7 +1067,7 @@ class Carma:
                 "NZ":                   self.NZ,
                 "NELEM":                len(self.elems),
                 "NGROUP":               len(self.groups),
-                "NGAS":                 len(self.gasses),
+                "NGAS":                 len(self.gases),
                 "NBIN":                 self.NBIN,
                 "NSOLUTE":              1,
                 "NWAVE":                0,
@@ -1100,15 +1100,15 @@ class Carma:
                 name = '"'+key + '"'
                 f.write(f'{name:35s}{self.groups[key].rmin:.15e}\n')
         
-        with open(os.path.join(path, io["gasses_file"]), "w+") as f:
+        with open(os.path.join(path, io["gases_file"]), "w+") as f:
 
             f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\trho_cond\t"
                     "surften_0\tcoldia\tvp_offset\tvp_tcoeff\tis_type3\t"
                     "surften_slope\tvp_metcoeff\tvplogpcoeff\tlat_heat_e\t"
                     "stofact\n")
             
-            for key in self.gasses.keys():
-                gas : "Gas" = self.gasses[key]
+            for key in self.gases.keys():
+                gas : "Gas" = self.gases[key]
                 name = '"'+key + ' Vapor"'
 
                 if   gas.gcomp == 1: vaprtn = I_VAPRTN_H2O_MURPHY2005
@@ -1198,15 +1198,15 @@ class Carma:
             for w in self.winds:
                 f.write(f'{w}\n')
 
-        gas_conc_bot_bc = np.zeros(len(self.gasses))
+        gas_conc_bot_bc = np.zeros(len(self.gases))
 
         with open(os.path.join(path, io["gas_input_file"]), "w+") as f:
-            for key in self.gasses.keys():
+            for key in self.gases.keys():
                 f.write(key+"\t")
             f.write("\n")
             
-            for i, key in enumerate(self.gasses.keys()):
-                g = self.gasses[key]
+            for i, key in enumerate(self.gases.keys()):
+                g = self.gases[key]
                 if type(g) == type(1):
                     if g.nmr < 0:
                         raise AttributeError(f"The nmr for {g.name} "
@@ -1220,8 +1220,8 @@ class Carma:
 
             f.write("\n")
             for i in range(1, self.NZ):
-                for key in self.gasses.keys():
-                    g = self.gasses[key]
+                for key in self.gases.keys():
+                    g = self.gases[key]
                     if len(np.shape(g.nmr)) > 1:
                         if len(g.nmr) != self.NZ:
                             raise ValueError(f"The array for nmr of {g.name} "
@@ -1233,13 +1233,13 @@ class Carma:
                         f.write(f"{0.:10e}\t")
                 f.write("\n")
         
-        gas_conc_top_bc = np.zeros(len(self.gasses))
-        gas_flux_bot_bc = np.zeros(len(self.gasses))
-        gas_flux_top_bc = np.zeros(len(self.gasses))
+        gas_conc_top_bc = np.zeros(len(self.gases))
+        gas_flux_bot_bc = np.zeros(len(self.gases))
+        gas_flux_top_bc = np.zeros(len(self.gases))
 
         ## handle gas boundary conditions
-        for i, key in enumerate(self.gasses.keys()):
-            g = self.gasses[key] 
+        for i, key in enumerate(self.gases.keys()):
+            g = self.gases[key] 
             bc = g.boundary.get("bot_conc", -1)
             if bc != -1:
                 gas_conc_bot_bc[i] = bc * g.wtmol_dif/self.wt_mol + 1e-50
@@ -1257,7 +1257,7 @@ class Carma:
         
         with open(os.path.join(path, io["g_boundary_file"]), "w+") as f:
             f.write("gas_name\tgctop\tgcbot\tftopg\tfbotg\n")
-            for i, key in enumerate(self.gasses.keys()):
+            for i, key in enumerate(self.gases.keys()):
                 f.write(f'"{key}"\t'
                         f"{gas_conc_top_bc[i]}\t"
                         f"{gas_conc_bot_bc[i]}\t"

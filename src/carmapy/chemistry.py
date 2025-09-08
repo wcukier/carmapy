@@ -91,7 +91,7 @@ def saturation_vapor_pressure(P: ArrayLike,
                        T:  ArrayLike, 
                        log_met: float,
                        gas: Union[str, "Gas"]) -> ArrayLike:
-  """Calculates the saturation vapor pressure for carmapy default gasses.
+  """Calculates the saturation vapor pressure for carmapy default gases.
 
   Parameters
   ----------
@@ -133,7 +133,7 @@ def _populate_fastchem_abundances(carma: "Carma",
   species = []
   
   
-  for gas in carma.gasses.keys():
+  for gas in carma.gases.keys():
       s = gas_dict[gas].get("hill_formula", -1) 
       
       if s == -1:
@@ -149,8 +149,8 @@ def _populate_fastchem_abundances(carma: "Carma",
   
   nmr_dict = {}
   
-  for i in range(len(carma.gasses.keys())):
-    nmr_dict[list(carma.gasses.keys())[i]] = abund[i, 0]
+  for i in range(len(carma.gases.keys())):
+    nmr_dict[list(carma.gases.keys())[i]] = abund[i, 0]
   
   for key in override.keys():
     nmr_dict[key] = override[key]
@@ -164,7 +164,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   Parameters
   ----------
   carma : Carma
-      A carma object with initialized gasses, P-T structure, and log metallicity
+      A carma object with initialized gases, P-T structure, and log metallicity
   species : str
       Either the name of the carmapy default gas to find the cloud base of or 
       the hill notation chemical formula of the species
@@ -177,7 +177,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
     The temperature at the cloud base [K]
   """
 
-  species = carma.gasses[species]
+  species = carma.gases[species]
   s = species.hill_formula
 
   P = carma.P_centers
@@ -232,7 +232,7 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   Parameters
   ----------
   carma : Carma
-      A carma object with initialized gasses, P-T structure, and log metallicity
+      A carma object with initialized gases, P-T structure, and log metallicity
 
   """
   P = carma.P_centers
@@ -244,11 +244,11 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
 
   nmr_dict = {"H2O": 0}
 
-  for s in list(carma.gasses.keys())[1:]:
+  for s in list(carma.gases.keys())[1:]:
 
     P_int, T_int = find_cloud_base(carma, s)
 
-    fast_chem_gas = carma.gasses[s].hill_formula
+    fast_chem_gas = carma.gases[s].hill_formula
     if fast_chem_gas == -1: 
       raise ValueError("{s} is not currently supported by "
                         "the carmapy fastchem interface")
