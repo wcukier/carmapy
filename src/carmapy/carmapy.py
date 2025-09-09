@@ -12,7 +12,8 @@ from numpy.typing import ArrayLike
 
 from typing import Union
 
-SRC = os.path.dirname(os.path.dirname(__file__)) # The src/ directory in the package
+# The src/ directory in the package
+SRC = os.path.dirname(os.path.dirname(__file__)) 
 
 
 @contextlib.contextmanager
@@ -25,6 +26,14 @@ def _cd(path: str):
    finally:
        os.chdir(old_path)
 
+ALLOWED_BCs = ["fixed_conc", "fixed_flux", "zero_grad"]
+BC_INTS = [I_FIXED_CONC, I_FLUX_SPEC, I_ZERO_CGRAD]
+
+def _bc2int(bc):
+    for i in range(len(ALLOWED_BCs)):
+        if bc == ALLOWED_BCs[i]:
+            return BC_INTS[i]
+    raise ValueError(f"{bc} not found")
 
 
 
@@ -52,7 +61,7 @@ class Carma:
     """ Number of vertical layers in the atmospheric grid. """
     NBIN:          int         = 80             
     """ Number of particle radius bins (default 80). """
-    NLONGITUDE:    int         = 64        
+    NLONGITUDE:    int         = -1        
     """ Number of longitude bins (used only in 2D mode). """
 
     P_levels:      ArrayLike   = None        
@@ -83,7 +92,7 @@ class Carma:
     """ Log Solar Metallicity (Default 0) """
 
     r_planet:           float   = 6.991e9    
-    """ Planet radius [cm] (Defaults to 1 Jovian radius); ignored in 1D mode? 
+    """ Planet radius [cm] (Defaults to 1 Jovian radius); ignored in 1D mode. 
     """
     velocity_avg:       float   = -1    
     """ Mean longitudinal wind speed at the equator [cm/s]; ignored in 1-D mode 
@@ -103,6 +112,7 @@ class Carma:
     """ Total number of timesteps """
 
 
+
     def __init__(self, name: str, is_2d=False) -> None:        
         self.is_2d:         bool        = is_2d          # true for 2d carma, false for 1d carma        
         self.name:      str = name            # Name for the carma object, used to define the directory the object is saved in
@@ -114,9 +124,16 @@ class Carma:
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
         self.growth:    list["Growth"]          = []      # list of carma Growth objects
         self.elems:     dict[str, "Element"]    = {}      # dictionary of carma Element objects
-        self.gasses:    dict[str, "Element"]    = {}      # dictionary of carma Gas objects
+        self.gases:    dict[str, "Element"]    = {}      # dictionary of carma Gas objects
         self.nucs:      list["Nuc"]             = []      # list of carma Nuc objecs
         self.coags:     list["Coag"]            = []      # dictionary of carma Coag objects
+
+        self.winds = None
+
+        self.bot_bound_type_cloud = "fixed_conc"
+        self.bot_bound_type_gas = "fixed_conc"
+        self.top_bound_type_cloud = "fixed_flux"
+        self.top_bound_type_gas = "fixed_flux"
 
         if is_2d:
             self.igridv: int = I_LOGP
@@ -213,9 +230,6 @@ class Carma:
         if wt_mol:
             if wt_mol < 0:
                 raise ValueError("Molar Weight must be positive")
-            if wt_mol > 3 or wt_mol < 2:
-                warnings.warn(f"Typical values of wt_mol are between 2 and 3. "
-                              +f"Your value is {wt_mol}.")
            
         if log_metallicity:
             if ((type(log_metallicity) != type(1)) 
@@ -308,7 +322,10 @@ class Carma:
         Parameters
         ----------
         levels : ArrayLike
-            Temperature values at the boundaries of the atmospheric cells [K]
+            Temperature values at the boundaries of the atmospheric cells [K].
+            For 1-D CARMApy should be of shape (NZ,).  For 2-D CARMApy should
+            be of shape (NZ, NLONGITUDEz)
+            
         """
         levels = np.array(levels)
         if self.NZ:
@@ -361,6 +378,27 @@ class Carma:
         self.z_centers = (levels[:-1] + levels[1:])/2
         self.z_levels = levels
 
+    def add_vertical_winds(self, wind_centers: ArrayLike):
+        """Sets the vertical wind speeds as a function of altitude.  Note that
+        unlike most other functions, this one requires wind speeds on the centers,
+        not the levels, of the atmosphere
+
+        Parameters
+        ----------
+        wind_centers : ArrayLike
+            The vertical wind speed at each altitude center [cm/s]
+
+        """
+        if self.NZ:
+            if len(wind_centers) != self.NZ:
+                raise ValueError(f"wind_centers must be {self.NZ} long to be "
+                                f"compatible with other inputs."
+                                f"\nYour data was {len(wind_centers)} long.")
+        else:
+            self.NZ = len(wind_centers)
+        
+        self.wind_centers = wind_centers
+
     
     def add_het_group(self, 
                       gas: Union[str, "Gas"], 
@@ -399,8 +437,9 @@ class Carma:
             particle
         """
         if type(gas) == type(""):
-            gas = self.gasses.get(gas, Gas(gas, len(self.gasses) + 1))
-        self.gasses[gas.name] = gas
+            gas = self.gases.get(gas, gas)
+            if type(gas) == type(""): gas = Gas(gas, len(self.gases) + 1)
+        self.gases[gas.name] = gas
         
         if type(seed_group) == type(""):
             seed_group = self.groups["Pure "+seed_group.split(" ")[-1]]
@@ -410,13 +449,13 @@ class Carma:
         self.groups[name] = group
    
         if not mucos:
-            mucos = mucos_dict[gas.name][seed_group.name.split(" ")[-1]]
+            mucos = gas_dict[gas.name]["mucos_dict"][seed_group.name.split(" ")[-1]]
         
         self.nucs.append(Nuc(seed_group, group, True, gas, mucos))
         
         mantle_elem = Element(gas.name + " Mantle", len(self.elems)+1, 
-                              group, cond_rho[gas.name], "Volatile", 
-                              self.gasses[gas.name].igas)
+                              group, gas.rho_cond, "Volatile", 
+                              self.gases[gas.name].igas)
         self.elems[mantle_elem.name] = mantle_elem
         group.mantle = mantle_elem
 
@@ -460,8 +499,8 @@ class Carma:
             The created group consisting of the homogeneously nucleated gas
         """
         if type(gas) == type(""):
-            gas = self.gasses.get(gas, Gas(gas, len(self.gasses) + 1))
-        self.gasses[gas.name] = gas
+            gas = self.gases.get(gas, Gas(gas, len(self.gases) + 1))
+        self.gases[gas.name] = gas
             
         name = "Pure "+ gas.name
         group = Group(len(self.groups)+1, name, rmin)
@@ -472,8 +511,8 @@ class Carma:
         self.nucs.append(Nuc(group, group, False, gas,  0))
         
         elem = Element("Pure "+ gas.name, len(self.elems)+1, 
-                            group, cond_rho[gas.name], "Volatile", 
-                            self.gasses[gas.name].igas)
+                            group, gas_dict[gas.name]["rho_cond"], "Volatile", 
+                            self.gases[gas.name].igas)
         group.core = elem
         self.elems[elem.name] = elem
         self.growth.append(Growth(elem, gas))
@@ -502,11 +541,11 @@ class Carma:
             The gas which was added to the simulation.
         """
         if type(gas) == type(""):
-            self.gasses[gas] = self.gasses.get(gas, 
-                                               Gas(gas, len(self.gasses)+1, 
+            self.gases[gas] = self.gases.get(gas, 
+                                               Gas(gas, len(self.gases)+1, 
                                                 **kwargs))
         else:
-            self.gasses[gas] = Gas
+            self.gases[gas] = Gas
         return gas
       
     def add_coag(self, group: Union[str, "Group"]) -> None:
@@ -519,7 +558,7 @@ class Carma:
         """
         if type(group) == type(""):
             g = self.groups.get(group, False)
-            if g:
+            if not g:
                 raise ValueError(f"Group '{group}' not found in simulation")
         elif type(group) == type(Group(-1, -1, -1)):
             g = group
@@ -537,17 +576,22 @@ class Carma:
         ----------
         nmr_dict : dict[str, ArrayLike]
             The number mixing ratio for each species.  The dictionary keys 
-            should be the name of gasses in the simulation.  The dictionary 
+            should be the name of gases in the simulation.  The dictionary 
             values should either be a float representing the mixing ratio at the
             bottom of the atmosphere or an array representing the mixing ratio
             at each atmospheric center
         """
         for key in nmr_dict.keys():
-            self.gasses[key].nmr = nmr_dict[key]
+            self.gases[key].nmr = nmr_dict[key]
     
+
+
+        
+
     def calculate_z(self, wt_mol: float | ArrayLike =None) -> None:
-        """Calculate and set the altitude structure.  Uses P and T levels to 
-        calculate the altitude structure using scale heights.
+        """Calculate and set the altitude structure in the proper format for the
+        version of carma (1D or 2D) used.  Uses P and T levels to 
+        calculate the altitude structure using scale heights.  
 
         Parameters
         ----------
@@ -567,29 +611,60 @@ class Carma:
         if (self.surface_grav is None):
             raise RuntimeError("surface_grav must be set")
 
-        H_levels = k_B * self.T_levels/(wt_mol 
-                                        * PROTON_MASS 
-                                        * self.surface_grav)
+        if self.is_2d:
+            H_levels = k_B * np.mean(self.T_levels[:, :], axis=1)/(wt_mol 
+                                            * PROTON_MASS 
+                                            * self.surface_grav)
+        else:
+            H_levels = k_B * self.T_levels/(wt_mol 
+                                * PROTON_MASS 
+                                * self.surface_grav)
 
         self.z_levels = np.zeros(self.NZ + 1)
+        self.z_centers = np.zeros(self.NZ)
 
-        for i in range(1, self.NZ+1):
-            dz = H_levels[i] * np.log(self.P_levels[i-1]/self.P_levels[i])
-            self.z_levels[i] = self.z_levels[i-1] + dz
+        if self.igridv == I_CART:
+            if self.is_2d:
+                warnings.warn("carma.igridv is set to I_CART.  For 2d carma it"
+                              "usually is set to I_LOGP.")
+            for i in range(1, self.NZ+1):
+                dz = H_levels[i] * np.log(self.P_levels[i-1]/self.P_levels[i])
+                self.z_levels[i] = self.z_levels[i-1] + dz
 
-        self.z_centers = (self.z_levels[1:] + self.z_levels[:-1])/2
+            self.z_centers = (self.z_levels[1:] + self.z_levels[:-1])/2
+
+        elif self.igridv == I_LOGP:
+            for i in range(self.NZ):
+                self.z_levels[i+1] = (H_levels[0] 
+                        * np.abs(np.log(self.P_levels[i+1]/self.P_levels[0])))
+                self.z_centers[i] =  (H_levels[0] 
+                        * np.abs(np.log(self.P_centers[i]/self.P_levels[0])))
 
 
+        else:
+            raise ("carma.igridv not set (This should not be reached unless"
+                   "you messed with carma's fields manually).")
 
-    def extend_atmosphere(self, max_P: float) -> None:
+
+    def extend_atmosphere(self, max_P: float, #TODO: See if can do non-iteratively b/c now calculating z later
+                          wt_mol=None, 
+                          method="adiabatic") -> None:
         """Extends the atmospheric structure to deeper pressures.  Modifies the
-        pressure, temperature, altitude, and eddy diffusion levels and requires
-        that they have previously been set.
+        pressure, temperature, and eddy diffusion levels and requires
+        that they have previously been set.  If ``max_P`` is less than the 
+        current maximum pressure, this method does nothing
 
         Parameters
         ----------
         max_P : float
             The pressure to which the atmosphere is extended
+        wt_mol : ArrayLike, optional
+            The mean molecular weight of the atmosphere.  If an array, each 
+            entry corresponds to one altitude level. Defaults to the mean 
+            molecular weight stored in the carma object
+        method : string, optional
+            The method to extend the atmosphere.  Options are "adiabatic"
+            and "isothermal"
 
         Notes
         -------
@@ -609,7 +684,7 @@ class Carma:
         """
 
         if ((self.P_levels is None) or (self.T_levels is None)
-             or (self.kzz_levels is None) or (self.z_levels is None)):
+             or (self.kzz_levels is None)):
 
             raise RuntimeError("P_levels, T_levels, z_levels, "
                                "and/or kzz_levels are not set")
@@ -617,51 +692,98 @@ class Carma:
         if (self.surface_grav is None or self.wt_mol is None):
             raise RuntimeError("g and/or wt_mol are not set")
 
+        if wt_mol is None: wt_mol = self.wt_mol
+
         ratio = self.P_levels[0]/self.P_levels[1]
         n = int(np.log(max_P/self.P_levels[0])/np.log(ratio)+1)
+        if n < 0: return
 
         self.NZ = self.NZ + n
 
         P_new = np.zeros(self.NZ + 1)
-        T_new = np.zeros(self.NZ + 1)
         kzz_new = np.zeros(self.NZ + 1)
-        z_new = np.zeros(self.NZ + 1)
 
         P_new[n:] = self.P_levels
-        T_new[n:] = self.T_levels
         kzz_new[n:] = self.kzz_levels
-        z_new[n:] = self.z_levels
 
-        H0 = k_B * self.T_levels[0]/(self.wt_mol * PROTON_MASS * self.surface_grav)
+        if self.is_2d:
+            T_new = np.zeros((self.NZ + 1, self.NLONGITUDE))
+            T_new[n:, :] = self.T_levels
+            H0 = k_B * (np.mean(self.T_levels[0, :])
+                        / (self.wt_mol * PROTON_MASS * self.surface_grav))
+        else:
+            T_new = np.zeros(self.NZ + 1)
+            T_new[n:] = self.T_levels
+            H0 = k_B * (self.T_levels[0]
+                        / (self.wt_mol * PROTON_MASS * self.surface_grav))
 
-        def K(P):
-            return (self.T_levels[0]/(PARMENTIER_A_COEFF 
-                                      - PARMENTIER_B_COEFF * self.T_levels[0])
-                        * (P/self.P_levels[0]) ** PARMENTIER_A_COEFF)
+        def K(P, t0, p0):
+            return (t0/(PARMENTIER_A_COEFF 
+                                      - PARMENTIER_B_COEFF * t0)
+                        * (P/p0) ** PARMENTIER_A_COEFF)
     
-        def new_T(P):
-            return PARMENTIER_A_COEFF * K(P) / (1 + PARMENTIER_B_COEFF * K(P))
+        def new_T(P, t0, p0):
+            return (PARMENTIER_A_COEFF * K(P, t0, p0) 
+                    / (1 + PARMENTIER_B_COEFF * K(P, t0, p0)))
+
+        if method == "adiabatic":
+            for i in range(n-1, -1, -1):
+                P_new[i] = self.P_levels[0] * ratio ** (n - i)
+                
+                if not self.is_2d:
+                    T_new[i] = new_T(P_new[i], 
+                                     self.T_levels[0], 
+                                     self.P_levels[0]) 
+
+                    H = k_B * T_new[i]/(self.wt_mol 
+                                        * PROTON_MASS 
+                                        * self.surface_grav)
+                    
+
+                else:
+                    for j in range(self.NLONGITUDE):
+                        T_new[i, j] = new_T(P_new[i], 
+                                            self.T_levels[0, j], 
+                                            self.P_levels[0])
+                        
+                        H = (k_B * np.mean(T_new[i, :])
+                            / (self.wt_mol * PROTON_MASS * self.surface_grav))
+                        
+                kzz_new[i] = self.kzz_levels[0] * (H/H0)**(1/3)
         
-        for i in range(n-1, -1, -1):
-            P_new[i] = self.P_levels[0] * ratio ** (n - i)
-            T_new[i] = new_T(P_new[i]) 
+        elif method == "isothermal":
+            for i in range(n-1, -1, -1):
+                P_new[i] = self.P_levels[0] * ratio ** (n - i)
+                
+                if not self.is_2d:
+                    T_new[i] = self.T_levels[0]
+                else:
+                    for j in range(self.NLONGITUDE):
+                        T_new[i, j] = self.T_levels[0, j]
+                        
+                kzz_new[i] = self.kzz_levels[0] 
 
-            H = k_B * T_new[i]/(self.wt_mol * PROTON_MASS * self.surface_grav)
-            kzz_new[i] = self.kzz_levels[0] * (H/H0)**(1/3)
 
-            dz = H * np.log(P_new[i]/P_new[i+1])
-            z_new[i] = z_new[i+1] - dz
 
-        z_new -= z_new[0]
+        # z_new -= z_new[0]
 
-        self.z_centers = (z_new[1:] + z_new[:-1])/2
+        # self.z_centers = (z_new[1:] + z_new[:-1])/2
         self.P_centers = (P_new[1:] + P_new[:-1])/2
-        self.T_centers = (T_new[1:] + T_new[:-1])/2
+        
+        if not self.is_2d:
+            self.T_centers = (T_new[1:] + T_new[:-1])/2
+        else:
+            self.T_centers = (T_new[1:, :] + T_new[:-1, :])/2
 
-        self.z_levels = z_new
+        # self.z_levels = z_new
         self.P_levels = P_new
         self.T_levels = T_new
         self.kzz_levels = kzz_new
+
+        wt_mol_new = np.zeros(self.NZ + 1)
+        wt_mol_new[n:] = wt_mol
+        wt_mol_new[:n] = wt_mol_new[n]
+        self.calculate_z(wt_mol=wt_mol_new)
 
 
     def calc_scale_height(self, calc_centers=False) -> np.ndarray:
@@ -684,6 +806,197 @@ class Carma:
             T = self.T_levels
        
         return k_B * T/(self.wt_mol * PROTON_MASS * self.surface_grav)
+
+    def set_atmospheric_parameters(self, 
+                                   rmu_0: float, 
+                                   rmu_t0: float, 
+                                   rmu_c: float,
+                                   thcond_0: float,
+                                   thcond_1: float,
+                                   thcond_2: float,
+                                   cp: float) -> None:
+        """Sets the atmospheric viscosity and thermal conductivity
+
+        Notes
+        -----
+        1. Atmospheric viscosity, `rmu`, is set by the following formula
+           (the Sutherland equation): 
+           `rmu = rmu_0 * ((rmu_t0 + tmu_c)/(T + rmu_t0)) * (T/rmu_t0) ** 1.5`
+           where `T` is the local atmospheric temperature
+        
+        2. Atmosphgeric thermal conductivity, `thcond` is set by the following
+           formula:
+           `thcond = thcond_0 + thcond_1*T + thcond_2 * T**2`
+
+        Parameters
+        ----------
+        rmu_0 : float
+            Viscosoty scaling term [Poise]
+        rmu_t0 : float
+             Viscosity reference temp [K]
+        rmu_c : float
+            Viscosity Sutherland constant [K]
+        thcond_0 : float
+            Consant thermal conductivity term [ergs/s/cm/K]
+        thcond_1 : float
+            Coefficient to linear thermal conductivity term [ergs/s/cm/K^2]
+        thcond_2 : float
+            Coefficient to quadratic thermal conductivity term [ergs/s/cm/K^3]
+        cp : float
+            Specific heat capacity of the atmosphere [erg/g/K]
+        """
+        self.atmo = {
+            "rmu_0": rmu_0,
+            "rmu_t0": rmu_t0,
+            "rmu_c": rmu_c,
+            "thcond_0": thcond_0,
+            "thcond_1": thcond_1,
+            "thcond_2": thcond_2,
+            "CP": cp
+        }
+
+    def set_atmospheric_parameters_from_defaults(self, default: str) -> None:
+        """Sets the atmospheric viscosity and thermal conductivity from a 
+        default profile.  Currently available defaults are:
+
+        - "Pure H2"
+
+
+        Parameters
+        ----------
+        default : str
+            The name of the default profile to use
+        """
+        profile = atmo_dict.get(default, -1)
+
+        if profile == -1:
+            raise KeyError(f"{default} is not a known profile.  Known profiles"
+                           f"are {list(atmo_dict.keys())}.")
+        
+        self.atmo = profile
+
+
+    def set_cloud_boundary_type(self,
+                                top_boundary_type: str,
+                                bot_boundary_type: str,
+                                ) -> None:
+        """Sets the type of boundary conditions on the cloud particle 
+        concentration.  Note that the same boundary condition type must be used 
+        for all cloud species (although different types can be chosen for the 
+        bottom of the atmosphere vs the top)
+
+        Parameters
+        ----------
+        top_boundary_type : str
+            Which type of boundary condtion to use at the top of the atmosphere.
+            Options are "fixed_conc", "fixed_flux", or "zero_grad"
+        bot_boundary_type : str
+            Which type of boundary condtion to use at the bottom of the 
+            atmosphere. Options are "fixed_conc", "fixed_flux", or "zero_grad"
+        """
+
+        if top_boundary_type not in ALLOWED_BCs: 
+            raise ValueError(f"top_boundary_type must be one of {ALLOWED_BCs}")
+
+        if bottom_boundary_type not in ALLOWED_BCs: 
+            raise ValueError(f"bottom_boundary_type must be one of "
+                             f"{ALLOWED_BCs}")
+
+        self.top_bound_type_cloud = top_boundary_type
+        self.bot_bound_type_cloud = bottom_boundary_type
+
+    def set_gas_boundary_type(self,
+                                    top_boundary_type: str,
+                                    bot_boundary_type: str,
+                                    ) -> None:
+        """Sets type of boundary conditions on the gas concentration.  
+        Note that the same boundary condition type must be used for all 
+        cloud species (although different types can be chosen for the bottom of
+        the atmosphere vs the top)
+
+        Parameters
+        ----------
+        top_boundary_type : str
+            Which type of boundary condtion to use at the top of the atmosphere.
+            Options are "fixed_conc", "fixed_flux", or "zero_grad"
+        bot_boundary_type : str
+            Which type of boundary condtion to use at the bottom of the 
+            atmosphere. Options are "fixed_conc", "fixed_flux", or "zero_grad"
+        """
+        ALLOWED_BCs = ["fixed_conc", "fixed_flux", "zero_grad"]
+
+        if top_boundary_type not in ALLOWED_BCs: 
+            raise ValueError(f"top_boundary_type must be one of {ALLOWED_BCs}")
+
+        if bottom_boundary_type not in ALLOWED_BCs: 
+            raise ValueError(f"bottom_boundary_type must be one of "
+                             f"{ALLOWED_BCs}")
+
+        self.top_bound_type_gas = top_boundary_type
+        self.bot_bound_type_gas = bottom_boundary_type
+        
+    def set_clound_boundary(self, 
+                            group: Union[str, "Group"],
+                            bot_conc=0.0, 
+                            top_conc=0.0, 
+                            bot_flux=0.0, 
+                            top_flux=0.0) -> None:
+        """Sets the boundary conditions for the group.  Throws an error if used
+        on a multi-element group (ex. a heterogeneously nucleated group)
+
+        Parameters
+        ----------
+        group : Union[str, Group]
+            The group to set the boundary conditions for
+        bot_conc : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the concentration of each bin in the group at the bottom of the 
+            atmosphere. Only used if the bottom cloud boundary condition is set 
+            to "fixed_conc". [particles/cm^3]. By default 0 for all bins
+        top_conc : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the concentration of the group at the top of the atmosphere for each  
+            bin. Only used if the top cloud boundary condition is set 
+            to "fixed_conc". [particles/cm^3]. By default 0 for all bins
+        bot_flux : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the upwards flux of the group at the bottom of the atmosphere for  
+            each bin. Only used if the bottom cloud boundary condition is set to 
+            "fixed_flux". [particles/cm^2/s]. By default 0 for all bins
+        top_flux : ArrayLike, optional
+            Either 0 or an array of NBIN elements describing
+            the concentration of the group at the bottom of the atmosphere for  
+            each bin. Only used if the cloud boundary condition is set to 
+            "fixed_conc". [particles/cm^3]. By default 0 for all bins.
+        """
+
+        if type(group) == type(""):
+            group = self.groups[group]
+
+        if group.is_het: raise ValueError("Multi-element groups must have boundary"
+                                        "conditions of 0.  The is already the"
+                                        "default behavior so this function does"
+                                        "not need to be called.")
+
+        if np.all(top_conc == 0): top_conc = np.zeros(self.NBIN)
+        if np.all(bot_conc == 0): bot_conc = np.zeros(self.NBIN)
+        if np.all(top_flux == 0): top_flux = np.zeros(self.NBIN)
+        if np.all(bot_flux == 0): bot_flux = np.zeros(self.NBIN)
+
+        if np.shape(top_conc) != (self.NBIN, ): 
+            raise ValueError("top_conc must be 0 or an arraylike of length NBIN")
+        if np.shape(bot_conc) != (self.NBIN, ): 
+            raise ValueError("bot_conc must be 0 or an arraylike of length NBIN")
+        if np.shape(top_flux) != (self.NBIN, ): 
+            raise ValueError("top_flux must be 0 or an arraylike of length NBIN")
+        if np.shape(bot_flux) != (self.NBIN, ): 
+            raise ValueError("bot_flux must be 0 or an arraylike of length NBIN")
+
+        group.boundary["top_conc"] = top_conc
+        group.boundary["bot_conc"] = bot_conc
+        group.boundary["top_flux"] = top_flux
+        group.boundary["bot_flux"] = bot_flux
+
 
     def run(self, suppress_output=False) -> None:
         """Runs the CARMA Simulation.
@@ -721,30 +1034,40 @@ class Carma:
             "io_files": {
                 "filename":            path_end,
                 "filename_restart":    path_end+"_restart",
-                "fileprefix":          "bd_",
+                "fileprefix":          "",
                 "gas_input_file":      os.path.join("inputs", "gas_input.txt"),
                 "centers_file":        os.path.join("inputs", "centers.txt"),
                 "levels_file":         os.path.join("inputs", "levels.txt"),
                 "temps_file":          os.path.join("inputs", "temps.txt"),
                 "groups_file":         os.path.join("inputs", "groups.txt"),
                 "elements_file":       os.path.join("inputs", "elements.txt"),
-                "gases_file":          os.path.join("inputs", "gasses.txt"),
+                "gases_file":          os.path.join("inputs", "gases.txt"),
                 "growth_file":         os.path.join("inputs", "growth.txt"),
                 "nuc_file":            os.path.join("inputs", "nucleation.txt"),
-                "coag_file":           os.path.join("inputs", "coagulation.txt")
+                "coag_file":           os.path.join("inputs", "coagulation.txt"),
+                "winds_file":          os.path.join("inputs", "winds.txt"),
+                "p_boundary_file":     os.path.join("inputs", "pbound.txt"),
+                "g_boundary_file":     os.path.join("inputs", "gbound.txt"),
                 },
             "physical_params" : {
                 "wtmol_air_set":        self.wt_mol,
                 "grav_set":             self.surface_grav,
                 "rplanet":              self.r_planet,
                 "velocity_avg":         self.velocity_avg,
-                "met":                  self.log_metallicity
+                "met":                  self.log_metallicity,
+                "rmu_0":                self.atmo["rmu_0"],
+                "rmu_t0":               self.atmo["rmu_t0"],
+                "rmu_c":                self.atmo["rmu_c"],
+                "thcond_0":             self.atmo["thcond_0"],
+                "thcond_1":             self.atmo["thcond_1"],
+                "thcond_2":             self.atmo["thcond_2"],
+                "CP":                   self.atmo["CP"]
                 },
             "input_params": {
                 "NZ":                   self.NZ,
                 "NELEM":                len(self.elems),
                 "NGROUP":               len(self.groups),
-                "NGAS":                 len(self.gasses),
+                "NGAS":                 len(self.gases),
                 "NBIN":                 self.NBIN,
                 "NSOLUTE":              1,
                 "NWAVE":                0,
@@ -759,7 +1082,11 @@ class Carma:
                 "NCOAG":                len(self.coags),
                 "IS_2D":                int(self.is_2d),
                 "igridv":               self.igridv,
-                "iappend":              self.iappend
+                "iappend":              self.iappend,
+                "itbnd_pc":             _bc2int(self.top_bound_type_cloud),
+                "ibbnd_pc":             _bc2int(self.bot_bound_type_cloud),
+                "itbnd_gc":             _bc2int(self.top_bound_type_gas),
+                "ibbnd_gc":             _bc2int(self.bot_bound_type_gas)
                 }        
             }
         nml = f90nml.Namelist(nml)
@@ -771,7 +1098,7 @@ class Carma:
             f.write("name\trmin\n")
             for key in self.groups.keys():
                 name = '"'+key + '"'
-                f.write(f'{name:24s}{self.groups[key].rmin:.15e}\n')
+                f.write(f'{name:35s}{self.groups[key].rmin:.15e}\n')
         
         with open(os.path.join(path, io["gases_file"]), "w+") as f:
 
@@ -780,8 +1107,8 @@ class Carma:
                     "surften_slope\tvp_metcoeff\tvplogpcoeff\tlat_heat_e\t"
                     "stofact\n")
             
-            for key in self.gasses.keys():
-                gas : "Gas" = self.gasses[key]
+            for key in self.gases.keys():
+                gas : "Gas" = self.gases[key]
                 name = '"'+key + ' Vapor"'
 
                 if   gas.gcomp == 1: vaprtn = I_VAPRTN_H2O_MURPHY2005
@@ -806,12 +1133,13 @@ class Carma:
                         f'{gas.stofact:2d}'
                         '\n')
         
+        # TODO: check for names which are too long
         with open(os.path.join(path, io["elements_file"]), "w+") as f:
             f.write("igroup\tname\trho\tprocess\tigas\n")
             for key in self.elems.keys():
                 name = '"'+key + '"'
                 proc = '"'+self.elems[key].proc + '"'
-                f.write(f'{self.elems[key].group.igroup}\t{name:24s}'
+                f.write(f'{self.elems[key].group.igroup}\t{name:35s}'
                         f'{self.elems[key].rho:2.4f}\t{proc:15s}\t'
                         f'{self.elems[key].igas:2d}\n')
         
@@ -858,30 +1186,42 @@ class Carma:
         np.savetxt(os.path.join(path, io["temps_file"]),
                     self.T_centers, 
                     delimiter='\t')
-        
-        np.savetxt(os.path.join(path, "temp_levels.txt"),
+
+        np.savetxt(os.path.join(path, "inputs", "temp_levels.txt"),
                     self.T_levels, 
                     delimiter='\t')
+        
+        if self.winds is None:
+            self.winds = np.zeros(self.NZ, dtype=float)
+        
+        with open(os.path.join(path, io["winds_file"]), "w+") as f:
+            for w in self.winds:
+                f.write(f'{w}\n')
+
+        gas_conc_bot_bc = np.zeros(len(self.gases))
 
         with open(os.path.join(path, io["gas_input_file"]), "w+") as f:
-            for key in self.gasses.keys():
+            for key in self.gases.keys():
                 f.write(key+"\t")
             f.write("\n")
             
-            for key in self.gasses.keys():
-                g = self.gasses[key]
+            for i, key in enumerate(self.gases.keys()):
+                g = self.gases[key]
                 if type(g) == type(1):
                     if g.nmr < 0:
                         raise AttributeError(f"The nmr for {g.name} "
                                              "was not set.")
                 if len(np.shape(g.nmr)) > 0:
                     f.write(f"{g.nmr[0]:10e}\t")
+                    gas_conc_bot_bc[i] = g.nmr[0] * g.wtmol_dif/self.wt_mol + 1e-50
                 else:
                     f.write(f"{g.nmr:10e}\t")
+                    gas_conc_bot_bc[i] = g.nmr * g.wtmol_dif/self.wt_mol + 1e-50
+
             f.write("\n")
             for i in range(1, self.NZ):
-                for key in self.gasses.keys():
-                    g = self.gasses[key]
+                for key in self.gases.keys():
+                    g = self.gases[key]
                     if len(np.shape(g.nmr)) > 1:
                         if len(g.nmr) != self.NZ:
                             raise ValueError(f"The array for nmr of {g.name} "
@@ -893,6 +1233,63 @@ class Carma:
                         f.write(f"{0.:10e}\t")
                 f.write("\n")
         
+        gas_conc_top_bc = np.zeros(len(self.gases))
+        gas_flux_bot_bc = np.zeros(len(self.gases))
+        gas_flux_top_bc = np.zeros(len(self.gases))
+
+        ## handle gas boundary conditions
+        for i, key in enumerate(self.gases.keys()):
+            g = self.gases[key] 
+            bc = g.boundary.get("bot_conc", -1)
+            if bc != -1:
+                gas_conc_bot_bc[i] = bc * g.wtmol_dif/self.wt_mol + 1e-50
+            
+            gas_flux_bot_bc[i] = g.boundary.get("bot_flux", 0)
+            
+            bc = g.boundary.get("top_conc", -1)
+            if (bc == -1) and (self.top_bound_type_gas == "fixed_conc"): 
+                raise RuntimeError(f"'top_conc' gas boundary condition not"
+                                f"set for {key} even though"
+                                "carma.top_bound_type_gas = 'fixed_conc'")
+            
+            gas_conc_top_bc[i] = bc * g.wtmol_dif/self.wt_mol + 1e-50
+            gas_flux_top_bc[i] = g.boundary.get("top_flux", 0)
+        
+        with open(os.path.join(path, io["g_boundary_file"]), "w+") as f:
+            f.write("gas_name\tgctop\tgcbot\tftopg\tfbotg\n")
+            for i, key in enumerate(self.gases.keys()):
+                f.write(f'"{key}"\t'
+                        f"{gas_conc_top_bc[i]}\t"
+                        f"{gas_conc_bot_bc[i]}\t"
+                        f"{gas_flux_top_bc[i]}\t"
+                        f"{gas_flux_bot_bc[i]}\n")
+
+
+        ## handle cloud bcs
+        elem_top_conc_bc = np.zeros((self.NBIN, len(self.elems)))
+        elem_bot_conc_bc = np.zeros((self.NBIN, len(self.elems)))
+        elem_top_flux_bc = np.zeros((self.NBIN, len(self.elems)))
+        elem_bot_flux_bc = np.zeros((self.NBIN, len(self.elems)))
+        for i, key in enumerate(self.elems.keys()):
+            e = self.elems[key]
+            g = e.group
+            elem_top_conc_bc[:, i] = g.boundary.get("top_conc", np.zeros(self.NBIN))
+            elem_top_flux_bc[:, i] = g.boundary.get("top_flux", np.zeros(self.NBIN))
+            elem_bot_conc_bc[:, i] = g.boundary.get("bot_conc", np.zeros(self.NBIN))
+            elem_bot_flux_bc[:, i] = g.boundary.get("bot_flux", np.zeros(self.NBIN))
+
+
+        with open(os.path.join(path, io["p_boundary_file"]), "w+") as f:
+            f.write("elem_name\tibin\tpctop\tpcbot\tftopp\tfbotp\n")
+            for ibin in range(self.NBIN):
+                for j, key in enumerate(self.elems.keys()):
+                    f.write(f'"{key}"\t'
+                            f"{ibin}\t"
+                            f"{elem_top_conc_bc[i, j]}\t"
+                            f"{elem_bot_conc_bc[i, j]}\t"
+                            f"{elem_top_flux_bc[i, j]}\t"
+                            f"{elem_bot_flux_bc[i, j]}\n")
+
         with _cd(path):
 
             try:
@@ -917,14 +1314,19 @@ class Carma:
             except Exception as e:
                 print(e)
             
-    def read_results(self) -> None:
+    def read_results(self, read_diag=False) -> None:
         """Reads in results of the carma simulation.  
+
+        Parameters
+        ----------
+        If true reads in the microphysical rates and core mass fraction.
+        Defaults to False.
 
         See Also
         --------
         carmapy.Results()
         """
-        self.results = Results(self)
+        self.results = Results(self, read_diag=read_diag)
         
         
     
@@ -971,6 +1373,12 @@ class Element:
         self.proc:  str     = proc
         self.igas:  int     = igas #TODO chance to reference gas directly
     
+
+_DEFAULT_GAS_BC = {"bot_conc": -1,
+                    "top_conc": -1,
+                    "bot_flux": 0,
+                    "top_flux": 0}
+
 class Gas: 
     """An object representing a limiting gas resevoir for a condensate.  Attributes
     not defined in ``**kwargs`` will be populated from carmapy defaults, if available
@@ -1000,12 +1408,32 @@ class Gas:
     
     2. The surface tension of the condensate is calculated as follows:
 
-        ``surften = surften_0 - surften_slope * (T - 273.15)``
+        ``surften = surften_0 - surften_slope * (T)``
 
         with ``T`` in K and ``surften`` in dyne / cm
 
     3. If not directly given, the latent heat of evaportation is calculated
        folowing Charnay et al. 2015 [2]_
+
+       ``lat_heat_e = vp_coeff * log(10) * R/wtmol_dif``
+
+       where R is the ideal gas constant
+
+    4. The ``gas.boundary`` dictionary is structured as follows:
+        - ["bot_conc"] describes the number mixing ratio of the gas at the base
+          of the atmosphere (only used if the bottom gas boundary condition is
+          set to "fixed_conc").  If not set, uses the value of `gas.nmr` at the
+          bottom of the atmosphere instead.
+        - ["top_conc"] describes the number mixing ratio of the gas at the top
+          of the atmosphere (only used if the top gas boundary condition is
+          set to "fixed_conc").  Will throw an error if used but not set.
+        - ["bot_flux"] describes the upwards flux of the gas to the base
+          of the atmosphere (only used if the bottom gas boundary condition is
+          set to "fixed_flux") [g/cm^2/s].  Defaults to 0 if not set.
+        - ["top_flux"] describes the downwards flux of the gas at the top
+          of the atmosphere (only used if the top gas boundary condition is
+          set to "fixed_flux"). [g/cm^2/s] Defaults to 0 if not set.
+
 
     References
     ----------
@@ -1029,35 +1457,40 @@ class Gas:
     """ Density of the condensate formed by the gas [g/cm³]"""
 
     surften_0: float 
-    """ Surface tension at 0 K assuming linear trend holds (see notes) [dyne/cm] """
+    """ Surface tension at 0 K assuming linear trend holds (see note 2) [dyne/cm] """
 
     surften_slope: float = 0
-    """ Slope of surface tension with temperature (see notes) [dyne/cm/K]"""
+    """ Slope of surface tension with temperature (see note 2) [dyne/cm/K]"""
 
     coldia: float 
     """ Collisional diameter of the condensate [cm] """
 
     vp_offset: float 
-    """ Constant term in vapor pressure equation (see notes)"""
+    """ Constant term in vapor pressure equation (see note 1)"""
 
     vp_tcoeff: float 
-    """ Coeficcient to temperature term in vapor pressure equation (see notes) [K]"""
+    """ Coeficcient to temperature term in vapor pressure equation (see note 1) [K]"""
 
     vp_metcoeff: float = 0
-    """ Coeficcient to metallicity term in vapor pressure equation (see notes)"""
+    """ Coeficcient to metallicity term in vapor pressure equation (see note 1)"""
 
     vp_logpcoeff: float = 0
-    """ Coeficcent to pressure term in vapor pressure equation (see notes)"""
+    """ Coeficcent to pressure term in vapor pressure equation (see note 1)"""
 
     is_typeIII: bool = False
     """ True if condensation reaction is a Type III reaction (see Helling & Woitke 2006) [1]_"""
 
     lat_heat_e: float = -1
-    """ Latent heat of evaporation, if not provided derived from other inputs (see notes) """
+    """ Latent heat of evaporation, if not provided derived from other inputs (see note 3) """
 
     stofact: int
     """ The stoichiometry factor between the gas phase and the condensate """
     
+    hill_formula: str
+    """ The chemical formula of the condensate in hill notation"""
+
+    boundary: dict
+    """ The boundary conditions for the gas (see note 4) """
 
     def __init__(self, 
                  name: str, 
@@ -1072,7 +1505,7 @@ class Gas:
 
         self.wtmol          = kwargs.get("wtmol",         defaults["wtmol"])
         self.wtmol_dif      = kwargs.get("wtmol_dif",     defaults["wtmol_dif"])
-        self.gcomp          = kwargs.get("gcomp",         defaults["gcomp"])
+        self.gcomp          = kwargs.get("gcomp",         defaults.get("gcomp", 0))
         self.rho_cond       = kwargs.get("rho_cond",      defaults["rho_cond"])
         self.surften_0      = kwargs.get("surften_0",     defaults["surften_0"])
         self.surften_slope  = kwargs.get("surften_slope", defaults["surften_slope"])
@@ -1083,7 +1516,9 @@ class Gas:
         self.vp_logpcoeff   = kwargs.get("vp_logpcoeff",  defaults["vp_logpcoeff"])
         self.is_typeIII     = kwargs.get("is_typeIII",    defaults["is_typeIII"])
         self.stofact        = kwargs.get("stofact",       defaults["stofact"])
-        self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults["lat_heat_e"])
+        self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
+        self.hill_formula   = kwargs.get("hill_formula",  defaults["hill_formula"])
+        self.boundary       = kwargs.get("boundary",      _DEFAULT_GAS_BC)
 
         
     
@@ -1148,13 +1583,37 @@ class Group:
         <Core>" (ie "Mg2SiO4 on TiO2") for heterogeneously nucleating groups
     rmin : float
         The minimum size of the condensate
+
+    Notes
+    -----
+    1. The ``group.boundary`` describes the boundary conditions of the 
+    particulate matter in the atmosphere.  Currently, CARMApy only supports 
+    non-zero boundary conditions for single element groups (ex. homogeneously
+    nucleated groups).  Noting that each of these entries is either 0 or an 
+    array of NBIN elements, the structure of the dictionary is as follows:
+        - ["bot_conc"] describes the concentration of the group at the base
+          of the atmosphere (only used if the bottom cloud boundary condition is
+          set to "fixed_conc"). [particles/cm^3]  If not set, defaults to 0.
+        - ["top_conc"] describes the concentration of the group at the top
+          of the atmosphere (only used if the top cloud boundary condition is
+          set to "fixed_conc").  [particles/cm^3] If not set, defaults to 0.
+        - ["bot_flux"] describes the upwards flux of the group to the base
+          of the atmosphere (only used if the bottom cloud boundary condition is
+          set to "fixed_flux") [particles/cm^2/s].  Defaults to 0 if not set.
+        - ["top_flux"] describes the downwards flux of the group at the top
+          of the atmosphere (only used if the top cloud boundary condition is
+          set to "fixed_flux"). [particles/cm^2/s] Defaults to 0 if not set.
+
     """
 
     core : "Element"
-    """The element which represents the original seed particle"""
+    """ The element which represents the original seed particle. """
 
     mantle: "Element"
-    """The element on the surface of the cloud particle"""
+    """ The element on the surface of the cloud particle. """
+
+    boundary: dict
+    """ The boundary conditions for the group (see note 1). """
 
 
     def __init__(self, igroup: int, name: str, rmin: float) -> None:
@@ -1163,6 +1622,7 @@ class Group:
         self.rmin = rmin
         self.core = None
         self.mantle = None
+        self.boundary = {}
     
     def coreify(self, ielem: int, group: "Group", gas_name: str) -> Element:
         """Create a core element from the only element of the current group.
@@ -1194,6 +1654,8 @@ class Group:
         elem = Element(name, ielem, group, core_elem.rho, "Core Mass", core_elem.igas)
         group.core = elem
         return elem
+    
+
 
 
 class Coag:

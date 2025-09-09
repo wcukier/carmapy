@@ -47,8 +47,12 @@ nbsphinx_execute = 'always'
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_book_theme'
 html_static_path = ['_static']
+html_logo = "logo.png"
+html_theme_options = {
+    'logo_only': True,
+}
 
 nbsphinx_prolog = """
 {% set docname = env.doc2path(env.docname, base=None) %}

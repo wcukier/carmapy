@@ -16,7 +16,11 @@ dependencies = [
     "f90nml",
 ]
 
+readme = "README.md"
+license-files = ["LICEN[CS]E*"]
+
 [tool.setuptools_scm]
+local_scheme = "no-local-version"
 
 [build-system]
 requires = ["setuptools", "setuptools-scm>=8"]

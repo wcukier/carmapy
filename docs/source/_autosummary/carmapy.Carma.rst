@@ -20,12 +20,15 @@
       ~Carma.add_het_group
       ~Carma.add_hom_group
       ~Carma.add_kzz
+      ~Carma.add_vertical_winds
       ~Carma.add_z
       ~Carma.calc_scale_height
       ~Carma.calculate_z
       ~Carma.extend_atmosphere
       ~Carma.read_results
       ~Carma.run
+      ~Carma.set_atmospheric_parameters
+      ~Carma.set_atmospheric_parameters_from_defaults
       ~Carma.set_nmr
       ~Carma.set_physical_params
       ~Carma.set_stepping
@@ -69,12 +72,15 @@
 .. automethod:: Carma.add_het_group
 .. automethod:: Carma.add_hom_group
 .. automethod:: Carma.add_kzz
+.. automethod:: Carma.add_vertical_winds
 .. automethod:: Carma.add_z
 .. automethod:: Carma.calc_scale_height
 .. automethod:: Carma.calculate_z
 .. automethod:: Carma.extend_atmosphere
 .. automethod:: Carma.read_results
 .. automethod:: Carma.run
+.. automethod:: Carma.set_atmospheric_parameters
+.. automethod:: Carma.set_atmospheric_parameters_from_defaults
 .. automethod:: Carma.set_nmr
 .. automethod:: Carma.set_physical_params
 .. automethod:: Carma.set_stepping

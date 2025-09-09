@@ -64,15 +64,10 @@ subroutine vertadv(carma, cstate, vtrans, cvert, itbnd, ibbnd, cvert_tbnd, cvert
       vertadvu = vtrans
     end where
   else
-  
-!    if( ibbnd .eq. I_FLUX_SPEC ) vtrans(1) = 0._f
-!    if( itbnd .eq. I_FLUX_SPEC ) vtrans(NZP1) = 0._f
+
     if( ibbnd .eq. I_FLUX_SPEC ) vtrans(1) = winds(1)								!PETER
     if( itbnd .eq. I_FLUX_SPEC ) vtrans(NZP1) = winds(NZ)							!PETER
-!    if( ibbnd .eq. I_FLUX_SPEC ) vtrans(1) = 8.0e-6_f / (rhoa(1) / (xmet(1)*ymet(1)*zmet(1)))                  !PETER
-!    if( itbnd .eq. I_FLUX_SPEC ) vtrans(NZP1) = 8.0e-6_f / (rhoa(NZ) / (xmet(NZ)*ymet(NZ)*zmet(NZ)))           !PETER
-!    if( ibbnd .eq. I_FLUX_SPEC ) vtrans(1) = -8.0e-6_f / (rhoa(1) / (xmet(1)*ymet(1)*zmet(1)))                  !PETER
-!    if( itbnd .eq. I_FLUX_SPEC ) vtrans(NZP1) = -8.0e-6_f / (rhoa(NZ) / (xmet(NZ)*ymet(NZ)*zmet(NZ)))           !PETER
+
             
     ! Set some constants
     nzm1 = max( 1, NZ-1 )

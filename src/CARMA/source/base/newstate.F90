@@ -59,17 +59,7 @@ subroutine newstate(carma, cstate, rc)
   1 format(/,'newstate::ERROR - Substep failed, maximum retries execeed. : iz=',i4,',isubstep=',i12, &
              ',ntsubsteps=',i12,',nretries=',F9.0)
 
-	!call cpu_time(t1)	!PETER
 
-  !write(*,*) "before vertical"
-
-!  do iz = 1,NZ
-!    do ibin = 1,NBIN
-!      do ielem = 1,NELEM
-!        write(*,*) 'before vertical',iz,ibin,ielem,pc(iz,ibin,ielem)
-!      enddo
-!    enddo
-!  enddo
   ! Calculate changes due to vertical transport
   if (do_vtran) then
   
@@ -77,9 +67,6 @@ subroutine newstate(carma, cstate, rc)
     if (rc < RC_OK) return
   endif
 
-  !write(*,*) "after vertical"
-
-	!call cpu_time(t2)	!PETER
   
   ! If doing doing incloud processing, then scale the parameters for incloud concentrations.
   ! 
@@ -122,17 +109,6 @@ subroutine newstate(carma, cstate, rc)
     end do
   end if
 
-	!call cpu_time(t3)	!PETER
-
-  !write(*,*) "before microslow"
-
-!  do iz = 1,NZ
-!    do ibin = 1,NBIN
-!      do ielem = 1,NELEM
-!        write(*,*) 'after vertical, before microslow',iz,ibin,ielem,pc(iz,ibin,ielem)
-!      enddo
-!    enddo
-!  enddo
   
   ! Calculate changes in particle concentrations due to microphysical
   ! processes, part 1.  (potentially slower microphysical calcs)
@@ -141,19 +117,6 @@ subroutine newstate(carma, cstate, rc)
     call microslow(carma, cstate, rc)
     if (rc < RC_OK) return
   endif
-
-!  do iz = 1,NZ
-!    do ibin = 1,NBIN
-!      do ielem = 1,NELEM
-!        write(*,*) 'after microslow, before microfast',iz,ibin,ielem,pc(iz,ibin,ielem)
-!      enddo
-!    enddo
-!  enddo
-
-
-  !write(*,*) "after microslow"
-
-	!call cpu_time(t4)	!PETER
   
   ! If there is any microsphysics that happens on a faster time scale,
   ! then check to see if the time step needs to be subdivided and then
@@ -186,29 +149,6 @@ subroutine newstate(carma, cstate, rc)
       told(:) = t(:)
     endif
 
-    if (do_printdiag) then 													!PETER
-      write(lundiag,*) 'PART 5: NUCLEATION, CONDENSATION, EVAPORATION'							!PETER
-      write(lundiag,*) '****************************************'						!PETER
-      write(lundiag,*) 'Z: ALTITUDE LEVEL INDEX'								!PETER
-      write(lundiag,*) 'BIN: SIZE BIN'										!PETER
-      write(lundiag,*) 'ELEM: ELEMENT INDEX (BIN =/= 0) OR GAS INDEX (BIN = 0)'					!PETER
-      write(lundiag,*) 'NSUB: NUMBER OF SUBSTEPS TAKEN'								!PETER
-      write(lundiag,*) 'RNUCPE1: PRODUCTION RATE DUE TO NUCLEATION (1) [#/cm3/s]'					!PETER
-      write(lundiag,*) 'RHOMPE: PRODUCTION RATE DUE TO BINARY HOMOGENEUS NUCLEATION OF H2O/H2SO4 [#/cm3/s]'		!PETER
-      write(lundiag,*) 'GROWPE: PRODUCTION RATE DUE TO CONDENSATIONAL GROWTH [#/cm3/s]'					!PETER
-      write(lundiag,*) 'RNUCLG: LOSS RATE DUE TO NUCLEATION [#/cm3/s]'							!PETER
-      write(lundiag,*) 'GROWLG: LOSS RATE DUE TO CONDENSATIONAL GROWTH [#/cm3/s]'						!PETER
-      write(lundiag,*) 'EVAPLG: LOSS RATE DUE TO EVAPORATION [#/cm3/s]'							!PETER
-      write(lundiag,*) 'RNUCPE2: PRODUCTION RATE DUE TO NUCLEATION (2) [#/cm3/s]'						!PETER
-      write(lundiag,*) 'EVAPPE: PRODUCTION RATE DUE TO EVAPORATION [#/cm3/s]'						!PETER
-      write(lundiag,*) 'GASPROD: PRODUCTION RATE OF GAS [g/cm3/s]'							!PETER
-      write(lundiag,*) 'NETFLUX: NETFLUX OF NUMBER DENSITY DUE TO THE ABOVE PROCESSES [#/cm3/s]'				!PETER
-      write(lundiag,*) '****************************************'							!PETER
-      write(lundiag,'(2A5,A8,A6,10A11)') 'Z', 'BIN', 'ELEM', 'NSUB', 'RNUCPE1', 'RHOMPE', 'GROWPE', 'RNUCLG', &      	!PETER
-                                                         'GROWLG', 'EVAPLG', 'RNUCPE2', 'EVAPPE', 'GASPROD', 'NETFLUX'    	       	!PETER
-    end if																!PETER
-
-      
     do iz = kb,ke,idk
 
       ! Compute or specify number of sub-timestep intervals for current spatial point
@@ -233,7 +173,6 @@ subroutine newstate(carma, cstate, rc)
       
 
       !!!!!!!!!!!!!!!!!!!!!!! Start Substepping !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
       do while (takeSteps)
       
         ! Compute sub-timestep time interval for current spatial grid point
@@ -318,7 +257,6 @@ subroutine newstate(carma, cstate, rc)
           ! If there was a retry warning message and substepping is enabled, then retry
           ! the operation with more substepping.
           if (rc == RC_WARNING_RETRY) then
-		        !write(*,*) 'RETRY WARNING'
             if (do_substep) then
           
               ! Only retry for so long ...
@@ -365,57 +303,26 @@ subroutine newstate(carma, cstate, rc)
             end if            
           end if
 
-       ! call cpu_time(t1)	!PETER
-
-        !  if (do_printdiag) then											!PETER
-        !    if (.not. takeSteps) then											!PETER
-              do igas = 1, NGAS                                                                                         !PETER
-                  gasprod_tot(iz,igas) = gasprod_tot(iz,igas) + gasprod(igas)*dtime                                     !PETER
-              end do                                                                                                    !PETER
-              do ielem = 1, NELEM                                                                                       !PETER
-                do ibin = 1, NBIN                                                                                       !PETER	
-                  igroup = igelem(ielem)                                                                                !PETER
-                  rnucpeup_tot(iz,ibin,ielem) = rnucpeup_tot(iz,ibin,ielem) + rnucpeup(ibin,ielem)*dtime                !PETER
-                  rhompe_tot(iz,ibin,ielem) = rhompe_tot(iz,ibin,ielem) + rhompe(ibin,ielem)*dtime                      !PETER
-                  growpe_tot(iz,ibin,ielem) = growpe_tot(iz,ibin,ielem) + growpe(ibin,ielem)*dtime                      !PETER
-                  rnuclg_tot(iz,ibin,igroup) = rnuclg_tot(iz,ibin,igroup) + &
-                        sum(rnuclg(ibin,igroup,:))*pc_psolve(iz,ibin,ielem)*dtime !PETER
-                  growlg_tot(iz,ibin,igroup) = growlg_tot(iz,ibin,igroup) + growlg(ibin,igroup)*pc_psolve(iz,ibin,ielem)*dtime  !PETER
-                   !write(*,*) iz,ibin,ielem,igroup,growlg(ibin,igroup), pc_psolve(iz,ibin,ielem), dtime
-                  evaplg_tot(iz,ibin,igroup) = evaplg_tot(iz,ibin,igroup) + evaplg(ibin,igroup)*pc_psolve(iz,ibin,ielem)*dtime  !PETER
-                  rnucpe_tot(iz,ibin,ielem) = rnucpe_tot(iz,ibin,ielem) + rnucpe(ibin,ielem)*dtime                              !PETER
-                  evappe_tot(iz,ibin,ielem) = evappe_tot(iz,ibin,ielem) + evappe(ibin,ielem)*dtime                              !PETER
-                end do                                                                                                          !PETER
-              end do   
-
-                                                                                     !PETER	   
-
-        ! call cpu_time(t2)	!PETER
-         !   end if													!PETER
-         ! end if													!PETER
-        !write(*,*) iz, t2 - t1
+          do igas = 1, NGAS                                                                                         !PETER
+              gasprod_tot(iz,igas) = gasprod_tot(iz,igas) + gasprod(igas)*dtime                                     !PETER
+          end do                                                                                                    !PETER
+          do ielem = 1, NELEM                                                                                       !PETER
+            do ibin = 1, NBIN                                                                                       !PETER	
+              igroup = igelem(ielem)                                                                                !PETER
+              rnucpeup_tot(iz,ibin,ielem) = rnucpeup_tot(iz,ibin,ielem) + rnucpeup(ibin,ielem)*dtime                !PETER
+              rhompe_tot(iz,ibin,ielem) = rhompe_tot(iz,ibin,ielem) + rhompe(ibin,ielem)*dtime                      !PETER
+              growpe_tot(iz,ibin,ielem) = growpe_tot(iz,ibin,ielem) + growpe(ibin,ielem)*dtime                      !PETER
+              rnuclg_tot(iz,ibin,igroup) = rnuclg_tot(iz,ibin,igroup) + &
+                    sum(rnuclg(ibin,igroup,:))*pc_psolve(iz,ibin,ielem)*dtime !PETER
+              growlg_tot(iz,ibin,igroup) = growlg_tot(iz,ibin,igroup) + growlg(ibin,igroup)*pc_psolve(iz,ibin,ielem)*dtime  !PETER
+                !write(*,*) iz,ibin,ielem,igroup,growlg(ibin,igroup), pc_psolve(iz,ibin,ielem), dtime
+              evaplg_tot(iz,ibin,igroup) = evaplg_tot(iz,ibin,igroup) + evaplg(ibin,igroup)*pc_psolve(iz,ibin,ielem)*dtime  !PETER
+              rnucpe_tot(iz,ibin,ielem) = rnucpe_tot(iz,ibin,ielem) + rnucpe(ibin,ielem)*dtime                              !PETER
+              evappe_tot(iz,ibin,ielem) = evappe_tot(iz,ibin,ielem) + evappe(ibin,ielem)*dtime                              !PETER
+            end do                                                                                                          !PETER
+          end do   
         end do
       end do
-!      if (do_printdiag) then													!PETER
-!      do igas = 1, NGAS														!PETER
-!        write(lundiag,'(2I5,2I7,10E11.3)') iz, 0, igas, ntsubsteps, 0, 0, 0, 0, 0, 0, 0, 0, &					!PETER
-!							     gasprod_tot(igas), gasprod_tot(igas)				!PETER
-!      end do															!PETER
-!      do ielem = 1, NELEM													!PETER
-!        do ibin = 1, NBIN													!PETER	
-!	  igroup = igelem(ielem)												!PETER
-!            write(lundiag,'(2I5,2I7,10E11.3)') iz, ibin, ielem, ntsubsteps, rnucpeup_tot(ibin,ielem), &				!PETER
-!								 rhompe_tot(ibin,ielem), growpe_tot(ibin,ielem), &		!PETER
-!                                                  		 rnuclg_tot(ibin,igroup), growlg_tot(ibin,igroup), &		!PETER
-!					                         evaplg_tot(ibin,igroup), rnucpe_tot(ibin,ielem), & 		!PETER
-!         					                 evappe_tot(ibin,ielem), 0, rnucpeup_tot(ibin,ielem) + &	!PETER
-!								 rhompe_tot(ibin,ielem) + growpe_tot(ibin,ielem) - &		!PETER
-!								 rnuclg_tot(ibin,igroup) - growlg_tot(ibin,igroup) - &		!PETER
-!								 evaplg_tot(ibin,igroup) + rnucpe_tot(ibin,ielem) + &		!PETER
-!								 evappe_tot(ibin,ielem)						!PETER
-!        end do															!PETER
-!      end do															!PETER
-!      end if															!PETER
 
 
 
@@ -430,7 +337,7 @@ subroutine newstate(carma, cstate, rc)
       if (do_substep) zsubsteps(iz) = ntsubsteps
     end do
 
-    if (do_printdiag) write(lundiag,*) ' '		!PETER
+    ! if (do_printdiag) write(lundiag,*) ' '		!PETER
   
     ! Restore normal timestep
     dtime = dtime_orig
@@ -446,8 +353,8 @@ subroutine newstate(carma, cstate, rc)
 
       t(:) = t(:) + d_t(:)
     end if
-    
-    ! Do the detrainment, if it was being done in the growth loop.
+  
+  ! Do the detrainment, if it was being done in the growth loop.
     if (do_detrain) then
       pc(:,:,:)    = pc(:,:,:) + pcd(:,:,:)
       
@@ -456,14 +363,12 @@ subroutine newstate(carma, cstate, rc)
     end if
   end if
 
-	!call cpu_time(t5)	!PETER
-
   ! Calculate average heating rates.
   if (do_grow) then
     rlheat(:)    = rlheat(:)   / dtime
     partheat(:)  = partheat(:) / dtime
   end if
-  
+    
   ! Convert particles, gas and temperature to gridbox average values
   !
   ! NOTE: For particles that are not in the cloud, the unchanged value outside of the
@@ -483,13 +388,13 @@ subroutine newstate(carma, cstate, rc)
       else
         do ibin = 1, NBIN
           pc(:, ibin, ielem)   = (1._f - scale_cldfrc(:)) * &
-		pc_orig(:, ibin, ielem) + pc(:, ibin, ielem) * scale_cldfrc(:)
+              pc_orig(:, ibin, ielem) + pc(:, ibin, ielem) * scale_cldfrc(:)
         end do
       end if
     end do
         
     t(:) = (1._f - scale_cldfrc(:)) * t_orig(:) + scale_cldfrc(:) * t(:)
-    
+  
     if (do_grow) then
       rlheat(:)   = scale_cldfrc(:) * rlheat(:)
       partheat(:) = scale_cldfrc(:) * partheat(:)
@@ -498,7 +403,7 @@ subroutine newstate(carma, cstate, rc)
     if (do_substep) then
       t(:) = t(:) + (1._f - scale_cldfrc(:)) * d_t(:)
     end if
-    
+  
     do igas = 1, NGAS
       gc(:, igas) = (1._f - scale_cldfrc(:)) * gc_orig(:, igas) + gc(:, igas) * scale_cldfrc(:)
     
@@ -515,17 +420,6 @@ subroutine newstate(carma, cstate, rc)
   end if
 
 
-	!call cpu_time(t6)  	!PETER  
-
-!  do iz = 1,NZ
-!    do ibin = 1,NBIN
-!      do ielem = 1,NELEM
-!        write(*,*) 'after microfast',iz,ibin,ielem,pc(iz,ibin,ielem)
-!      enddo
-!    enddo
-!  enddo
-        !write(*,*) 'after all'
-       ! write(*,*) (t2-t1)*100._f, (t3-t2)*100._f,(t4-t3)*100._f,(t5-t4)*100._f,(t6-t5)*100._f	!PETER
 
   ! Return to caller with new state computed 
   return

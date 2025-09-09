@@ -10,6 +10,8 @@ import os
 SRC = os.path.dirname(os.path.dirname(__file__))
 import io
 import sys
+from typing import Union
+
 
 def get_fastchem_abundances(T : np.ndarray, 
                             P : np.ndarray, 
@@ -37,7 +39,6 @@ def get_fastchem_abundances(T : np.ndarray,
       P-T point
 
   """
-    
   temperature = T
   pressure = np.array(P) / BAR_TO_BARYE
 
@@ -60,7 +61,8 @@ def get_fastchem_abundances(T : np.ndarray,
     
     #scale the element abundances, except those of H and He
   for j in range(0, fastchem.getElementNumber()):
-    if fastchem.getElementSymbol(j) != 'H' and fastchem.getElementSymbol(j) != 'He':
+    if ((fastchem.getElementSymbol(j) != 'H')
+         and (fastchem.getElementSymbol(j) != 'He')):
       element_abundances[j] *= metallicity
       
   fastchem.setElementAbundances(element_abundances)
@@ -71,7 +73,9 @@ def get_fastchem_abundances(T : np.ndarray,
     
   number_densities = np.array(output_data.number_densities)
 
-  nmr = number_densities / np.repeat((P/(k_B * T))[:, np.newaxis], number_densities.shape[1], axis=1)
+  nmr = number_densities / np.repeat((P/(k_B * T))[:, np.newaxis],
+                                      number_densities.shape[1], 
+                                      axis=1)
   
   ret = []
   for s in species:
@@ -86,8 +90,8 @@ def get_fastchem_abundances(T : np.ndarray,
 def saturation_vapor_pressure(P: ArrayLike, 
                        T:  ArrayLike, 
                        log_met: float,
-                       gas: str) -> ArrayLike:
-  """Calculates the saturation vapor pressure for carmapy default gasses.
+                       gas: Union[str, "Gas"]) -> ArrayLike:
+  """Calculates the saturation vapor pressure for carmapy default gases.
 
   Parameters
   ----------
@@ -97,8 +101,8 @@ def saturation_vapor_pressure(P: ArrayLike,
       Temperature [K]
   log_met : float
       Log solar metallicity
-  gas : str
-      Name of the carmapy default gas
+  gas : Union[str, Gas]
+      carma Gas object or name of the carmapy default gas
 
   Returns
   -------
@@ -106,10 +110,16 @@ def saturation_vapor_pressure(P: ArrayLike,
       The saturation vapor pressure of the gas at each requested P-T point
   """
 
-  offset     = gas_dict[gas].get("vp_offset", 0)
-  T_coeff    = gas_dict[gas].get("vp_tcoeff", 0)
-  met_coeff  = gas_dict[gas].get("vp_metcoeff", 0)
-  logp_coeff = gas_dict[gas].get("vp_logpcoeff", 0)
+  if type(gas) == type(""):
+    offset     = gas_dict[gas].get("vp_offset", 0)
+    T_coeff    = gas_dict[gas].get("vp_tcoeff", 0)
+    met_coeff  = gas_dict[gas].get("vp_metcoeff", 0)
+    logp_coeff = gas_dict[gas].get("vp_logpcoeff", 0)
+  else:
+    offset     = gas.vp_offset
+    T_coeff    = gas.vp_tcoeff
+    met_coeff  = gas.vp_metcoeff
+    logp_coeff = gas.vp_logpcoeff
 
   return 1e6 * 10**(offset
               - T_coeff/T
@@ -123,20 +133,24 @@ def _populate_fastchem_abundances(carma: "Carma",
   species = []
   
   
-  for gas in carma.gasses.keys():
-      s = gas_dict[gas].get("fastchem_species", -1) 
+  for gas in carma.gases.keys():
+      s = gas_dict[gas].get("hill_formula", -1) 
       
       if s == -1:
-          raise ValueError(f"{gas} is not currently supported by the carmapy fastchem interface")
+          raise ValueError(f"{gas} is not currently supported by the carmapy "
+                           "fastchem interface")
       species.append(s)
         
-  abund = get_fastchem_abundances(carma.T_centers, carma.P_centers, species, metallicity)
+  abund = get_fastchem_abundances(carma.T_centers, 
+                                  carma.P_centers, 
+                                  species, 
+                                  metallicity)
   
   
   nmr_dict = {}
   
-  for i in range(len(carma.gasses.keys())):
-    nmr_dict[list(carma.gasses.keys())[i]] = abund[i, 0]
+  for i in range(len(carma.gases.keys())):
+    nmr_dict[list(carma.gases.keys())[i]] = abund[i, 0]
   
   for key in override.keys():
     nmr_dict[key] = override[key]
@@ -150,7 +164,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   Parameters
   ----------
   carma : Carma
-      A carma object with initialized gasses, P-T structure, and log metallicity
+      A carma object with initialized gases, P-T structure, and log metallicity
   species : str
       Either the name of the carmapy default gas to find the cloud base of or 
       the hill notation chemical formula of the species
@@ -163,20 +177,31 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
     The temperature at the cloud base [K]
   """
 
-  s = gas_dict.get(species, {}).get("fastchem_species", species)
+  species = carma.gases[species]
+  s = species.hill_formula
 
   P = carma.P_centers
   T = carma.T_centers
 
+  # if carma.is_2d: T = np.mean(T, axis=1)
+  if carma.is_2d: T = T[:, 0] # TODO
+
+
   metallicity = 10**carma.log_metallicity
 
-  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), species)
+  # print(s)
+
+# TODO make T, P ordering consistent
+  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), species) 
   abund = get_fastchem_abundances(T, P, [s], metallicity)[0, :]
 
   i = 0
   while(sat_vp[i]/P[i] > abund[i]): 
     i += 1
-    if (i == len(P)): return P[i-1], T[i-1]
+    # print(f"{i:2d}\t{sat_vp[i]/P[i]:.2e}\t{abund[i]:.2e}\t{T[i]:.0f}\t{P[i]:.2e}\t{sat_vp[i]:2e}")
+    if (i == len(P)): 
+      print(f"{s} does not condense")
+      return P[i-1], T[i-1]
   
   guess = T[i]
 
@@ -184,10 +209,17 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
 
   def _diff(T):
 
-    sat_vp = saturation_vapor_pressure(p_t(T), T, np.log10(metallicity), species)/p_t(T)
-    abund = get_fastchem_abundances(np.array(T), np.array(p_t(T)), [gas_dict[species]["fastchem_species"]], metallicity)[0, :]
+    sat_vp = saturation_vapor_pressure(p_t(T),
+                                       T, 
+                                       np.log10(metallicity), 
+                                       species) / p_t(T)
+    
+    abund = get_fastchem_abundances(np.array(T), 
+                                    np.array(p_t(T)), 
+                                    [s], 
+                                    metallicity)[0, :]
 
-    return abund- sat_vp
+    return abund - sat_vp
   
 
   root = scipy.optimize.root(_diff, guess).x[0]
@@ -200,25 +232,33 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   Parameters
   ----------
   carma : Carma
-      A carma object with initialized gasses, P-T structure, and log metallicity
+      A carma object with initialized gases, P-T structure, and log metallicity
 
   """
   P = carma.P_centers
   T = carma.T_centers
 
+  if carma.is_2d: T = np.mean(T, axis=1)
+
   p_t = interp1d(T, P)
 
   nmr_dict = {"H2O": 0}
 
-  for s in list(carma.gasses.keys())[1:]:
+  for s in list(carma.gases.keys())[1:]:
 
     P_int, T_int = find_cloud_base(carma, s)
 
-    fast_chem_gas = gas_dict[s].get("fastchem_species", -1) 
-    if fast_chem_gas == -1: raise ValueError("{s} is not currently supported by the carmapy fastchem interface")
+    fast_chem_gas = carma.gases[s].hill_formula
+    if fast_chem_gas == -1: 
+      raise ValueError("{s} is not currently supported by "
+                        "the carmapy fastchem interface")
 
     metallicity = 10 ** carma.log_metallicity
-    nmr_dict[s] = get_fastchem_abundances(np.array([T_int]), np.array([P_int]), [fast_chem_gas], metallicity)[0]
+
+    nmr_dict[s] = get_fastchem_abundances(np.array([T_int]), 
+                                          np.array([P_int]), 
+                                          [fast_chem_gas], 
+                                          metallicity)[0]
   
     carma.set_nmr(nmr_dict)
 

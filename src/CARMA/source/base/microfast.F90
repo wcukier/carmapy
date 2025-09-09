@@ -249,22 +249,21 @@ subroutine microfast(carma, cstate, iz, rc, maxrate)      !PETER
   
         ! Don't let one substep change the supersaturation by too much.
         if (ds_threshold(igas) > 0._f) then
-!          if (srat >= ds_threshold(igas)) then
           if ((srat >= ds_threshold(igas)) .and. (abs(supsatold - supsatnew) > 0.1_f)) then
             if (do_substep) then
               if (nretries == maxretries) then 
                 if (do_print) write(LUNOPRT,1) trim(gasname(igas)), iz, &
-		lat, lon, srat, previous_supsati(igas), previous_supsatl(igas), &
+		              lat, lon, srat, previous_supsati(igas), previous_supsatl(igas), &
                 supsati(iz, igas), supsatl(iz,igas), t(iz)       
                 if (do_print) write(LUNOPRT,2) gcl(iz,igas), supsatiold(iz, igas), &
-		supsatlold(iz,igas), told(iz), d_gc(iz, igas), d_t(iz)
+		              supsatlold(iz,igas), told(iz), d_gc(iz, igas), d_t(iz)
               end if
               
               rc = RC_WARNING_RETRY
             else
               if (do_print) write(LUNOPRT,1) trim(gasname(igas)), &
-		iz, lat, lon, gc(iz,igas), gasprod(igas), &
-                supsati(iz, igas), supsatl(iz,igas), t(iz)
+		              iz, lat, lon, gc(iz,igas), gasprod(igas), &
+                  supsati(iz, igas), supsatl(iz,igas), t(iz)
             end if
           end if
         end if
@@ -301,24 +300,24 @@ subroutine microfast(carma, cstate, iz, rc, maxrate)      !PETER
           if (do_substep) then
             if (nretries == maxretries) then 
               if (do_print) write(LUNOPRT,1) trim(gasname(igas)), iz, &
-		lat, lon, previous_supsati(igas), previous_supsatl(igas), &
-              	supsati(iz, igas), supsatl(iz,igas), t(iz)
+		              lat, lon, previous_supsati(igas), previous_supsatl(igas), &
+              	  supsati(iz, igas), supsatl(iz,igas), t(iz)
               if (do_print) write(LUNOPRT,3) gcl(iz,igas), supsatiold(iz, igas), &
-		supsatlold(iz,igas), told(iz), d_gc(iz, igas), d_t(iz)
+	              	supsatlold(iz,igas), told(iz), d_gc(iz, igas), d_t(iz)
             end if
           else
             if (do_print) write(LUNOPRT,1) trim(gasname(igas)), iz, &
-		lat, lon, gc(iz,igas), gasprod(igas), &
-              	supsati(iz, igas), supsatl(iz,igas), t(iz)
+		              lat, lon, gc(iz,igas), gasprod(igas), &
+              	  supsati(iz, igas), supsatl(iz,igas), t(iz)
           end if
-  
+          
           rc = RC_WARNING_RETRY
         end if
       end if
     end do
   endif
 
-  !write(*,*) "done with microfast!"
+  ! write(*,*) "done with microfast!"
 
 
   ! Update particle densities

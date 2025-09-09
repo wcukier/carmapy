@@ -58,12 +58,24 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.output_gap = nml["input_params"]["iskip"]
     carma.n_tstep  = nml["input_params"]["nstep"]
     carma.dt = nml["input_params"]["dtime"]
+
+
     
     carma.wt_mol = nml["physical_params"]["wtmol_air_set"]
     carma.surface_grav = nml["physical_params"]["grav_set"]
     carma.r_planet = nml["physical_params"]["rplanet"]
     carma.velocity_avg = nml["physical_params"]["velocity_avg"]
-    
+    carma.log_metallicity = nml["physical_params"]["met"]
+
+    carma.atmo = {
+        "rmu_0": nml["physical_params"]["rmu_0"],
+        "rmu_t0": nml["physical_params"]["rmu_t0"],
+        "rmu_c": nml["physical_params"]["rmu_c"],
+        "thcond_0": nml["physical_params"]["thcond_0"],
+        "thcond_1": nml["physical_params"]["thcond_1"],
+        "thcond_2": nml["physical_params"]["thcond_2"],
+        "CP" : nml["physical_params"]["CP"]
+    }
 
     io = nml["io_files"]
 
@@ -94,8 +106,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
              stofact) = shlex.split(line[:-1])
             
             name= name[:-len(' Vapor')]
-            carma.gasses[name] = Gas(name, 
-                                     len(carma.gasses)+1, 
+            carma.gases[name] = Gas(name, 
+                                     len(carma.gases)+1, 
                                      wtmol=float(wtmol), 
                                      wtmol_dif=float(wtmol_dif),
                                      gcomp = int(gcomp),
@@ -140,7 +152,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
                 is_het = True
             group_core = carma.elems[list(carma.elems.keys())[int(ele_from)-1]].group
             group_mantle = carma.elems[list(carma.elems.keys())[int(ele_to)-1]].group
-            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
+            gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
             carma.nucs.append(Nuc(group_core, group_mantle, is_het, gas, float(mucos)))
             
     with open(os.path.join(path, io["growth_file"])) as f:
@@ -148,7 +160,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
         for line in f:
             ielem, igas = shlex.split(line[:-1])
             elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]
-            gas = carma.gasses[list(carma.gasses.keys())[int(igas)-1]]
+            gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
             carma.growth.append(Growth(elem, gas))
             
     with open(os.path.join(path, io["coag_file"])) as f:
@@ -169,13 +181,56 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.kzz_levels = levels[:, 2]
 
     carma.T_centers = np.genfromtxt(os.path.join(path, io["temps_file"]))
-    carma.T_levels = np.genfromtxt(os.path.join(path, "temp_levels.txt"))
+    carma.T_levels = np.genfromtxt(os.path.join(path, "inputs", "temp_levels.txt"))
 
 
     gas_input = np.genfromtxt(os.path.join(path, io["gas_input_file"]))
-    for i, key in enumerate(carma.gasses.keys()):
-        carma.gasses[key].nmr = gas_input[1:, i]
+    for i, key in enumerate(carma.gases.keys()):
+        carma.gases[key].nmr = gas_input[1:, i]
         
+    winds = np.zeros(carma.NZ)
+    with open(os.path.join(path, io["winds_file"])) as f:
+        for i in range(carma.NZ):
+            winds[i] = float(f.readline())
+
+    with open(os.path.join(path, io["g_boundary_file"])) as f:
+        f.readline()
+        for key in carma.gases.keys():
+            g = carma.gases[key]
+            _, gctop, gcbot, ftopg, fbotg = shlex.split(f.readline()[:-1])
+
+            g.boundary = {
+                "top_conc": float(gctop),
+                "bot_conc": float(gcbot),
+                "top_flux": float(ftopg),
+                "bot_flux": float(fbotg)
+            }
+
+    elem_top_conc_bc = np.zeros((carma.NBIN, len(carma.elems)))
+    elem_bot_conc_bc = np.zeros((carma.NBIN, len(carma.elems)))
+    elem_top_flux_bc = np.zeros((carma.NBIN, len(carma.elems)))
+    elem_bot_flux_bc = np.zeros((carma.NBIN, len(carma.elems)))
+
+    with open(os.path.join(path, io["p_boundary_file"])) as f:
+        f.readline()
+        for ibin in range(carma.NBIN):
+            for j in range(len(carma.elems.keys())):
+                line = f.readline()
+                _, _, pctop, pcbot, ftopp, fbotp = shlex.split(line)
+
+                elem_top_conc_bc[ibin, j] = float(pctop)
+                elem_bot_conc_bc[ibin, j] = float(pcbot)
+                elem_top_flux_bc[ibin, j] = float(ftopp)
+                elem_bot_flux_bc[ibin, j] = float(fbotp)
+
+    for j, key in enumerate(carma.elems.keys()):
+        e = carma.elems[key]
+        e.group.boundary["top_conc"] = elem_top_conc_bc[:, j]
+        e.group.boundary["bot_conc"] = elem_bot_conc_bc[:, j]
+        e.group.boundary["top_flux"] = elem_top_flux_bc[:, j]
+        e.group.boundary["bot_flux"] = elem_bot_flux_bc[:, j]
+
+
     return carma
 
 

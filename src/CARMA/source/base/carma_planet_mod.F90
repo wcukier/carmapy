@@ -56,10 +56,10 @@ module carma_planet_mod
 !	real(kind=f), parameter :: SCDAY = 1377648._f                   !TITAN
 !	real(kind=f), parameter :: SCDAY = 551815.2_f                   !PLUTO
 
-        !! Define specific heat at constant pres of dry air [ cm^2 / s^2 / deg_K ]
+        !! Define specific heat at constant pres of dry air [ cm^2 / s^2 / deg_K ] TODO WC
 !	real(kind=f), parameter :: CP = 1.004e7_f			!EARTH
 !	real(kind=f), parameter :: CP = 7.0e6_f				!VENUS
-	real(kind=f), parameter :: CP = 1.3e8_f                         !Hydrogen, for generic gas giant, Kataria et al. 2015, ApJ 801, 86
+	! real(kind=f), parameter :: CP = 1.3e8_f                         !Hydrogen, for generic gas giant, Kataria et al. 2015, ApJ 801, 86
 !	real(kind=f), parameter :: CP = 1.040e7_f                       !TITAN, PLUTO
 
 	!! Define ratio of gas constant for dry air and specific heat

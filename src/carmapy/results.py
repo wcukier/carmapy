@@ -12,6 +12,8 @@ import os
 # import PyMieScatt as ps
 from scipy.interpolate import RectBivariateSpline
 
+from collections.abc import Callable
+
 # petroff 10 color cycle
 petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6",
               "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
@@ -27,6 +29,9 @@ class Results:
     ----------
     carma : Carma
         The carma simulation to load results from
+    read_diag : boolean, optional
+        If true reads in the microphysical rates and core mass fraction.
+        Defaults to False.
 
     Notes
     ------
@@ -40,6 +45,46 @@ class Results:
         - ``results.clouds['numden']`` is a 3D numpy array of shape 
           (NZ, NBIN, NT) which stores the number density of each cloud species 
           in each size bin at each time step in units of cm⁻³
+        - ``results.clouds['coremass_frac']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the fraction of mass in each
+           bin stored in the particle core.
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['nuc_gain_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles
+           are added to the bin via nucleation [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+         - ``results.clouds['nuc_loss_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles are 
+           removed from a bin due to nucleation [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['grow_gain_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which 
+           particles are added to a bin due to condensational growth 
+           [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['grow_loss_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which 
+           particles are removed from a bin due to condensational growth
+           [particles/s/cm³].
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['evap_gain_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles are 
+           added to a bin due to evaporation [particles/s/cm³]   .
+           Only stored if ``read_diag=True``.
+        - ``results.clouds['evap_loss_rate']`` is a 3D numpy array of 
+           shape (NZ, NBIN, NT) which stores the rate at which particles are 
+           removed from a bin due to evaporation [particles/s/cm³].
+           Only stored if ``read_diag=True``.         
+
+    In a 2-D CARMApy run two additional items are saved:
+        - ``results.gases_2d`` stores the same info as ``results.gases`` but
+          stores (NZ, NLONGITUDE) arrays instead of (NZ, NT) arrays
+        - ``results.longitude_map`` takes in a 3-D array of shape (NZ, NBIN, NT)
+          and transforms it to an array of shape `(NZ, NBIN, NLONGITUDE)` where 
+          each longitude bin in the average of all timesteps corresponding to 
+          that longitude.  This function is designed to work on the 
+          ``results.clouds["numden"]`` array as well as any of the microphysical
+           rates arrays in ``results.clouds``.
     """
 
 
@@ -54,10 +99,10 @@ class Results:
     # """ Radius of particules in each radius bin [cm] (NBIN x NGROUP) """
 
     # gas_abund : np.ndarray
-    # """ The number mixing rations of the gasses (NZ x NGAS x NT) """
+    # """ The number mixing rations of the gases (NZ x NGAS x NT) """
 
     sat_vp : np.ndarray
-    """ The saturation mixing ratios of the gasses (NZ x NGAS x NT) """
+    """ The saturation mixing ratios of the gases (NZ, NGAS, NT, [NLONG]) """
 
     ts : np.ndarray
     """ Time elapsed since start of simulation at each step [s] (NT)"""
@@ -69,13 +114,13 @@ class Results:
     """ Altitude centers alias [cm] (NZ) """
 
     T : np.ndarray
-    """ Temperature centers alias [K] (NZ) """
+    """ Temperature centers alias [K] (NZ, [NLONG]) """
 
     group_names : list[str]
     """ The name of each of the simulated groups """
 
     gas_names :  list[str]
-    """ The name of each of the simulated gasses """
+    """ The name of each of the simulated gases """
 
     dt_timestep : float
     """ The length of time between each output [s] """
@@ -83,16 +128,22 @@ class Results:
     path : str
     """ The path to the CARMA output files """
     
-    gasses : dict[str, np.ndarray]
-    """ The number mixing ratio for each of the gasses """
+    gases : dict[str, np.ndarray]
+    """ The number mixing ratio for each of the gases """
+
+    gases_2d : dict[str, np.ndarray]
+    """ The number mixing ratio for each of the gases by longitude """
 
     clouds : dict[str, dict[str, np.ndarray]]
     """ A dictionary storing results for each cloud species (see notes) """
 
-    def __init__(self, carma: "Carma") -> None:
+    longitude_map : Callable
+    """ A function to transform arrays to be by longitude (see notes) """
+
+    def __init__(self, carma: "Carma", read_diag=False) -> None:
         path = carma.name
         path_end = os.path.basename(path)
-        file_path = os.path.join(path, f"bd_{path_end}.txt")
+        file_path = os.path.join(path, f"{path_end}.txt")
 
         f = open(file_path)
 
@@ -109,7 +160,7 @@ class Results:
             (NGROUP != len(carma.groups))+
             (NELEM != len(carma.elems))+
             (NBIN != carma.NBIN) +
-            (NGAS != len(carma.gasses))+
+            (NGAS != len(carma.gases))+
             (nstep - 1 != carma.n_tstep)+
             (iskip != carma.output_gap)
         ):
@@ -156,14 +207,26 @@ class Results:
         gas_abund = np.zeros((NZ, NGAS, NT))
         sat_vp = np.zeros((NZ, NGAS, NT))
         ts = np.zeros(NT)
+        if carma.is_2d: step = np.zeros(NT, dtype=int)
         
-        for it in range(NT):
-            t_step = f.readline()
+        for it in range(NT-1):
+            if carma.is_2d:
+                (t_step, 
+                current_distance, 
+                rotation_counter,
+                current_step,
+                longitude) = f.readline().split()
+
+                step[it] = int(float(current_step))
+            else:
+                t_step = f.readline()
+
             if t_step:
                 ts[it] = t_step
                 for ibin in range(NBIN):
                     for iz in range(NZ):
-                        line = np.array(f.readline().split(), dtype=float)
+                        line = f.readline()
+                        line = np.array(line.split(), dtype=float)
                         for ielem in range(NELEM):
                             numden[iz, ielem, ibin, it] = line[ielem+2]
                         for igas in range(NGAS):
@@ -189,7 +252,10 @@ class Results:
             if np.any( numden_groups[:, group.igroup-1, :, :] < 0):
                 raise RuntimeError("Error in reading in number densities")
         
+        f.close()
         
+        n_tstep = it
+
         self.carma = carma
         self.rmass = rmass
         self.r = r
@@ -201,13 +267,14 @@ class Results:
         self.Z = Z
         self.T = T
         self.group_names = list(carma.groups.keys())
-        self.gas_names = list(carma.gasses.keys())
+        self.gas_names = list(carma.gases.keys())
         self.dt_timestep = carma.dt * carma.output_gap
         self.path = path
 
-        self.gasses = {}
+
+        self.gases = {}
         for i in range(1, len(self.gas_names)):
-            self.gasses[self.gas_names[i]] = gas_abund[:, i, :]
+            self.gases[self.gas_names[i]] = gas_abund[:, i, :]
 
         self.clouds = {}
         for i in range(len(self.group_names)):
@@ -216,17 +283,129 @@ class Results:
                 "r": self.r[:, i] * MICRON_TO_CM,
                 "r_mass": self.rmass[:, i]
             }
+        if self.carma.is_2d: #TODO: pre nanmean() these.  Maybe have a window for a set number of timesteps
+            _, counts = np.unique(step, return_counts=True)
+            self.gases_2d = {}
+
+            for i in range(1, len(self.gas_names)):
+                self.gases_2d[self.gas_names[i]] = (np.zeros((NZ, 
+                                                            carma.NLONGITUDE,
+                                                            np.max(counts))) 
+                                                  * np.nan)
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                for it in range(n_tstep):
+                    self.gases_2d[self.gas_names[i]][
+                        :, step[it], index[step[it]]] =  gas_abund[:, i, it] 
+                    index[step[it]] += 1 
+                self.gases_2d[self.gas_names[i]] = np.nanmean(
+                                        self.gases_2d[self.gas_names[i]], 
+                                        axis=2)
+                                                   
+
+            for i in range(len(self.group_names)):
+                self.clouds[self.group_names[i]]["numden_2d"] = np.zeros(
+                                        (NZ, 
+                                        NBIN, 
+                                        carma.NLONGITUDE, 
+                                        np.max(counts))) * np.nan
+
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                for it in range(n_tstep):
+                    self.clouds[self.group_names[i]]["numden_2d"][
+                      :, :, step[it], index[step[it]]] = (
+                          self.numden[:, i, :, it])
+                    
+                    index[step[it]] += 1 
+                
+                self.clouds[self.group_names[i]]["numden_2d"] = np.nanmean(
+                    self.clouds[self.group_names[i]]["numden_2d"], axis=3)
+                
+
+            def longitude_map(arr):
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                temp_array = np.zeros((NZ, 
+                                       NBIN, 
+                                       carma.NLONGITUDE, 
+                                       np.max(counts)))
+                for it in range(n_tstep):
+                    temp_array[:, :, step[it], index[step[it]]] = arr[:, :, it]
+                    index[step[it]] += 1 
+                
+                return np.nanmean(temp_array, axis=3)
+            self.longitude_map = longitude_map
 
 
-    def plot_toa_gas(self, skip_gasses = [0], burn_in = 20, **kwargs):
+
+        if not read_diag: return
+
+        hom_nuc_gain_rates = np.zeros((NZ, NBIN, NELEM, n_tstep))
+        het_nuc_gain_rates = np.zeros((NZ, NBIN, NELEM, n_tstep))
+        grow_gain_rates    = np.zeros((NZ, NBIN, NELEM, n_tstep))
+        evap_gain_rates    = np.zeros((NZ, NBIN, NELEM, n_tstep))
+
+        nuc_loss_rates     = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+        grow_loss_rates    = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+        evap_loss_rates    = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+        coremass_frac      = np.zeros((NZ, NBIN, NGROUP, n_tstep))
+
+
+        file_path = os.path.join(path, f"rates_{path_end}.txt")
+        f = open(file_path)
+
+        for it in range(n_tstep):
+            t_step = f.readline()
+
+            for ibin in range(NBIN):
+                for iz in range(NZ):
+                    for ielem in range(NELEM):
+                        line = np.array(f.readline().split(), dtype=float)
+                        hom_nuc_gain_rates[iz, ibin, ielem, it] = line[3]
+                        het_nuc_gain_rates[iz, ibin, ielem, it] = line[4]
+                        grow_gain_rates[iz, ibin, ielem, it] = line[5]
+                        evap_gain_rates[iz, ibin, ielem, it] = line[6]
+                    
+                    for igroup in range(NGROUP):
+                        line = np.array(f.readline().split(), dtype=float)
+                        
+                        nuc_loss_rates[iz, ibin, igroup, it] = line[3]
+                        grow_loss_rates[iz, ibin, igroup, it] = line[4]
+                        evap_loss_rates[iz, ibin, igroup, it] = line[5]
+                        coremass_frac[iz, ibin, igroup, it] = line[6]
+        
+
+
+        for i, key in enumerate(carma.groups.keys()):
+            group = carma.groups[key]
+
+            self.clouds[key]["nuc_loss_rate"] = nuc_loss_rates[:, :, i, :]
+            self.clouds[key]["grow_loss_rate"] = grow_loss_rates[:, :, i, :]
+            self.clouds[key]["evap_loss_rate"] = evap_loss_rates[:, :, i, :]
+            self.clouds[key]["coremass_frac"] = coremass_frac[:, :, i, :]
+
+            if group.mantle:
+                e = group.mantle.ielem-1
+
+            else:
+                e = group.core.ielem-1
+
+            self.clouds[key]["nuc_gain_rate"] = (
+                            hom_nuc_gain_rates[:, :, e, :] 
+                            + het_nuc_gain_rates[:, :, e, :])
+                
+            self.clouds[key]["grow_gain_rate"] = grow_gain_rates[:, :, e, :]
+            self.clouds[key]["evap_gain_rate"] = evap_gain_rates[:, :, e, :]
+        
+        f.close()
+
+    def plot_toa_gas(self, skip_gases = [0], burn_in = 20, **kwargs):
         """Plots the gas abundances at the top of the atmosphere.  Useful for 
         determining whether or not the simulation has converged. ``**kwargs``
         are passed to pyplot
 
         Parameters
         ----------
-        skip_gasses : list, optional
-            A list of gasses, by index, to skip plotting, by default [0] (H2O)
+        skip_gases : list, optional
+            A list of gases, by index, to skip plotting, by default [0] (H2O)
         burn_in : int, optional
             The number of timesteps to exclude from the start of the simulation,
             by default 20
@@ -236,7 +415,7 @@ class Results:
         ax.set_prop_cycle(mpl.cycler(color=petroff10))
         j = 0
         for i, gas in enumerate(list(self.gas_names)): #TODO get this from header file
-            if i not in skip_gasses:
+            if i not in skip_gases:
                 xs = np.arange(burn_in, 
                                len(self.gas_abund[-1, i, :])) * self.dt_timestep
                 
@@ -371,14 +550,14 @@ class Results:
         group_slider.on_changed(update)
 
 
-    def _plot_abundance_profile(self, skip_gasses = [0], **kwargs):
+    def _plot_abundance_profile(self, skip_gases = [0], **kwargs):
         plt.close()
         lines = []
         fig, ax = plt.subplots()
         ax.set_prop_cycle(mpl.cycler(color=petroff10))
 
         for i, gas in enumerate(self.gas_names):
-            if i not in skip_gasses:
+            if i not in skip_gases:
                 zs = self.Z
                 lines.append(ax.plot((self.gas_abund[:, i, -1]/1e6 * self.P), self.P, label=gas)[0])
         plt.yscale("log")
@@ -413,7 +592,7 @@ class Results:
         slider.on_changed(update2)
         plt.show()
         
-    def _plot_saturation(self, skip_gasses=[0]):
+    def _plot_saturation(self, skip_gases=[0]):
         plt.close()
         lines = []
         # plt.style.use("petroff10")
@@ -421,7 +600,7 @@ class Results:
         ax.set_prop_cycle(mpl.cycler(color=petroff10))
 
         for i, gas in enumerate(self.gas_names):
-            if i not in skip_gasses:
+            if i not in skip_gases:
                 zs = self.Z
                 lines.append(ax.plot(((self.gas_abund[:, i, -1]/1e6 * self.P)
                                      /self.sat_vp[:, i, -1]),
