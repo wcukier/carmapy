@@ -239,12 +239,18 @@ class Results:
             if i not in skip_gasses:
                 xs = np.arange(burn_in, 
                                len(self.gas_abund[-1, i, :])) * self.dt_timestep
+                
+                min_abund = np.min(self.gas_abund[-1, i, burn_in:])
+                max_abund = np.max(self.gas_abund[-1, i, burn_in:])
+                d_abund = max_abund - min_abund + 1e-100
+                
                 ax.plot(xs, 
-                        (self.gas_abund[-1, i, burn_in:]
-                         / np.max(self.gas_abund[-1, i, burn_in:])  
-                         + j), 
-                         label=gas, 
+                        ((self.gas_abund[-1, i, burn_in:]-min_abund)/d_abund  
+                         + j*1.2), 
+                         label=f"{gas} (±{d_abund/max_abund:.2e})", 
                          **kwargs)
+                
+
                 j -= 1
         plt.xlabel("Time [s]")
         plt.ylabel("Relative gas bundance (offset)")
@@ -500,20 +506,23 @@ class Results:
 
 
         # species = ['H2O1', 'C1H4', 'C1O1', 'C1O2', 'Na', 'K', 'H2S1', 'C1H1N1_1', 'O2S1', 'H', 'H2', 'He', 'H1-', 'H1+', 'e-']
-        species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4', 
-                   'C1O1','C1O2','O2','N','H1N1','C1N1','C1H1N1_1','N1O1',
-                   'H2N1','N2','H3N1','H1S1','H2O4S1','H2S1','S','S2','O1S1',
-                   'C1S1','C1O1S1','C1S2','N1S1','O2S1','S4','S8','S3','O1S2',
-                   'O1Ti1','Ti','O2Ti1','H1Ti1','C2Ti1','N1Ti1','O1V1','V','He',
-                   'Na','K', 'H1-', 'H1+', 'e-']
+        # species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4', 
+        #            'C1O1','C1O2','O2','N','H1N1','C1N1','C1H1N1_1','N1O1',
+        #            'H2N1','N2','H3N1','H1S1','H2O4S1','H2S1','S','S2','O1S1',
+        #            'C1S1','C1O1S1','C1S2','N1S1','O2S1','S4','S8','S3','O1S2',
+        #            'O1Ti1','Ti','O2Ti1','H1Ti1','C2Ti1','N1Ti1','O1V1','V','He',
+        #            'Na','K', 'H1-', 'H1+', 'e-']
         # species_labels = ['H2O', 'CH4', 'CO', 'CO2', 'Na', 'K', 'H2S', 'HCN', 'SO2', 'H', 'H2', 'He', 'H-', 'H+', 'e-']
-        species_labels = ['OH','H2','H2O','H','O','CH','C','CH2','CH3','CH4',
-                  'CO','CO2','O2',
-                  'N','NH','CN','HCN','NO','NH2','N2','NH3',
-                  'SH','H2SO4','H2S','S','S2','SO','CS','COS','CS2','NS','SO2','S4','S8',
-                  'S3','S2O',
-                  'TiO','Ti','TiO2','TiH','TiC2','TiN','VO','V','He','Na','K','H1-', 'H1+', 'e-']
-        species_dict = dict(zip(species, species_labels)) #used to convert FROM HILL notation to readable
+        # species_labels = ['OH','H2','H2O','H','O','CH','C','CH2','CH3','CH4',
+        #           'CO','CO2','O2',
+        #           'N','NH','CN','HCN','NO','NH2','N2','NH3',
+        #           'SH','H2SO4','H2S','S','S2','SO','CS','COS','CS2','NS','SO2','S4','S8',
+        #           'S3','S2O',
+        #           'TiO','Ti','TiO2','TiH','TiC2','TiN','VO','V','He','Na','K','H1-', 'H1+', 'e-']
+        species_labels = ['H2', 'He', 'CH4', 'CO', 'CO2', 'NH3', 'N2', 'H2O', 'TiO', 'VO', 'FeH', 'H2S']
+        species = ["H2", "He", "C1H4", "C1O1", "C1O2", "H3N1", "N2", "H2O1", "O1Ti1", "O1V1", "Fe1H1", "H2S1"]
+
+        # species_dict = dict(zip(species, species_labels)) #used to convert FROM HILL notation to readable
 
         data = get_fastchem_abundances(self.carma.T_levels, self.carma.P_levels, species, 1)
         data = np.vstack((self.carma.P_levels/BAR_TO_BARYE, self.carma.T_levels, data))
