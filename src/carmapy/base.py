@@ -23,6 +23,11 @@ from typing import Union
 
 SRC = os.path.dirname(os.path.dirname(__file__))
 
+_int2bc = {
+    I_ZERO_CGRAD: "zero_grad",
+    I_FIXED_CONC: "fixed_conc",
+    I_FLUX_SPEC: "fixed_flux"
+}
 
 def load_carma(path: str, restart: int =0) -> Carma:
     """Restores a carma object from files.  Loads in the configuration stored by
@@ -58,9 +63,11 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.output_gap = nml["input_params"]["iskip"]
     carma.n_tstep  = nml["input_params"]["nstep"]
     carma.dt = nml["input_params"]["dtime"]
+    carma.top_bound_type_cloud = _bc2int[nml["input_params"]["itbnd_pc"]]
+    carma.bot_bound_type_cloud = _bc2int[nml["input_params"]["ibbnd_pc"]]
+    carma.top_bound_type_gas = _bc2int[nml["input_params"]["itbnd_gc"]]
+    carma.bot_bound_type_gas = _bc2int[nml["input_params"]["ibbnd_gc"]]
 
-
-    
     carma.wt_mol = nml["physical_params"]["wtmol_air_set"]
     carma.surface_grav = nml["physical_params"]["grav_set"]
     carma.r_planet = nml["physical_params"]["rplanet"]
@@ -229,7 +236,6 @@ def load_carma(path: str, restart: int =0) -> Carma:
         e.group.boundary["bot_conc"] = elem_bot_conc_bc[:, j]
         e.group.boundary["top_flux"] = elem_top_flux_bc[:, j]
         e.group.boundary["bot_flux"] = elem_bot_flux_bc[:, j]
-
 
     return carma
 

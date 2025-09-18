@@ -57,60 +57,92 @@ class Carma:
     >>> carma = Carma("new_carma")
     """
 
-    NZ:            int         = 0               
+    NZ: int = 0               
     """ Number of vertical layers in the atmospheric grid. """
-    NBIN:          int         = 80             
+
+    NBIN: int = 80             
     """ Number of particle radius bins (default 80). """
-    NLONGITUDE:    int         = -1        
+
+    NLONGITUDE: int = -1        
     """ Number of longitude bins (used only in 2D mode). """
 
-    P_levels:      ArrayLike   = None        
+    P_levels: ArrayLike = None        
     """ Pressure levels starting from bottom of atmosphere [barye]. """
-    P_centers:     ArrayLike   = None       
+
+    P_centers: ArrayLike = None       
     """ Pressure center values (between levels) [barye]. """
 
-    z_levels:      ArrayLike   = None       
+    z_levels: ArrayLike = None       
     """ Altitude levels where z=0 is bottom of atmosphere [cm]. """
-    z_centers:     ArrayLike   = None       
+
+    z_centers: ArrayLike = None       
     """  Altitude center values (between levels) [cm]. """
 
-    T_levels:      ArrayLike   = None        
+    T_levels: ArrayLike = None        
     """  Temperature levels [K]. """
-    T_centers:     ArrayLike   = None      
+
+    T_centers: ArrayLike = None      
     """ Temperature center values (between levels) [K]. """
 
-    kzz_levels:    ArrayLike   = None     
+    kzz_levels: ArrayLike = None     
     """ Eddy diffusion coefficient levels [cm²/s]. """
-    
 
-    
-    surface_grav:       float   = None   
+    surface_grav: float = None   
     """ Surface gravity of the planet / brown dwarf [cm/s²] """
-    wt_mol:             float   = None          
+
+    wt_mol: float = None          
     """ Mean molecular weight of the atmosphere [dimentionless] """
-    log_metallicity:    float   = 0
+
+    log_metallicity: float = 0
     """ Log Solar Metallicity (Default 0) """
 
-    r_planet:           float   = 6.991e9    
+    r_planet: float = 6.991e9    
     """ Planet radius [cm] (Defaults to 1 Jovian radius); ignored in 1D mode. 
     """
-    velocity_avg:       float   = -1    
+
+    velocity_avg: float = -1    
     """ Mean longitudinal wind speed at the equator [cm/s]; ignored in 1-D mode 
     """
 
-
-    restart:            bool    = False        
+    restart: bool = False        
     """If true, continues the simulation from a previously stored state 
     (Default False) """
 
-    dt:                 int              
+    dt: int              
     """ Simulation timestep [s] """
 
     output_gap: int = 1000      
     """ Number of timesteps between each simulation output """
+
     n_tstep: int = 1_000_000    
     """ Total number of timesteps """
 
+    is_2d: bool
+    """ If true, the simulation is a 2D Carma sim, otherwise 1D"""
+
+    name: str
+    """ The name of the directory the carma object is saved / loaded from """
+
+    iappend: int
+    """ 1 if and only if a restarted run should add to existing files (default 0)"""
+    
+    groups: dict[str, "Group"]
+    """ Dictionary of group objects indexed by group name used in the sim """
+
+    growth: list["Growth"]
+    """ List of the microphysical growth pathways enabled in the sim """
+
+    elems: dict[str, "Element"]
+    """ Dictionary of the element objects indexed by elem name used in the sim """
+
+    gases: dict[str, "Gas"]
+    """ Dictionary of the gas objects, indexed by gas name, used in the sim """
+
+    nucs: list["Nuc"]
+    """ List of the nucleation pathways enabled in the sim """
+
+    coags: list["Coag"]
+    """ List of the coagulation pathways enabled in the sim """
 
 
     def __init__(self, name: str, is_2d=False) -> None:        
@@ -124,7 +156,7 @@ class Carma:
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
         self.growth:    list["Growth"]          = []      # list of carma Growth objects
         self.elems:     dict[str, "Element"]    = {}      # dictionary of carma Element objects
-        self.gases:    dict[str, "Element"]    = {}      # dictionary of carma Gas objects
+        self.gases:    dict[str, "Gas"]    = {}      # dictionary of carma Gas objects
         self.nucs:      list["Nuc"]             = []      # list of carma Nuc objecs
         self.coags:     list["Coag"]            = []      # dictionary of carma Coag objects
 
@@ -878,7 +910,7 @@ class Carma:
 
     def set_cloud_boundary_type(self,
                                 top_boundary_type: str,
-                                bot_boundary_type: str,
+                                bottom_boundary_type: str,
                                 ) -> None:
         """Sets the type of boundary conditions on the cloud particle 
         concentration.  Note that the same boundary condition type must be used 
@@ -890,7 +922,7 @@ class Carma:
         top_boundary_type : str
             Which type of boundary condtion to use at the top of the atmosphere.
             Options are "fixed_conc", "fixed_flux", or "zero_grad"
-        bot_boundary_type : str
+        bottom_boundary_type : str
             Which type of boundary condtion to use at the bottom of the 
             atmosphere. Options are "fixed_conc", "fixed_flux", or "zero_grad"
         """
@@ -935,7 +967,7 @@ class Carma:
         self.top_bound_type_gas = top_boundary_type
         self.bot_bound_type_gas = bottom_boundary_type
         
-    def set_clound_boundary(self, 
+    def set_cloud_boundary(self, 
                             group: Union[str, "Group"],
                             bot_conc=0.0, 
                             top_conc=0.0, 
@@ -973,7 +1005,7 @@ class Carma:
         if type(group) == type(""):
             group = self.groups[group]
 
-        if group.is_het: raise ValueError("Multi-element groups must have boundary"
+        if group.mantle: raise ValueError("Multi-element groups must have boundary"
                                         "conditions of 0.  The is already the"
                                         "default behavior so this function does"
                                         "not need to be called.")
@@ -997,6 +1029,52 @@ class Carma:
         group.boundary["top_flux"] = top_flux
         group.boundary["bot_flux"] = bot_flux
 
+
+    def set_gas_boundary(self, 
+                            gas: Union[str, "Group"],
+                            bot_conc=None, 
+                            top_conc=None, 
+                            bot_flux=None, 
+                            top_flux=None) -> None:
+        """Sets the boundary conditions for the gas.  Will leave any unspecified
+        boundary conditions unchanged, potentially remaining with the default
+        behavior for the gas (see Gas).
+
+        Parameters
+        ----------
+        gas : Union[str, Gas]
+            gas group to set the boundary conditions for
+        bot_conc : float, optional
+            The number mixing ratio of the gas at the bottom of the 
+            atmosphere. Only used if the bottom gas boundary condition is set 
+            to "fixed_conc". [particles/particles]. 
+        top_conc : float, optional
+            The number mixing ratio of the gas at the top of the atmosphere 
+            Only used if the top gas boundary condition is set 
+            to "fixed_conc". [particles/particles]. 
+        bot_flux : float, optional
+            The upwards flux of the gas at the bottom of the atmosphere for.
+            Only used if the bottom gas boundary condition is set to 
+            "fixed_flux". [particles/cm^2/s]. 
+        top_flux : ArrayLike, optional
+            The concentration of the gas at the bottom of the atmosphere.
+            Only used if the cloud boundary condition is set to 
+            "fixed_conc". [particles/cm^3].
+        """
+
+        if top_conc is not None:
+            if top_conc < 0: raise ValueError("top_conc must be positive")
+            gas.boundary["top_conc"] = top_conc
+
+        if bot_conc is not None:
+            if bot_conc < 0: raise ValueError("bot_conc must be positive")
+            gas.boundary["bot_conc"] = bot_conc
+
+        if top_flux is not None:
+            gas.boundary["top_flux"] = top_flux
+
+        if bot_flux is not None:
+            gas.boundary["bot_flux"] = bot_flux
 
     def run(self, suppress_output=False) -> None:
         """Runs the CARMA Simulation.
