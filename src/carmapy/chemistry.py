@@ -177,6 +177,8 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
     The temperature at the cloud base [K]
   """
 
+  carma._citation["fastchem"] = True
+
   species = carma.gases[species]
   s = species.hill_formula
 
@@ -235,6 +237,9 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
       A carma object with initialized gases, P-T structure, and log metallicity
 
   """
+  carma._citation["fastchem"] = True
+
+
   P = carma.P_centers
   T = carma.T_centers
 

@@ -680,6 +680,7 @@ class Results:
             located in the directory storing the carma simulation.
 
         """
+        self.carma._citation["picaso"] = True
 
         if not file_path: file_path = os.path.join(self.path, 'fastchem.atm')
 
@@ -745,6 +746,8 @@ class Results:
             The indices of any cloud groups to exclude from the opacity 
             calculation, by default None
         """
+
+        self.carma._citation["picaso"] = True
 
         if not file_path: file_path = os.path.join(self.path, 'clouds.atm')
 

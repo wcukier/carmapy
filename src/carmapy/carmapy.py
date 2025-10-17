@@ -144,6 +144,8 @@ class Carma:
     coags: list["Coag"]
     """ List of the coagulation pathways enabled in the sim """
 
+    _citation = {}
+
 
     def __init__(self, name: str, is_2d=False) -> None:        
         self.is_2d:         bool        = is_2d          # true for 2d carma, false for 1d carma        
@@ -1098,6 +1100,9 @@ class Carma:
         if (self.wt_mol is None or self.surface_grav is None):
             raise RuntimeError("surface_grav and wt_mol must be set")
         
+        if self.is_2d:
+            self._citation["2d"] = True
+
         path = self.name
         
         os.makedirs(path, exist_ok=True)
@@ -1407,7 +1412,39 @@ class Carma:
         self.results = Results(self, read_diag=read_diag)
         
         
+    def citation(self) -> str:
+        """Generates the required citations based on the modules used
+
+        Returns
+        -------
+        str
+            A reccomended citation and a list of references to cite
+        """
+
+        if self.is_2d:
+            self._citation["2d"] = True
+
+        cite = ("This work made use of CARMApy (Cukier et al. in prep), "
+                "a wrapper of the ExoCARMA (Gao and Benneke 2018, Powell et al."
+                " 2018) branch of CARMA (Turco et al. 1979, Toon et al. 1988) "
+                "version 3.0 (Bardeen et al. 2008, 2010).  "
+        )
+
+        if self._citation.get("2d", False):   
+            cite += ("2-D CARMA was implemented by Powell and Zhang 2024.  "
+            )
+
+        if self._citation.get("fastchem", False):
+            cite += ("Atmospheric chemistry calculations were performed using "
+            "fastchem (Stock et al. 2018, 2022).  ")
+
+        if self._citation.get("picaso", False):
+            cite += ("Spectra were generated using picaso "
+            "(Batalha et al. 2019).  ")
     
+        print(cite)
+
+        return cite
     
 class Element:
     """An object representing a single species in a Group.  Note that element
