@@ -84,7 +84,7 @@ class Results:
           each longitude bin in the average of all timesteps corresponding to 
           that longitude.  This function is designed to work on the 
           ``results.clouds["numden"]`` array as well as any of the microphysical
-           rates arrays in ``results.clouds``.
+          rates arrays in ``results.clouds``.
     """
 
 

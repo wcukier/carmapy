@@ -13,3 +13,5 @@ Read the documentation (including install instructions) here: [https://carmapy.r
 - [x] Thermal Conductivity
 - [x] Vertical Winds
 - [ ] Benchmark CARMApy vs CARMA
+- [ ] Test suite
+- [ ] calculate mucos

@@ -37,7 +37,9 @@ build:
       # - cd picaso/reference/opacities && mv opacities_0.3_15_R15000.db opacities.db
       # - cd picaso/reference && export picaso_refdata=`pwd`
 
-
+submodules:
+  include: all
+  recursive: true
 
 
 # Build documentation in the "docs/" directory with Sphinx

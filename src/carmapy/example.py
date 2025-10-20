@@ -14,11 +14,11 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     arrays is one more than that of the "centers" arrays.
 
     The files are taken from a 1000 K, log g = 4.5, f_sed = 4, log [Fe/H] = 1
-    sonora diamondback [1]_ run. 
+    sonora diamondback [#morley2024]_ run. 
 
     References
     ----------
-    .. [1] Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
+    .. [#morley2024] Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
        http://arxiv.org/abs/2402.00758
 
 
@@ -51,11 +51,11 @@ def example_2d_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     thus the length of "levels" arrays is one more than that of the "centers" 
     arrays.
 
-    The files are taken from a GCM run of GJ1214 b [1]_  
+    The files are taken from a GCM run of GJ1214 b [#steinrueck2025]_  
 
     References
     ----------
-    .. [1] Maria E. Steinrueck et al 2025 ApJ 985 98
+    .. [#steinrueck2025] Maria E. Steinrueck et al 2025 ApJ 985 98
 
 
     Returns
