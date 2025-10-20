@@ -1,0 +1,241 @@
+elem_name	ibin	pctop	pcbot	ftopp	fbotp
+"Pure TiO2"	0	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	0	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	0	0.0	0.0	0.0	0.0
+"Pure TiO2"	1	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	1	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	1	0.0	0.0	0.0	0.0
+"Pure TiO2"	2	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	2	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	2	0.0	0.0	0.0	0.0
+"Pure TiO2"	3	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	3	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	3	0.0	0.0	0.0	0.0
+"Pure TiO2"	4	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	4	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	4	0.0	0.0	0.0	0.0
+"Pure TiO2"	5	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	5	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	5	0.0	0.0	0.0	0.0
+"Pure TiO2"	6	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	6	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	6	0.0	0.0	0.0	0.0
+"Pure TiO2"	7	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	7	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	7	0.0	0.0	0.0	0.0
+"Pure TiO2"	8	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	8	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	8	0.0	0.0	0.0	0.0
+"Pure TiO2"	9	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	9	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	9	0.0	0.0	0.0	0.0
+"Pure TiO2"	10	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	10	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	10	0.0	0.0	0.0	0.0
+"Pure TiO2"	11	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	11	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	11	0.0	0.0	0.0	0.0
+"Pure TiO2"	12	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	12	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	12	0.0	0.0	0.0	0.0
+"Pure TiO2"	13	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	13	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	13	0.0	0.0	0.0	0.0
+"Pure TiO2"	14	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	14	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	14	0.0	0.0	0.0	0.0
+"Pure TiO2"	15	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	15	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	15	0.0	0.0	0.0	0.0
+"Pure TiO2"	16	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	16	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	16	0.0	0.0	0.0	0.0
+"Pure TiO2"	17	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	17	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	17	0.0	0.0	0.0	0.0
+"Pure TiO2"	18	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	18	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	18	0.0	0.0	0.0	0.0
+"Pure TiO2"	19	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	19	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	19	0.0	0.0	0.0	0.0
+"Pure TiO2"	20	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	20	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	20	0.0	0.0	0.0	0.0
+"Pure TiO2"	21	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	21	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	21	0.0	0.0	0.0	0.0
+"Pure TiO2"	22	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	22	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	22	0.0	0.0	0.0	0.0
+"Pure TiO2"	23	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	23	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	23	0.0	0.0	0.0	0.0
+"Pure TiO2"	24	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	24	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	24	0.0	0.0	0.0	0.0
+"Pure TiO2"	25	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	25	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	25	0.0	0.0	0.0	0.0
+"Pure TiO2"	26	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	26	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	26	0.0	0.0	0.0	0.0
+"Pure TiO2"	27	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	27	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	27	0.0	0.0	0.0	0.0
+"Pure TiO2"	28	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	28	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	28	0.0	0.0	0.0	0.0
+"Pure TiO2"	29	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	29	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	29	0.0	0.0	0.0	0.0
+"Pure TiO2"	30	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	30	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	30	0.0	0.0	0.0	0.0
+"Pure TiO2"	31	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	31	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	31	0.0	0.0	0.0	0.0
+"Pure TiO2"	32	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	32	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	32	0.0	0.0	0.0	0.0
+"Pure TiO2"	33	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	33	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	33	0.0	0.0	0.0	0.0
+"Pure TiO2"	34	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	34	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	34	0.0	0.0	0.0	0.0
+"Pure TiO2"	35	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	35	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	35	0.0	0.0	0.0	0.0
+"Pure TiO2"	36	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	36	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	36	0.0	0.0	0.0	0.0
+"Pure TiO2"	37	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	37	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	37	0.0	0.0	0.0	0.0
+"Pure TiO2"	38	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	38	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	38	0.0	0.0	0.0	0.0
+"Pure TiO2"	39	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	39	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	39	0.0	0.0	0.0	0.0
+"Pure TiO2"	40	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	40	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	40	0.0	0.0	0.0	0.0
+"Pure TiO2"	41	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	41	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	41	0.0	0.0	0.0	0.0
+"Pure TiO2"	42	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	42	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	42	0.0	0.0	0.0	0.0
+"Pure TiO2"	43	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	43	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	43	0.0	0.0	0.0	0.0
+"Pure TiO2"	44	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	44	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	44	0.0	0.0	0.0	0.0
+"Pure TiO2"	45	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	45	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	45	0.0	0.0	0.0	0.0
+"Pure TiO2"	46	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	46	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	46	0.0	0.0	0.0	0.0
+"Pure TiO2"	47	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	47	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	47	0.0	0.0	0.0	0.0
+"Pure TiO2"	48	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	48	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	48	0.0	0.0	0.0	0.0
+"Pure TiO2"	49	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	49	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	49	0.0	0.0	0.0	0.0
+"Pure TiO2"	50	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	50	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	50	0.0	0.0	0.0	0.0
+"Pure TiO2"	51	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	51	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	51	0.0	0.0	0.0	0.0
+"Pure TiO2"	52	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	52	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	52	0.0	0.0	0.0	0.0
+"Pure TiO2"	53	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	53	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	53	0.0	0.0	0.0	0.0
+"Pure TiO2"	54	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	54	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	54	0.0	0.0	0.0	0.0
+"Pure TiO2"	55	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	55	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	55	0.0	0.0	0.0	0.0
+"Pure TiO2"	56	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	56	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	56	0.0	0.0	0.0	0.0
+"Pure TiO2"	57	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	57	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	57	0.0	0.0	0.0	0.0
+"Pure TiO2"	58	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	58	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	58	0.0	0.0	0.0	0.0
+"Pure TiO2"	59	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	59	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	59	0.0	0.0	0.0	0.0
+"Pure TiO2"	60	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	60	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	60	0.0	0.0	0.0	0.0
+"Pure TiO2"	61	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	61	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	61	0.0	0.0	0.0	0.0
+"Pure TiO2"	62	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	62	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	62	0.0	0.0	0.0	0.0
+"Pure TiO2"	63	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	63	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	63	0.0	0.0	0.0	0.0
+"Pure TiO2"	64	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	64	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	64	0.0	0.0	0.0	0.0
+"Pure TiO2"	65	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	65	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	65	0.0	0.0	0.0	0.0
+"Pure TiO2"	66	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	66	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	66	0.0	0.0	0.0	0.0
+"Pure TiO2"	67	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	67	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	67	0.0	0.0	0.0	0.0
+"Pure TiO2"	68	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	68	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	68	0.0	0.0	0.0	0.0
+"Pure TiO2"	69	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	69	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	69	0.0	0.0	0.0	0.0
+"Pure TiO2"	70	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	70	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	70	0.0	0.0	0.0	0.0
+"Pure TiO2"	71	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	71	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	71	0.0	0.0	0.0	0.0
+"Pure TiO2"	72	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	72	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	72	0.0	0.0	0.0	0.0
+"Pure TiO2"	73	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	73	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	73	0.0	0.0	0.0	0.0
+"Pure TiO2"	74	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	74	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	74	0.0	0.0	0.0	0.0
+"Pure TiO2"	75	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	75	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	75	0.0	0.0	0.0	0.0
+"Pure TiO2"	76	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	76	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	76	0.0	0.0	0.0	0.0
+"Pure TiO2"	77	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	77	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	77	0.0	0.0	0.0	0.0
+"Pure TiO2"	78	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	78	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	78	0.0	0.0	0.0	0.0
+"Pure TiO2"	79	0.0	0.0	0.0	0.0
+"Mg2SiO4 Mantle"	79	0.0	0.0	0.0	0.0
+"TiO2 Core (Mg2SiO4)"	79	0.0	0.0	0.0	0.0

@@ -18,10 +18,10 @@
     idiag = 0
     igridv = 1
     irestart = 0
-    iskip = 100
+    iskip = 800
     itbnd_gc = 2
     itbnd_pc = 2
-    nstep = 3000
+    nstep = 24000
 /
 
 &io_files
