@@ -1706,18 +1706,19 @@ class Group:
     non-zero boundary conditions for single element groups (ex. homogeneously
     nucleated groups).  Noting that each of these entries is either 0 or an 
     array of NBIN elements, the structure of the dictionary is as follows:
-        - ["bot_conc"] describes the concentration of the group at the base
-          of the atmosphere (only used if the bottom cloud boundary condition is
-          set to "fixed_conc"). [particles/cm^3]  If not set, defaults to 0.
-        - ["top_conc"] describes the concentration of the group at the top
-          of the atmosphere (only used if the top cloud boundary condition is
-          set to "fixed_conc").  [particles/cm^3] If not set, defaults to 0.
-        - ["bot_flux"] describes the upwards flux of the group to the base
-          of the atmosphere (only used if the bottom cloud boundary condition is
-          set to "fixed_flux") [particles/cm^2/s].  Defaults to 0 if not set.
-        - ["top_flux"] describes the downwards flux of the group at the top
-          of the atmosphere (only used if the top cloud boundary condition is
-          set to "fixed_flux"). [particles/cm^2/s] Defaults to 0 if not set.
+    
+    - ["bot_conc"] describes the concentration of the group at the base
+       of the atmosphere (only used if the bottom cloud boundary condition is
+       set to "fixed_conc"). [particles/cm^3]  If not set, defaults to 0.
+    - ["top_conc"] describes the concentration of the group at the top
+       of the atmosphere (only used if the top cloud boundary condition is
+       set to "fixed_conc").  [particles/cm^3] If not set, defaults to 0.
+    - ["bot_flux"] describes the upwards flux of the group to the base
+       of the atmosphere (only used if the bottom cloud boundary condition is
+       set to "fixed_flux") [particles/cm^2/s].  Defaults to 0 if not set.
+    - ["top_flux"] describes the downwards flux of the group at the top
+       of the atmosphere (only used if the top cloud boundary condition is
+       set to "fixed_flux"). [particles/cm^2/s] Defaults to 0 if not set.
 
     """
 
