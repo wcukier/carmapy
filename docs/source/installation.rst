@@ -13,13 +13,19 @@ following commands::
 
 as long as at least one of those commands returns as file path rather than saying
 "ifort not found" or "gfortran not found" then you should be good to proceed with
-installation
+installation.  If you are installing on an apple silicon device, you may be able
+to get away with installing using pip even if you don't have a fortran compiler
+
+Installation with pip
+---------------------
+To install with pip simply write::
+   pip install carmapy
 
 Installation with git
 ---------------------
-Currently this is the only way to install carmapy::
+To install and build loacally::
 
-   git clone https://github.com/wcukier/carmapy
+   git clone --recursive https://github.com/wcukier/carmapy
    cd carmapy
    pip install .
 
