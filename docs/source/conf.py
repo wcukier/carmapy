@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath('../../src/'))
 project = 'carmapy'
 copyright = '2025, Wolf Cukier'
 author = 'Wolf Cukier'
-release = '0.1.0'
+release = '0.5.5'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -56,5 +56,5 @@ html_theme_options = {
 
 nbsphinx_prolog = """
 {% set docname = env.doc2path(env.docname, base=None) %}
-.. note::  `Download full notebook here <https://github.com/wcukier/carmapy/tree/main/docs/{{ docname }}>`_
+.. note::  `Download full notebook here <https://github.com/wcukier/carmapy/tree/main/docs/source/{{ docname }}>`_
 """

@@ -19,6 +19,7 @@ to get away with installing using pip even if you don't have a fortran compiler
 Installation with pip
 ---------------------
 To install with pip simply write::
+   
    pip install carmapy
 
 Installation with git

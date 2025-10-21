@@ -479,7 +479,7 @@ opacity_files = {
     "Al2O3": "KH18/Al2O3[s].txt"
 }
 
-# Taken from Gao and BVenneke 2018
+# Taken from Gao and Benneke 2018
 atmo_dict = {
     "Pure H2": {
         "rmu_0": 8.76e-5,
