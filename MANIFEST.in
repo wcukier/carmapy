@@ -1,0 +1,2 @@
+recursive-include src/CARMA/source/base *
+prune src/CARMA/source/base.git
