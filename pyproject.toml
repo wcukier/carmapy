@@ -1,10 +1,9 @@
 [project]
 name = "carmapy"
 description = "A python wrapper of the CARMA cloud aerosol model"
-# version = "0.0.1"
 dynamic = ["version"]
 authors = [
-    {name= "Wolf Cukier", email="wcukier@uchicago.edu"},
+    {name = "Wolf Cukier", email = "wcukier@uchicago.edu"},
 ]
 dependencies = [
     "requests",
@@ -15,19 +14,29 @@ dependencies = [
     "pyfastchem",
     "f90nml",
 ]
-
 readme = "README.md"
-license-files = ["LICEN[CS]E*"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
 
 [build-system]
-requires = ["setuptools", "setuptools-scm>=8"]
+requires = [
+    "setuptools",
+    "setuptools-scm>=8",
+    "wheel",
+    "cibuildwheel",
+    "delocate"
+]
 build-backend = "setuptools.build_meta"
 
-# [tool.setuptools]
-# package-dir = {"" = "src"}
+# --- CIBUILDWHEEL CONFIGURATION ---
+[tool.cibuildwheel]
+build = "cp310-*"
 
-# [tool.setuptools.packages.find]
-# where = ["src"]
+[tool.cibuildwheel.macos]
+before-build = "brew install gcc"
+environment = { FC = "gfortran", FORTRAN = "gfortran" }
+repair-wheel-command = "delocate-wheel -v -w {dest_dir} {wheel}"
