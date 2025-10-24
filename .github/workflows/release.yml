@@ -20,23 +20,29 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      # Install gfortran on macOS runners
+      # Install gfortran on macOS
       - name: Install gfortran (macOS)
-        if: matrix.os == 'macos-14' || matrix.os == 'macos-15-intel'
+        if: startsWith(matrix.os, 'macos')
         run: |
           brew update
           brew install gcc
+          echo "GFORTRAN=$(brew --prefix gcc)/bin/gfortran" >> $GITHUB_ENV
+          export PATH="$(brew --prefix gcc)/bin:$PATH"
+          $GFORTRAN --version
 
-      # Install gfortran on Ubuntu runners
+      # Install gfortran on Ubuntu
       - name: Install gfortran (Ubuntu)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran
+          gfortran --version
 
       # Build wheels
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.1
+        env:
+          FC: ${{ env.GFORTRAN }}
 
       # Upload wheels
       - uses: actions/upload-artifact@v4
@@ -57,6 +63,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y gfortran
+          gfortran --version
 
       - name: Build SDist
         run: pipx run build --sdist
