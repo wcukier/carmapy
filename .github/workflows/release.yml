@@ -1,4 +1,4 @@
-name: Build and release CARMApy (macOS only)
+name: Build and release CARMApy (macOS ARM64)
 
 on:
   push:
@@ -20,15 +20,17 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      # Set up Python
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
+      # Install Python.org Python 3.10 (ARM64)
+      - name: Install Python.org Python 3.10
+        run: |
+          curl -LO https://www.python.org/ftp/python/3.10.12/python-3.10.12-macos11.pkg
+          sudo installer -pkg python-3.10.12-macos11.pkg -target /
+          echo "/Library/Frameworks/Python.framework/Versions/3.10/bin" >> $GITHUB_PATH
 
       # Install build tools and gfortran
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python3 -m pip install --upgrade pip
           pip install cibuildwheel delocate build
           brew install gcc  # ensures gfortran is available
 
@@ -39,18 +41,17 @@ jobs:
         env:
           CIBW_BUILD: "cp310-*"
           CIBW_SKIP: "pp*"
-          CIBW_ARCHS_MACOS: "arm64"                # only ARM64 to avoid x86_64 pkgutil issues
+          CIBW_ARCHS_MACOS: "arm64"
           FC: gfortran
           FORTRAN: gfortran
-          PATH: /opt/homebrew/bin:${PATH}          # ensures Homebrew binaries are found
-          MACOSX_DEPLOYMENT_TARGET: 15.0          # match Homebrew GCC min target
+          PATH: /opt/homebrew/bin:${PATH}
+          MACOSX_DEPLOYMENT_TARGET: 11.0
           CIBW_BEFORE_ALL_MACOS: "brew install gcc"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel -v -w {dest_dir} {wheel}"
 
       # Build source distribution
       - name: Build sdist
-        run: |
-          python -m build --sdist --outdir dist
+        run: python3 -m build --sdist --outdir dist
 
       # Upload artifacts for inspection (optional)
       - uses: actions/upload-artifact@v4
@@ -68,7 +69,7 @@ jobs:
     needs: build_macos
     runs-on: ubuntu-latest
     steps:
-      # Download artifacts
+      # Download artifacts from build
       - uses: actions/download-artifact@v4
         with:
           name: macos-wheels
