@@ -1,4 +1,4 @@
-name: Build and release CARMApy
+name: Build and release CARMApy (macOS only)
 
 on:
   push:
@@ -7,8 +7,11 @@ on:
 
 jobs:
   build_macos:
-    name: Build macOS wheels
+    name: Build macOS ARM64 wheels
     runs-on: macos-latest
+    outputs:
+      wheels-path: wheelhouse
+      sdist-path: dist
     steps:
       # Checkout repository with submodules
       - name: Checkout repository
@@ -22,73 +25,39 @@ jobs:
         with:
           python-version: "3.10"
 
-      # Install dependencies
-      - name: Install build tools
+      # Install build tools and gfortran
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install cibuildwheel delocate build
           brew install gcc  # ensures gfortran is available
 
-      # Set environment variables for building
+      # Build wheels with cibuildwheel
       - name: Build wheels
+        id: build_wheels
         run: cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: "cp310-*"
           CIBW_SKIP: "pp*"
-          CIBW_ARCHS_MACOS: "arm64 x86_64"
-          # Use gfortran from Homebrew
+          CIBW_ARCHS_MACOS: "arm64"                # only ARM64 to avoid x86_64 pkgutil issues
           FC: gfortran
           FORTRAN: gfortran
-          PATH: /opt/homebrew/bin:${PATH}   # ARM Macs
-          MACOSX_DEPLOYMENT_TARGET: 15.0    # matches Homebrew GCC minimum
+          PATH: /opt/homebrew/bin:${PATH}          # ensures Homebrew binaries are found
+          MACOSX_DEPLOYMENT_TARGET: 15.0          # match Homebrew GCC min target
+          CIBW_BEFORE_ALL_MACOS: "brew install gcc"
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel -v -w {dest_dir} {wheel}"
 
-      # Upload wheels
+      # Build source distribution
+      - name: Build sdist
+        run: |
+          python -m build --sdist --outdir dist
+
+      # Upload artifacts for inspection (optional)
       - uses: actions/upload-artifact@v4
         with:
           name: macos-wheels
           path: wheelhouse/*.whl
 
-
-  # build_linux:
-  #   name: Build Linux wheels
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository with submodules
-  #       uses: actions/checkout@v4
-  #       with:
-  #         submodules: recursive
-  #         fetch-depth: 0
-  #     - uses: actions/setup-python@v5
-  #       with:
-  #         python-version: "3.10"
-  #     - run: |
-  #         python -m pip install --upgrade pip
-  #         pip install cibuildwheel build
-  #     - run: cibuildwheel --output-dir wheelhouse
-  #       env:
-  #         CIBW_BUILD: "cp310-*"
-  #         CIBW_SKIP: "pp*"
-  #         CIBW_ARCHS_LINUX: "x86_64 aarch64"
-  #         CIBW_ENVIRONMENT_LINUX: "FC=gfortran FORTRAN=gfortran"
-  #         CIBW_BEFORE_ALL_LINUX: "yum install -y gcc-gfortran"
-  #         CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
-  #     - uses: actions/upload-artifact@v4
-  #       with:
-  #         name: linux-wheels
-  #         path: wheelhouse/*.whl
-
-  build_sdist:
-    name: Build sdist
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository with submodules
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-      - run: |
-          python -m pip install --upgrade pip build
-          python -m build --sdist
       - uses: actions/upload-artifact@v4
         with:
           name: sdist
@@ -96,23 +65,20 @@ jobs:
 
   publish_pypi:
     name: Publish to PyPI
-    # needs: [build_macos, build_linux, build_sdist]
-    needs: [build_macos,  build_sdist]
-
+    needs: build_macos
     runs-on: ubuntu-latest
     steps:
+      # Download artifacts
       - uses: actions/download-artifact@v4
         with:
           name: macos-wheels
           path: dist/
-      # - uses: actions/download-artifact@v4
-      #   with:
-      #     name: linux-wheels
-      #     path: dist/
       - uses: actions/download-artifact@v4
         with:
           name: sdist
           path: dist/
+
+      # Publish wheels and sdist to PyPI
       - uses: pypa/gh-action-pypi-publish@v1.9.3
         with:
           user: __token__
