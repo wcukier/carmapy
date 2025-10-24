@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 from setuptools.command.build_py import build_py
 import subprocess
@@ -53,7 +53,16 @@ class CustomBuildPy(build_py):
         self.run_command("build_ext")
         super().run()
 
+dummy_ext = Extension("carmapy._dummy", sources=[])
+
+
 setup(    cmdclass={
         "build_ext": BuildFortranBinary,
         "build_py": CustomBuildPy,
-    })
+    },
+        ext_modules=[dummy_ext],
+    )
+
+
+
+

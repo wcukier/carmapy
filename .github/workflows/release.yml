@@ -1,0 +1,90 @@
+name: Build and release CARMApy
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build_macos:
+    name: Build macOS wheels
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install cibuildwheel delocate build
+      - run: cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: "cp310-*"
+          CIBW_SKIP: "pp*"
+          CIBW_ARCHS_MACOS: "arm64 x86_64"
+          CIBW_BEFORE_ALL_MACOS: "brew install gcc"
+          CIBW_ENVIRONMENT_MACOS: "FC=gfortran FORTRAN=gfortran"
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel -v -w {dest_dir} {wheel}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-wheels
+          path: wheelhouse/*.whl
+
+  build_linux:
+    name: Build Linux wheels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install cibuildwheel build
+      - run: cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: "cp310-*"
+          CIBW_SKIP: "pp*"
+          CIBW_ARCHS_LINUX: "x86_64 aarch64"
+          CIBW_ENVIRONMENT_LINUX: "FC=gfortran FORTRAN=gfortran"
+          CIBW_BEFORE_ALL_LINUX: "yum install -y gcc-gfortran"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-wheels
+          path: wheelhouse/*.whl
+
+  build_sdist:
+    name: Build sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish_pypi:
+    name: Publish to PyPI
+    needs: [build_macos, build_linux, build_sdist]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-wheels
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-wheels
+          path: dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@v1.9.3
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
