@@ -1,4 +1,4 @@
-name: Build and release CARMApy (macOS ARM64)
+name: Build and release CARMApy 
 
 on:
   push:
@@ -11,44 +11,60 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # macos-15-intel is an Intel runner, macos-14 is Apple silicon
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-14]
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: true  # ensures submodules are pulled
+
+      # Install gfortran on macOS runners
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-14' || matrix.os == 'macos-15-intel'
+        run: |
+          brew install gcc
+
+      # Optional: Install gfortran on Ubuntu runners
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.1
-        # env:
-        #   CIBW_SOME_OPTION: value
-        #   ...
-        # with:
-        #   package-dir: .
-        #   output-dir: wheelhouse
-        #   config-file: "{package}/pyproject.toml"
+        with:
+          # package-dir: .
+          # output-dir: wheelhouse
+          # config-file: "{package}/pyproject.toml"
 
       - uses: actions/upload-artifact@v4
         with:
           name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
 
-
   make_sdist:
     name: Make SDist
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-      with:
-        fetch-depth: 0  # Optional, use if you use setuptools_scm
-        submodules: true  # Optional, use if you have submodules
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: true  # ensure submodules are included
 
-    - name: Build SDist
-      run: pipx run build --sdist
+      - name: Install gfortran
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: cibw-sdist
-        path: dist/*.tar.gz
+      - name: Build SDist
+        run: pipx run build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
 
   upload_all:
     needs: [build_wheels, make_sdist]
@@ -58,10 +74,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-    - uses: actions/download-artifact@v5
-      with:
-        pattern: cibw-*
-        path: dist
-        merge-multiple: true
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: cibw-*
+          path: dist
+          merge-multiple: true
 
-    - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@release/v1
