@@ -14,7 +14,7 @@ F90DOC = ../../bin/f90doc-0.4.0/f90doc
 PACKAGE =	CARMA
 TGZ =		CARMA.tar
 
-FFLAGS = -O3
+FFLAGS = -O3 -static-libgfortran -static-libgcc
 # FFLAGS += -traceback 
 # FFLAGS += -pg 
 # FFLAGS += -ggdb -O0 -tr=aceback 
