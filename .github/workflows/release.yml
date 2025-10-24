@@ -6,81 +6,62 @@ on:
   workflow_dispatch:
 
 jobs:
-  build_macos:
-    name: Build macOS ARM64 wheels
-    runs-on: macos-latest
-    outputs:
-      wheels-path: wheelhouse
-      sdist-path: dist
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # macos-15-intel is an Intel runner, macos-14 is Apple silicon
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-14]
+
     steps:
-      # Checkout repository with submodules
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
+      - uses: actions/checkout@v5
 
-      # Install Python.org Python 3.10 (ARM64)
-      - name: Install Python.org Python 3.10
-        run: |
-          curl -LO https://www.python.org/ftp/python/3.10.12/python-3.10.12-macos11.pkg
-          sudo installer -pkg python-3.10.12-macos11.pkg -target /
-          echo "/Library/Frameworks/Python.framework/Versions/3.10/bin" >> $GITHUB_PATH
-
-      # Install build tools and gfortran
-      - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          pip install cibuildwheel delocate build
-          brew install gcc  # ensures gfortran is available
-
-      # Build wheels with cibuildwheel
       - name: Build wheels
-        id: build_wheels
-        run: cibuildwheel --output-dir wheelhouse
-        env:
-          CIBW_BUILD: "cp310-*"
-          CIBW_SKIP: "pp*"
-          CIBW_ARCHS_MACOS: "arm64"
-          FC: gfortran
-          FORTRAN: gfortran
-          PATH: /opt/homebrew/bin:${PATH}
-          MACOSX_DEPLOYMENT_TARGET: 11.0
-          CIBW_BEFORE_ALL_MACOS: "brew install gcc"
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel -v -w {dest_dir} {wheel}"
-
-      # Build source distribution
-      - name: Build sdist
-        run: python3 -m build --sdist --outdir dist
-
-      # Upload artifacts for inspection (optional)
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-wheels
-          path: wheelhouse/*.whl
+        uses: pypa/cibuildwheel@v3.2.1
+        # env:
+        #   CIBW_SOME_OPTION: value
+        #   ...
+        # with:
+        #   package-dir: .
+        #   output-dir: wheelhouse
+        #   config-file: "{package}/pyproject.toml"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sdist
-          path: dist/*.tar.gz
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
 
-  publish_pypi:
-    name: Publish to PyPI
-    needs: build_macos
+
+  make_sdist:
+    name: Make SDist
     runs-on: ubuntu-latest
     steps:
-      # Download artifacts from build
-      - uses: actions/download-artifact@v4
-        with:
-          name: macos-wheels
-          path: dist/
-      - uses: actions/download-artifact@v4
-        with:
-          name: sdist
-          path: dist/
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0  # Optional, use if you use setuptools_scm
+        submodules: true  # Optional, use if you have submodules
 
-      # Publish wheels and sdist to PyPI
-      - uses: pypa/gh-action-pypi-publish@v1.9.3
-        with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+    - name: Build SDist
+      run: pipx run build --sdist
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: cibw-sdist
+        path: dist/*.tar.gz
+
+  upload_all:
+    needs: [build_wheels, make_sdist]
+    environment: pypi
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+    - uses: actions/download-artifact@v5
+      with:
+        pattern: cibw-*
+        path: dist
+        merge-multiple: true
+
+    - uses: pypa/gh-action-pypi-publish@release/v1
