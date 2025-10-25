@@ -31,9 +31,10 @@ jobs:
         run: |
           brew update
           brew install gcc@13
-          ln -sfn $(brew --prefix gcc@13)/bin/gfortran-13 /usr/local/bin/gfortran
-          echo "GFORTRAN=$(brew --prefix gcc@13)/bin/gfortran-13" >> $GITHUB_ENV
-          echo "$(brew --prefix gcc@13)/bin" >> $GITHUB_PATH
+          # Get full path to gfortran
+          GFORTRAN="$(brew --prefix gcc)/bin/gfortran"
+          echo "GFORTRAN=$GFORTRAN" >> $GITHUB_ENV
+          echo "$(brew --prefix gcc)/bin" >> $GITHUB_PATH
           $GFORTRAN --version
 
       # Install gfortran on Ubuntu
