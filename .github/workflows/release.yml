@@ -23,7 +23,7 @@ jobs:
 
       - name: Set macOS deployment target
         if: startsWith(matrix.os, 'macos')
-        run: echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+        run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
 
       # Install gfortran on macOS
       - name: Install gfortran (macOS)
