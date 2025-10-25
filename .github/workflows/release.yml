@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         # os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-14]
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-14]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-14, macos-15]
 
     steps:
       # Checkout repo and submodules
@@ -21,16 +21,20 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Set macOS deployment target
-        if: startsWith(matrix.os, 'macos')
-        run: echo "MACOSX_DEPLOYMENT_TARGET=11.0" >> $GITHUB_ENV
+      - name: Set macOS-14 deployment target
+        if: startsWith(matrix.os, 'macos-14')
+        run: echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
+
+      - name: Set macOS-15 deployment target
+        if: startsWith(matrix.os, 'macos-15')
+        run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> $GITHUB_ENV
 
       # Install gfortran on macOS
       - name: Install gfortran (macOS)
         if: startsWith(matrix.os, 'macos')
         run: |
           brew update
-          brew install gcc@13
+          brew install gcc
           # Get full path to gfortran
           GFORTRAN="$(brew --prefix gcc)/bin/gfortran"
           echo "GFORTRAN=$GFORTRAN" >> $GITHUB_ENV
