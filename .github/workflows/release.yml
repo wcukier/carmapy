@@ -54,6 +54,7 @@ jobs:
         uses: pypa/cibuildwheel@v3.2.1
         env:
           FC: ${{ env.GFORTRAN }}
+          CIBW_SKIP: ""
 
       # Upload wheels
       - uses: actions/upload-artifact@v4
