@@ -712,8 +712,8 @@ subroutine test_day()
   write(lun,'(A35)') name
 
 
-  write(lun,*) 0
-  write(lunf,*) 0
+  write(lun,'(i1)') 0
+  write(lunf,'(i1)') 0
   do j = 1, NBIN
    do i = 1, NZ
     write(lun, '(i3,i4)', advance="no") j, i
@@ -902,19 +902,19 @@ subroutine test_day()
 
       write(*,*) 'Recorded'
       if (IS_2D .eq. 1) then
-        write(lun,*) (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunp,*) (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunf,*) (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunfp,*) (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunrates,*) (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunratesp,*) (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lun,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunf,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunfp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunrates,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunratesp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
       else
-        write(lun,*) (istep)*dtime
-        write(lunp,*) (istep)*dtime
-        write(lunf,*) (istep)*dtime
-        write(lunfp,*) (istep)*dtime
-        write(lunrates,*) (istep)*dtime
-        write(lunratesp,*) (istep)*dtime
+        write(lun,'(f12.8)') (istep)*dtime
+        write(lunp,'(f12.8)') (istep)*dtime
+        write(lunf,'(f12.8)') (istep)*dtime
+        write(lunfp,'(f12.8)') (istep)*dtime
+        write(lunrates,'(f12.8)') (istep)*dtime
+        write(lunratesp,'(f12.8)') (istep)*dtime
       end if
 
       do j = 1, NBIN

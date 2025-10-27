@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath('../../src/'))
 project = 'carmapy'
 copyright = '2025, Wolf Cukier'
 author = 'Wolf Cukier'
-release = '0.5.9'
+release = '0.5.12'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
