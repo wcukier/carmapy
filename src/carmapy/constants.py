@@ -462,6 +462,27 @@ gas_dict = { #TODO change to predifined gas objects
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2
+    },
+        "SiO": { # need better sourcing for these constants
+        "cond_rho": 2.13,
+        "rtn": I_VAPRTN_USER,
+        "vp_offset": np.log(10) * 32.52 - 6,
+        "vp_tcoeff": np.log(10) * 49520,
+        "vp_metcoeff": 0,
+        "vp_logpcoeff": 0,
+        "wtmol": 44.0849,
+        "wtmol_dif": 44.0849,
+        "gcomp": -1,
+        "mucos_dict": {},
+        "hill_formula": "OSi",
+        "opacity_files": "KH18/Al2O3[s].txt",
+        "rho_cond": 2.13,
+        "surften_0": 243.2, #  @Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
+        "surften_slope": -0.013,
+        "coldia": 1.52e-8,
+        "is_typeIII": False,
+        "lat_heat_e": -1,
+        "stofact": 1
     }
 }
 
