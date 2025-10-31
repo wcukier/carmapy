@@ -267,6 +267,53 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   
     carma.set_nmr(nmr_dict)
 
+
+def calculate_mucos(core: Union[str, "Gas"],
+                    shell: Union[str, "Gas"],
+                    T_ref: float,
+                    surften_interface = 0.0) -> float:
+  """Uses Young's Equation to calculate the cosine of contact angle between
+    the seed particle and the condensing shell.  Limits the value to be between
+    +/- cos(0.1 degrees)
+
+  Parameters
+  ----------
+  core : Union[str, Gas]
+      The gas that condensed to form the core (either as a Gas object or the 
+      name of the carmapy default condensate)
+  shell : Union[str, Gas]
+      The gas that condenses onto the CCN (either as a Gas object or the 
+      name of the carmapy default condensate)
+  T_ref : float
+      The temperature at which to calculate the surface tensions [K]
+  surften_interface : float, optional
+      The surface tension at the interface of the core material and the
+      outer shell, by default 0.0
+
+  Returns
+  -------
+  float
+      The cosine of the contact angle between ther materials
+  """
+    
+  if isinstance(core, str):
+    surften_core = (gas_dict[core]["surften_0"] 
+                      + T_ref * gas_dict[core]["surften_slope"])
+  else:
+    surften_core = core.surften_0 + T_ref * core.surften_slope
+
+  
+  if isinstance(shell, str):
+    surften_shell = (gas_dict[shell]["surften_0"] 
+                      + T_ref * gas_dict[shell]["surften_slope"])
+  else:
+    surften_shell = shell.surften_0 + T_ref * shell.surften_slope
+
+    mu = (surften_core - surften_interface) / surften_shell
+    mu = np.min(mu, np.cos(0.1/180 * np.pi)) # set max to cos(0.1 deg)
+    mu = np.max(mu, -np.cos(0.1/180 * np.pi)) # set min to -cos(0.1 deg)
+
+    return surften_core/surften_shell
   
   
         

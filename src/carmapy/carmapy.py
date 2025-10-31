@@ -1,5 +1,6 @@
 from carmapy.constants import *
 from carmapy.results import *
+from carmapy.chemistry import calculate_mucos
 import os
 import shutil
 import f90nml
@@ -439,7 +440,8 @@ class Carma:
                       seed_group: Union[str, "Group"], 
                       rmin: float, 
                       mucos: float = None, 
-                      add_coag: bool = False) -> "Group":
+                      add_coag: bool = False,
+                      T_ref: float = 1000) -> "Group":
         """Adds a heterogeneously nucleating group to the simulation.  Assumes
         the gas nucleates on the seed particle. If a string is passed to `gas`, 
         will use the carmapy default parameters for that gas if that gas does 
@@ -463,6 +465,9 @@ class Carma:
         add_coag : bool, optional
             If true, allows coagulation of this particle onto itself,
             by default False
+        T_ref : float, optional
+            If a mucos is not provided, will use Young's equation to calculate
+            the mucos at this temperature
 
         Returns
         -------
@@ -483,7 +488,13 @@ class Carma:
         self.groups[name] = group
    
         if not mucos:
-            mucos = gas_dict[gas.name]["mucos_dict"][seed_group.name.split(" ")[-1]]
+            mucos = gas_dict[gas.name]["mucos_dict"].get(
+                        seed_group.name.split(" ")[-1], -5)
+            if mucos < -1:
+                mucos = calculate_mucos(
+                    self.gases[self.gases.keys()[seed_group.core.igas]], 
+                    gas, 
+                    T_ref)
         
         self.nucs.append(Nuc(seed_group, group, True, gas, mucos))
         
