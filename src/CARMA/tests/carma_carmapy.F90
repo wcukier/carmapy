@@ -909,12 +909,12 @@ subroutine test_day()
         write(lunrates,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
         write(lunratesp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
       else
-        write(lun,'(f12.8)') (istep)*dtime
-        write(lunp,'(f12.8)') (istep)*dtime
-        write(lunf,'(f12.8)') (istep)*dtime
-        write(lunfp,'(f12.8)') (istep)*dtime
-        write(lunrates,'(f12.8)') (istep)*dtime
-        write(lunratesp,'(f12.8)') (istep)*dtime
+        write(lun,'(f25.15)') (istep)*dtime
+        write(lunp,'(f25.15)') (istep)*dtime
+        write(lunf,'(f25.15)') (istep)*dtime
+        write(lunfp,'(f25.15)') (istep)*dtime
+        write(lunrates,'(f25.15)') (istep)*dtime
+        write(lunratesp,'(f25.15)') (istep)*dtime
       end if
 
       do j = 1, NBIN
