@@ -483,7 +483,8 @@ class Carma:
         if type(seed_group) == type(""):
             seed_group = self.groups["Pure "+seed_group.split(" ")[-1]]
         
-        name =  gas.name + " on " + seed_group.name.split(" ")[-1]
+        core_string = seed_group.name.split(" ")[-1]
+        name =  gas.name + " on " + core_string
         group = Group(len(self.groups)+1, name, rmin)
         self.groups[name] = group
    
@@ -499,7 +500,8 @@ class Carma:
         
         self.nucs.append(Nuc(seed_group, group, True, gas, mucos))
         
-        mantle_elem = Element(gas.name + " Mantle", len(self.elems)+1, 
+        mantle_elem = Element(f"{gas.name} Mantle ({core_string})", 
+                                len(self.elems)+1, 
                               group, gas.rho_cond, "Volatile", 
                               self.gases[gas.name].igas)
         self.elems[mantle_elem.name] = mantle_elem
