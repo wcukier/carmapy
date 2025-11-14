@@ -298,22 +298,26 @@ def calculate_mucos(core: Union[str, "Gas"],
     
   if isinstance(core, str):
     surften_core = (gas_dict[core]["surften_0"] 
-                      + T_ref * gas_dict[core]["surften_slope"])
+                      - T_ref * gas_dict[core]["surften_slope"])
   else:
-    surften_core = core.surften_0 + T_ref * core.surften_slope
+    surften_core = core.surften_0 - T_ref * core.surften_slope
 
   
   if isinstance(shell, str):
     surften_shell = (gas_dict[shell]["surften_0"] 
-                      + T_ref * gas_dict[shell]["surften_slope"])
+                      - T_ref * gas_dict[shell]["surften_slope"])
   else:
-    surften_shell = shell.surften_0 + T_ref * shell.surften_slope
+    surften_shell = shell.surften_0 - T_ref * shell.surften_slope
+
 
     mu = (surften_core - surften_interface) / surften_shell
-    mu = np.min(mu, np.cos(0.1/180 * np.pi)) # set max to cos(0.1 deg)
-    mu = np.max(mu, -np.cos(0.1/180 * np.pi)) # set min to -cos(0.1 deg)
+    mu = min(mu, np.cos(0.1/180 * np.pi)) # set max to cos(0.1 deg)
+    mu = max(mu, -np.cos(0.1/180 * np.pi)) # set min to -cos(0.1 deg)
 
-    return surften_core/surften_shell
+    print("surftens", surften_core, surften_shell, mu)
+
+
+    return mu
   
   
         

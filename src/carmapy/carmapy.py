@@ -491,8 +491,9 @@ class Carma:
             mucos = gas_dict[gas.name]["mucos_dict"].get(
                         seed_group.name.split(" ")[-1], -5)
             if mucos < -1:
+                print("seed gas:", list(self.gases.keys())[seed_group.core.igas - 1])
                 mucos = calculate_mucos(
-                    self.gases[self.gases.keys()[seed_group.core.igas]], 
+                    self.gases[list(self.gases.keys())[seed_group.core.igas - 1]], 
                     gas, 
                     T_ref)
         
