@@ -263,7 +263,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_H2O,
         "mucos_dict": {},
         "hill_formula": "H2O1",
-        "opacity_files": "WS15/H2O_complex.txt",
+        "opacity_files": "H2O_complex.txt",
         "rho_cond": RHO_W,
         "surften_0": np.nan,
         "surften_slope": np.nan,
@@ -285,7 +285,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_KCL,
         "mucos_dict": {},
         "hill_formula": "Cl1K1",
-        "opacity_files": "WS15/KCl_complex.txt",
+        "opacity_files": "KCl_complex.txt",
         "rho_cond": RHO_KCL,
         "surften_0": 160.4 + 0.07*273.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.07,
@@ -306,7 +306,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_ZNS,
         "mucos_dict": {"KCl": 0.144356},
         "hill_formula": "Zn",
-        "opacity_files": "WS15/ZnS_complex.txt",
+        "opacity_files": "ZnS_complex.txt",
         "rho_cond": RHO_ZNS,
         "surften_0": 860.0, #  @Citation: Zhang et al. 2003, J. Phys. Chem. B 2003, 107, 13051-13060 
         "surften_slope": 0,
@@ -327,13 +327,12 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_NA2S,
         "mucos_dict": {"TiO2": 0.48481},
         "hill_formula": "Na",
-        "opacity_files": "WS15/Na2S_complex.txt",
+        "opacity_files": "Na2S_complex.txt",
         "rho_cond": RHO_NA2S,
         "surften_0": 1033, #  @Citation: Graham Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
         "coldia": COLDIA_NA2S,
         "is_typeIII": True,
-        "lat_heat_e": -1,
         "lat_heat_e": -1,
         "stofact": 2
     },
@@ -349,7 +348,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_MNS,
         "mucos_dict": {"TiO2": 0.214735},
         "hill_formula": "Mn1S1",
-        "opacity_files": "KH18/MnS-KH_complex.txt",
+        "opacity_files": "MnS-KH_complex.txt",
         "rho_cond": RHO_MNS,
         "surften_0": 2326, #  @Citation:  Graham Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
@@ -370,7 +369,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_CR,
         "mucos_dict": {"TiO2": 0.262189},
         "hill_formula": "Cr",
-        "opacity_files": "KH18/Cr_complex.txt",
+        "opacity_files": "Cr_complex.txt",
         "rho_cond": RHO_CR,
         "surften_0": 1642 + .2 * 2133.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.2,
@@ -391,7 +390,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_MG2SIO4,
         "mucos_dict": {"TiO2": 0.995},
         "hill_formula": "Mg",
-        "opacity_files": "B21/Mg2SiO4_amorph.txt",
+        "opacity_files": "Mg2SiO4_amorph.txt",
         "rho_cond": RHO_MG2SIO4,
         "surften_0": 436, #  @!Kazasa et al. 1989 
         "surften_slope": 0,
@@ -412,7 +411,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_FE,
         "mucos_dict": {"TiO2": 0.221548},
         "hill_formula": "Fe",
-        "opacity_files": "KH18/Fe_complex.txt",
+        "opacity_files": "Fe_complex.txt",
         "rho_cond": RHO_FE,
         "surften_0": 1862 + .39*1803.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.39,
@@ -433,7 +432,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_TIO2,
         "mucos_dict": {},
         "hill_formula": "O2Ti1",
-        "opacity_files": "gCMCRT/TiO2[s].txt",
+        "opacity_files": "TiO2[s].txt",
         "rho_cond": RHO_TIO2,
         "surften_0": 535.124, #  @Citation: Lee et al. (2015)
         "surften_slope": 0.04396,
@@ -454,7 +453,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_AL2O3,
         "mucos_dict": {"TiO2": 0.724172},
         "hill_formula": "Al",
-        "opacity_files": "KH18/Al2O3[s].txt",
+        "opacity_files": "Al2O3[s].txt",
         "rho_cond": RHO_AL2O3,
         "surften_0": 690, #  @Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
         "surften_slope": 0,
@@ -475,7 +474,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_AL2O3,
         "mucos_dict": {},
         "hill_formula": "O1Si1",
-        "opacity_files": "KH18/Al2O3[s].txt",
+        "opacity_files": "SiO_complex.txt",
         "rho_cond": 2.13,
         "surften_0": 500, 
         "surften_slope": 0,

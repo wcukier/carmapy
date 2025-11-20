@@ -18,7 +18,7 @@ from collections.abc import Callable
 petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6",
               "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
 
-SRC = os.path.dirname(os.path.dirname(__file__))
+_SRC = os.path.dirname(os.path.dirname(__file__))
 
 MICRON_TO_CM = 1e-4
 
@@ -801,16 +801,6 @@ class Results:
 
 
 
-def _load_cloud_indices(specie_name):
-    data = np.genfromtxt(os.path.join(os.path.dirname(__file__),
-                                      "refractive_indices_txt_files",
-                                        opacity_files[specie_name]),
-                        comments="#")
-    wavelengths = data[:, 0] * 1e-4 # convert to cm
-    n_interp = interp1d(wavelengths, data[:, 1])
-    k_interp = interp1d(wavelengths, data[:, 2])
-    return n_interp, k_interp
-
 def _get_cloud_opacities(carma, 
                          i, 
                          wavelengths, 
@@ -820,10 +810,26 @@ def _get_cloud_opacities(carma,
     name = carma.results.group_names[i]
 
     
-    if not mie_table_path:
-        mie_table_path = os.path.join(SRC, "mie_tables", f'{name}.dat')
+    if name.split()[0] == "Pure":
+        species = name.split()[-1]
+    else:
+        species = name.split()[0]
 
-    data = np.genfromtxt(os.path.join(SRC, "mie_tables", f'{name}.dat'), delimiter='\t', names=True) #TODO
+    if mie_table_path:
+        data = np.genfromtxt(mie_table_path, delimiter='\t', names=True)
+    else:
+        try:
+            data = np.genfromtxt(
+                os.path.join(_SRC, "mie_tables", f'{species}_user.dat'),
+                 delimiter='\t', 
+                 names=True)
+        except: #TODO: handle this exception properly
+            data = np.genfromtxt(
+                os.path.join(_SRC, "mie_tables", f'{name}.dat'),
+                delimiter='\t', 
+                names=True)
+
+         
 
     r = data["rcm"]
     λ = data["λcm"]
