@@ -1092,7 +1092,9 @@ class Carma:
         if bot_flux is not None:
             gas.boundary["bot_flux"] = bot_flux
 
-    def run(self, suppress_output=False) -> None:
+    def run(self, 
+            suppress_output=False,
+            error_on_warn=True) -> None:
         """Runs the CARMA Simulation.
 
         Creates a directory at the path described by the name of the simulation
@@ -1106,6 +1108,10 @@ class Carma:
         suppress_output : bool, optional
             If true, will not print stdout from the CARMA executable,
             by default False
+
+        error_on_warn: bool, optional
+            If true will throw an error if carmapy's common sense checks fail
+            (NOT YET IMPLEMENTED)
 
         """
         if self.is_2d and self.velocity_avg < 0:

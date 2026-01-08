@@ -263,7 +263,7 @@ gas_dict = { #TODO change to predifined gas objects
         "gcomp": I_GCOMP_H2O,
         "mucos_dict": {},
         "hill_formula": "H2O1",
-        "opacity_files": "H2O_complex.txt",
+        "opacity_files": "WS15/H2O_complex.txt",
         "rho_cond": RHO_W,
         "surften_0": np.nan,
         "surften_slope": np.nan,
@@ -329,7 +329,7 @@ gas_dict = { #TODO change to predifined gas objects
         "hill_formula": "Na",
         "opacity_files": "Na2S_complex.txt",
         "rho_cond": RHO_NA2S,
-        "surften_0": 1033, #  @Citation: Graham Lee's calculations, estimated from enthalpy data
+        "surften_0": 1033, #  @Citation: Elsie Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
         "coldia": COLDIA_NA2S,
         "is_typeIII": True,
@@ -350,7 +350,7 @@ gas_dict = { #TODO change to predifined gas objects
         "hill_formula": "Mn1S1",
         "opacity_files": "MnS-KH_complex.txt",
         "rho_cond": RHO_MNS,
-        "surften_0": 2326, #  @Citation:  Graham Lee's calculations, estimated from enthalpy data
+        "surften_0": 2326, #  @Citation:  Elsie Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
         "coldia": COLDIA_MNS,
         "is_typeIII": False,
@@ -434,7 +434,7 @@ gas_dict = { #TODO change to predifined gas objects
         "hill_formula": "O2Ti1",
         "opacity_files": "TiO2[s].txt",
         "rho_cond": RHO_TIO2,
-        "surften_0": 535.124, #  @Citation: Lee et al. (2015)
+        "surften_0": 535.124, #  @Citation: Lee et al. (2015) TODO: Sindel et al. (2022) sig = 589.79_dp - 0.0708_dp * T
         "surften_slope": 0.04396,
         "coldia": COLDIA_TIO2,
         "is_typeIII": False,

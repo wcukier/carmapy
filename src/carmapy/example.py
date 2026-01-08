@@ -7,13 +7,13 @@ import numpy as np
 
 SRC = os.path.dirname(os.path.dirname(__file__))
 
-def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def example_levels(t=1000) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Loads example atmospheric structure "levels."  Atmospheric levels describe
     the boundaries between atmospheric layers and thus the length of "levels" 
     arrays is one more than that of the "centers" arrays.
 
-    The files are taken from a 1000 K, log g = 4.5, f_sed = 4, log [Fe/H] = 1
+    The files are taken from a (default 1000 K), log g = 4.5, f_sed = 4, log [Fe/H] = 1
     sonora diamondback [#morley2024]_ run. 
 
     References
@@ -21,6 +21,11 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     .. [#morley2024] Morley, C. V., Mukherjee, S., Marley, M. S., et al. 2024 (arXiv), 
        http://arxiv.org/abs/2402.00758
 
+    Args
+    ----
+    t : int
+        Temperature of the sample P-T profile to use in K.  Defaults to 1000.
+        Options are 1000 or 2000.
 
     Returns
     -------
@@ -33,7 +38,16 @@ def example_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     mu_levels : np.ndarray
         mean molecular weights [dimensionless]
     """
-    data = np.genfromtxt(os.path.join(SRC, "example_data", "example_levels"), skip_header=1)
+
+    if t == 1000: 
+        path = "example_levels"
+    elif t == 2000:
+        path = "example_levels2"
+    else:
+        raise ValueError(
+            "t must be either 1000 or 2000 (or left blank to default to 1000)")
+
+    data = np.genfromtxt(os.path.join(SRC, "example_data", path), comments='#')
 
     P_levels   = data[:, 0]
     T_levels   = data[:, 1]
