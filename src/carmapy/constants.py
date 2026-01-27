@@ -465,8 +465,8 @@ gas_dict = { #TODO change to predifined gas objects
         "SiO": { # need better sourcing for these constants
         "cond_rho": 2.13,
         "rtn": I_VAPRTN_USER,
-        "vp_offset": np.log(10) * 32.52 - 6,
-        "vp_tcoeff": np.log(10) * 49520,
+        "vp_offset": 32.52 / np.log(10)  - 6,
+        "vp_tcoeff":  49520 / np.log(10) ,
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
         "wtmol": 44.0849,

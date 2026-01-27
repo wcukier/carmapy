@@ -7,13 +7,13 @@ import numpy as np
 
 SRC = os.path.dirname(os.path.dirname(__file__))
 
-def example_levels(t=1000) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def example_levels(t=2000) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Loads example atmospheric structure "levels."  Atmospheric levels describe
     the boundaries between atmospheric layers and thus the length of "levels" 
     arrays is one more than that of the "centers" arrays.
 
-    The files are taken from a (default 1000 K), log g = 4.5, f_sed = 4, log [Fe/H] = 1
+    The files are taken from a (default 2000 K), log g = 4.5, f_sed = 4, log [Fe/H] = 1
     sonora diamondback [#morley2024]_ run. 
 
     References
@@ -24,7 +24,7 @@ def example_levels(t=1000) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     Args
     ----
     t : int
-        Temperature of the sample P-T profile to use in K.  Defaults to 1000.
+        Temperature of the sample P-T profile to use in K.  Defaults to 2000.
         Options are 1000 or 2000.
 
     Returns
