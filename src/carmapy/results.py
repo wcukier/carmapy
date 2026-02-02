@@ -292,6 +292,7 @@ class Results:
                                                             carma.NLONGITUDE,
                                                             np.max(counts))) 
                                                   * np.nan)
+
                 index = np.zeros(carma.NLONGITUDE, dtype=int)
                 for it in range(n_tstep):
                     self.gases_2d[self.gas_names[i]][
@@ -300,7 +301,6 @@ class Results:
                 self.gases_2d[self.gas_names[i]] = np.nanmean(
                                         self.gases_2d[self.gas_names[i]], 
                                         axis=2)
-                                                   
 
             for i in range(len(self.group_names)):
                 self.clouds[self.group_names[i]]["numden_2d"] = np.zeros(
@@ -326,7 +326,7 @@ class Results:
                 temp_array = np.zeros((NZ, 
                                        NBIN, 
                                        carma.NLONGITUDE, 
-                                       np.max(counts)))
+                                       np.max(counts))) * np.nan
                 for it in range(n_tstep):
                     temp_array[:, :, step[it], index[step[it]]] = arr[:, :, it]
                     index[step[it]] += 1 
