@@ -197,7 +197,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), species) 
   abund = get_fastchem_abundances(T, P, [s], metallicity)[0, :]
 
-  i = 0
+  i = 1
   while(sat_vp[i]/P[i] > abund[i]): 
     i += 1
     # print(f"{i:2d}\t{sat_vp[i]/P[i]:.2e}\t{abund[i]:.2e}\t{T[i]:.0f}\t{P[i]:.2e}\t{sat_vp[i]:2e}")
@@ -205,9 +205,16 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
       print(f"{s} does not condense")
       return P[i-1], T[i-1]
   
-  guess = T[i]
+  P_lo, P_hi = P[i-1], P[i]
+  T_hi, T_lo = T[i-1], T[i]
 
-  p_t = interp1d(T, P)
+  def p_t(T_in):
+
+    if T_in < T_lo: return np.nan
+    if T_in > T_hi: return np.nan
+
+    return np.exp((np.log(P_hi)-np.log(P_lo))/(T_hi-T_lo) * (T_in - T_lo) 
+                    + np.log(P_lo))
 
   def _diff(T):
 
@@ -216,15 +223,15 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
                                        np.log10(metallicity), 
                                        species) / p_t(T)
     
-    abund = get_fastchem_abundances(np.array(T), 
-                                    np.array(p_t(T)), 
+    abund = get_fastchem_abundances(np.array([T]), 
+                                    np.array([p_t(T)]), 
                                     [s], 
                                     metallicity)[0, :]
 
     return abund - sat_vp
   
 
-  root = scipy.optimize.root(_diff, guess).x[0]
+  root = scipy.optimize.root_scalar(_diff, bracket=(T_lo, T_hi)).root
   return p_t(root), root
 
 def populate_abundances_at_cloud_base(carma: "Carma") -> None:
