@@ -53,7 +53,6 @@ def get_fastchem_abundances(T : np.ndarray,
 
   input_data.temperature = temperature
   input_data.pressure = pressure
-  fastchem_flag = fastchem.calcDensities(input_data, output_data)
 
   solar_abundances = np.array(fastchem.getElementAbundances())
 
@@ -66,6 +65,7 @@ def get_fastchem_abundances(T : np.ndarray,
       element_abundances[j] *= metallicity
       
   fastchem.setElementAbundances(element_abundances)
+  fastchem_flag = fastchem.calcDensities(input_data, output_data)
 
   if np.amin(output_data.element_conserved[:]) == 0:
     raise RuntimeError("FastChem - element conservation: fail")

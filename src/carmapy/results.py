@@ -704,7 +704,9 @@ class Results:
 
         # species_dict = dict(zip(species, species_labels)) #used to convert FROM HILL notation to readable
 
-        data = get_fastchem_abundances(self.carma.T_levels, self.carma.P_levels, species, 1)
+        metallicity = 10**self.carma.log_metallicity
+
+        data = get_fastchem_abundances(self.carma.T_levels, self.carma.P_levels, species, metallicity)
         data = np.vstack((self.carma.P_levels/BAR_TO_BARYE, self.carma.T_levels, data))
 
         header = "pressure\ttemperature"

@@ -95,7 +95,7 @@ class Carma:
     """ Mean molecular weight of the atmosphere [dimentionless] """
 
     log_metallicity: float = 0
-    """ Log Solar Metallicity (Default 0) """
+    """ Log10 Solar Metallicity (Default 0) """
 
     r_planet: float = 6.991e9    
     """ Planet radius [cm] (Defaults to 1 Jovian radius); ignored in 1D mode. 
@@ -246,7 +246,7 @@ class Carma:
         wt_mol : float, optional
             Mean molecular weight [dimensionless], left as is if not provided
         log_metallicity : float, optional
-            Log metallicity relative to solar ([Fe/H]), left as is if not 
+            Log 10 metallicity relative to solar ([Fe/H]), left as is if not 
             provided
         r_planet : float, optional
             The planetary radius [cm (or R_J if use_jovian_radius is true)], 
