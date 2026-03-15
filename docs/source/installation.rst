@@ -1,26 +1,14 @@
 Installation
 ===============
 
-Dependencies
-------------
-Most dependencies will be automatically installed for you but in order to 
-install carmapy you must first either have the intel fortran compiler (preferred)
-or gfortran installed.  To check that they are installed you can run the 
-following commands::
-
-   which ifort
-   which gfortran
-
-as long as at least one of those commands returns as file path rather than saying
-"ifort not found" or "gfortran not found" then you should be good to proceed with
-installation.  If you are installing on an apple silicon device, you may be able
-to get away with installing using pip even if you don't have a fortran compiler
-
 Installation with pip
 ---------------------
 To install with pip simply write::
    
    pip install carmapy
+
+Assuming you are on a common operating system, this should work and all 
+dependencies should automatically be installed for you.
 
 Installation with git
 ---------------------
@@ -29,6 +17,19 @@ To install and build loacally::
    git clone --recursive https://github.com/wcukier/carmapy
    cd carmapy
    pip install .
+
+
+Most dependencies will be automatically installed for you but in order to 
+compile carmapy from source you must first either have the intel fortran compiler 
+or gfortran installed.  To check that they are installed you can run the 
+following commands::
+
+   which ifort
+   which gfortran
+
+as long as at least one of those commands returns as file path rather than saying
+"ifort not found" or "gfortran not found" then you should be good to proceed with
+installation.
 
 
 Testing Installation
