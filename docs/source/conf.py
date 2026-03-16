@@ -42,7 +42,7 @@ exclude_patterns = []
 nbsphinx_allow_errors = False
 autodoc_typehints = "description"
 autosummary_generate = True
-nbsphinx_execute = 'always'
+nbsphinx_execute = 'never'
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
