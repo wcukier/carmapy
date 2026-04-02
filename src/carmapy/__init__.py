@@ -7,5 +7,6 @@ import carmapy.example
 from .results import *
 from .base import *
 
-__Version__ = "0.5.13"
+from importlib.metadata import version
+__Version__ = version('carmapy')
 
