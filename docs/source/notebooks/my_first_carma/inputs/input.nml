@@ -10,7 +10,7 @@
     nnuc = 2
     nsolute = 1
     nwave = 0
-    nz = 126
+    nz = 152
     dtime = 100
     iappend = 0
     ibbnd_gc = 1
@@ -18,7 +18,7 @@
     idiag = 0
     igridv = 1
     irestart = 0
-    iskip = 100
+    iskip = 200
     itbnd_gc = 2
     itbnd_pc = 2
     nstep = 3000
@@ -55,5 +55,5 @@
     thcond_1 = 0.3912
     thcond_2 = 3.1607e-05
     velocity_avg = -1
-    wtmol_air_set = 2.3239773684490332
+    wtmol_air_set = 2.262911695960343
 /
