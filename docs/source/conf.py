@@ -9,14 +9,14 @@
 
 import os
 import sys
-from importlib.metadata import version
+from importlib.metadata import version as _get_version
 sys.path.insert(0, os.path.abspath('../../src/'))
 
 
 project = 'carmapy'
 copyright = '2025, Wolf Cukier'
 author = 'Wolf Cukier'
-release = version('carmapy')
+release = _get_version('carmapy')
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
