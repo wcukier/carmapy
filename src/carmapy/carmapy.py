@@ -547,7 +547,8 @@ class Carma:
             The created group consisting of the homogeneously nucleated gas
         """
         if type(gas) == type(""):
-            gas = self.gases.get(gas, Gas(gas, len(self.gases) + 1))
+            gas = self.gases.get(gas, gas)
+            if type(gas) == type(""): gas = Gas(gas, len(self.gases) + 1)
         self.gases[gas.name] = gas
             
         name = "Pure "+ gas.name
@@ -559,7 +560,7 @@ class Carma:
         self.nucs.append(Nuc(group, group, False, gas,  0))
         
         elem = Element("Pure "+ gas.name, len(self.elems)+1, 
-                            group, gas_dict[gas.name]["rho_cond"], "Volatile", 
+                            group, gas.rho_cond, "Volatile", 
                             self.gases[gas.name].igas)
         group.core = elem
         self.elems[elem.name] = elem

@@ -209,12 +209,10 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   T_hi, T_lo = T[i-1], T[i]
 
   def p_t(T_in):
-
-    if T_in < T_lo: return np.nan
-    if T_in > T_hi: return np.nan
-
-    return np.exp((np.log(P_hi)-np.log(P_lo))/(T_hi-T_lo) * (T_in - T_lo) 
+    T_in = np.asarray(T_in)
+    result = np.exp((np.log(P_hi)-np.log(P_lo))/(T_hi-T_lo) * (T_in - T_lo)
                     + np.log(P_lo))
+    return np.where((T_in >= T_lo) & (T_in <= T_hi), result, np.nan)
 
   def _diff(T):
 
@@ -226,7 +224,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
     abund = get_fastchem_abundances(np.array([T]), 
                                     np.array([p_t(T)]), 
                                     [s], 
-                                    metallicity)[0, :]
+                                    metallicity)[0, 0]
 
     return abund - sat_vp
   
