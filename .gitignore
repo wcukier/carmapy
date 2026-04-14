@@ -25,3 +25,5 @@ docs/source/notebooks/custom_gasses/**
 docs/source/notebooks/other_features/**
 build/** 
 wheelhouse/*
+claude/**
+CLAUDE.md

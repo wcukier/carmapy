@@ -638,35 +638,113 @@ class Results:
 
         plt.show()
 
-    def _is_prob_converged(self, burn_in=450, thresh=1e-15):
-        gas_abundances = self.gas_abund[-1, :, burn_in:]
+    def plot_condensation_curves(self, ax=None, t_step=-1, skip_gases=None, **kwargs):
+        """Plots condensation curves for each gas species in the CARMA model
+        overlaid on the model's P-T profile.
 
+        For each gas the condensation curve is the locus of (T, P) points at
+        which the gas partial pressure equals its saturation vapour pressure
+        (i.e. saturation ratio = 1).  The curve is computed analytically from
+        the vapour-pressure coefficients stored in ``constants.gas_dict`` using
+        the deep-atmosphere gas mixing ratio from the simulation.  Species whose
+        vapour-pressure formula does not have a temperature coefficient (e.g. H2O,
+        which uses a custom Fortran routine) are plotted using the saturation
+        vapour pressures stored directly in ``results.sat_vp``.
 
-        for i in range(len(gas_abundances)):
-            periods, strength = periodogram(gas_abundances[i, :] - np.mean(gas_abundances[i, :]), 1)
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes, optional
+            Axes to draw on.  A new figure is created when *None*.
+        t_step : int, optional
+            Time-step index used to read gas abundances, by default ``-1``
+            (last recorded step).
+        skip_gases : list[int], optional
+            List of gas indices to exclude.  Defaults to ``[]`` (plot all
+            species).
+        **kwargs
+            Extra keyword arguments forwarded to ``ax.plot`` for the P-T
+            profile line only.
 
-            if np.max(strength) > thresh:
-                long_period = max(10, 1/periods[np.argmax(strength)])
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+        ax : matplotlib.axes.Axes
+        """
+        if skip_gases is None:
+            skip_gases = []
+
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.get_figure()
+
+        ax.set_prop_cycle(mpl.cycler(color=petroff10))
+
+        P = self.P      # [barye], shape (NZ,)
+        T = self.T      # [K], shape (NZ,) or (NZ, NLONG)
+        if T.ndim > 1:
+            T = T[:, 0]  # use first longitude for 2D runs
+
+        log_met = getattr(self.carma, "log_metallicity", 0.0)
+
+        # P-T profile plotted in black so the colour cycle is free for species
+        ax.plot(T, P / 1e6, color="black", lw=2, label="P-T profile", **kwargs)
+
+        # Pressure grid for computing smooth condensation curves
+        P_curve = np.logspace(np.log10(P.min()), np.log10(P.max()), 300)
+
+        for i, gas_name in enumerate(self.gas_names):
+            if i in skip_gases:
+                continue
+
+            # Deep abundance: max over altitude gives uninhibited mixing ratio
+            x_gas = np.max(self.gas_abund[:, i, t_step]) / 1e6
+
+            if x_gas <= 0:
+                continue
+
+            entry = gas_dict.get(gas_name, {})
+            tcoeff = entry.get("vp_tcoeff", 0)
+
+            if tcoeff == 0:
+                # No analytic inversion available (e.g. H2O Murphy 2005).
+                # Use stored sat_vp at each model level: the condensation
+                # pressure for a given T is sat_vp / x_gas.
+                order = np.argsort(T)
+                P_cond = self.sat_vp[:, i, t_step] / x_gas  # barye
+                ax.plot(T[order], P_cond[order] / 1e6, label=gas_name)
             else:
-                long_period = 20
+                offset    = entry.get("vp_offset",    0.0)
+                metcoeff  = entry.get("vp_metcoeff",  0.0)
+                logpcoeff = entry.get("vp_logpcoeff", 0.0)
 
-            if (long_period * 2 > len(gas_abundances[0, :])): return False
+                # Condensation condition: sat_vp(T, P) = x_gas * P
+                #   1e6 * 10^(offset - tcoeff/T - metcoeff*log_met
+                #              - logpcoeff*log10(P*1e-6)) = x_gas * P
+                # Solving for T:
+                #   T = tcoeff / (6 + offset - metcoeff*log_met
+                #                 - logpcoeff*log10(P*1e-6)
+                #                 - log10(x_gas * P))
+                denom = (
+                    6.0
+                    + offset
+                    - metcoeff  * log_met
+                    - logpcoeff * np.log10(P_curve * 1e-6)
+                    - np.log10(x_gas * P_curve)
+                )
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    T_cond = np.where(denom > 0, tcoeff / denom, np.nan)
 
-            long_period = int(3*long_period+1)
+                ax.plot(T_cond, P_curve / 1e6, label=gas_name)
 
-            if (long_period * 2 > len(gas_abundances[0, :])): long_period = int(len(gas_abundances[0, :])/2)
-        
+        ax.set_yscale("log")
+        ax.invert_yaxis()
+        ax.set_xlabel("Temperature [K]")
+        ax.set_ylabel("Pressure [bar]")
+        ax.legend(bbox_to_anchor=(1.0, 1.0), loc="upper left")
+        fig.tight_layout()
 
-            mins = np.array([np.min(gas_abundances[i, j:j+long_period]) for j in range(len(gas_abundances[i, :]) - 2*long_period, len(gas_abundances[i, :]) - long_period)])
-            maxes = np.array([np.max(gas_abundances[i, j:j+long_period]) for j in range(len(gas_abundances[i, :]) - 2*long_period, len(gas_abundances[i, :]) - long_period)])
-            means = np.array([np.mean(gas_abundances[i, j:j+long_period]) for j in range(len(gas_abundances[i, :]) - 2*long_period, len(gas_abundances[i, :]) - long_period)])
-
-            if (np.max(np.abs(mins - np.mean(mins)))/np.mean(mins) > 0.5): return False
-            if (np.max(np.abs(means - np.mean(means)))/np.mean(means) > 0.5): return False
-            if (np.max(np.abs(maxes - np.mean(maxes)))/np.mean(maxes) > 0.5): return False
-
-            # print(f"{self.gas_names[i]}\t {np.max(np.abs(mins - np.mean(mins)))/np.mean(mins):.3e}\t {np.max(np.abs(maxes - np.mean(maxes)))/np.mean(maxes):.3e}\t {np.max(np.abs(means - np.mean(means)))/np.mean(means):.3e}")
-        return True
+        return fig, ax
 
     def gen_picaso_atm_file(self, file_path: str = None) -> None:
         """Generates an atmosphere file for use in picaso.
@@ -876,9 +954,9 @@ def _get_cloud_opacities(carma,
 
 
 
-            weighted_qext[:, ibin, ilambda] = weight_term * Qext_interp(r, wavelength)
-            weighted_qsca[:, ibin, ilambda] = weight_term * Qsca_interp(r, wavelength)
-            weighted_g[:, ibin, ilambda] = weight_term * Qsca_interp(r, wavelength) * g_interp(r, wavelength)
+            weighted_qext[:, ibin, ilambda] = weight_term * Qext_interp.ev(r, wavelength)
+            weighted_qsca[:, ibin, ilambda] = weight_term * Qsca_interp.ev(r, wavelength)
+            weighted_g[:, ibin, ilambda] = weight_term * Qsca_interp.ev(r, wavelength) * g_interp.ev(r, wavelength)
 
     
     beta_ext = np.sum(weighted_qext, axis=1)

@@ -53,7 +53,7 @@ def gen_mie_table(species: str,
                                     gas_dict[species]["opacity_files"])
     n_interp, k_interp = _load_cloud_indices(indices_path)
 
-    rs = np.array([min_r * ratio ** ir for ir in range(len(n_r))])
+    rs = np.array([min_r * ratio ** ir for ir in range(n_r)])
 
     with open(os.path.join(_SRC, "mie_tables", f"{species}_user.dat"), "w+") as f:
         f.write("r[cm]\tλ[cm]\tQ_ext\tQ_sca\tg\n")
@@ -61,11 +61,11 @@ def gen_mie_table(species: str,
             for il in range(len(lambdas)):
                 m = n_interp(lambdas[il]) + 1j*k_interp(lambdas[il])
 
-                mie_res = ps.AutoMieQ(m, 
-                                lambdas*1e7, 
-                                2*rs*1e7, 
+                mie_res = ps.AutoMieQ(m,
+                                lambdas[il]*1e7,
+                                2*rs[ibin]*1e7,
                                 asDict=True)
                 f.write(f"{rs[ibin]}\t{lambdas[il]}\t{mie_res['Qext']}"
-                         "\t{mie_res['Qsca']}\t{mie_res['g']}\n")
+                        f"\t{mie_res['Qsca']}\t{mie_res['g']}\n")
 
             f.flush()

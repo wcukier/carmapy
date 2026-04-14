@@ -359,7 +359,7 @@ class Carma:
         levels : ArrayLike
             Temperature values at the boundaries of the atmospheric cells [K].
             For 1-D CARMApy should be of shape (NZ,).  For 2-D CARMApy should
-            be of shape (NZ, NLONGITUDEz)
+            be of shape (NZ, NLONGITUDE)
             
         """
         levels = np.array(levels)
@@ -1490,8 +1490,8 @@ class Element:
 
         - "Core Mass": The inner element in a heterogeneously nucleating group
     igas : int
-        The index of the gas which the element grows from and evaporates to in t
-        he Carma simulation
+        The index of the gas which the element grows from and evaporates to in
+        the Carma simulation
     """
 
     def __init__(self, 
@@ -1507,7 +1507,7 @@ class Element:
         self.group: "Group" = group
         self.rho:   float   = rho
         self.proc:  str     = proc
-        self.igas:  int     = igas #TODO chance to reference gas directly
+        self.igas:  int     = igas #TODO change to reference gas directly
     
 
 _DEFAULT_GAS_BC = {"bot_conc": -1,
