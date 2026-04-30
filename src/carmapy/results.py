@@ -222,7 +222,7 @@ class Results:
                 t_step = f.readline()
 
             if t_step:
-                ts[it] = t_step
+                ts[it] = (it + 1) * carma.dt * carma.output_gap
                 for ibin in range(NBIN):
                     for iz in range(NZ):
                         line = f.readline()
