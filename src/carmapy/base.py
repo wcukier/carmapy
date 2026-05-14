@@ -75,9 +75,10 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.log_metallicity = nml["physical_params"]["met"]
 
     carma.atmo = {
-        "rmu_0": nml["physical_params"]["rmu_0"],
-        "rmu_t0": nml["physical_params"]["rmu_t0"],
-        "rmu_c": nml["physical_params"]["rmu_c"],
+        "rmu_1": nml["physical_params"]["rmu_1"],
+        "rmu_2": nml["physical_params"]["rmu_2"],
+        "rmu_3": nml["physical_params"]["rmu_3"],
+        "rmu_4": nml["physical_params"]["rmu_4"],
         "thcond_0": nml["physical_params"]["thcond_0"],
         "thcond_1": nml["physical_params"]["thcond_1"],
         "thcond_2": nml["physical_params"]["thcond_2"],
@@ -110,7 +111,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
              vp_metcoeff,
              vp_logpcoeff,
              lat_heat_e,
-             stofact) = shlex.split(line[:-1])
+             stofact,
+             hill_formula) = shlex.split(line[:-1])
             
             name= name[:-len(' Vapor')]
             carma.gases[name] = Gas(name, 
@@ -128,7 +130,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
                                      vp_logpcoeff = float(vp_logpcoeff),
                                      is_typeIII = bool(is_typeIII),
                                      lat_heat_e=float(lat_heat_e),
-                                     stofact=int(stofact)
+                                     stofact=int(stofact),
+                                     hill_formula=str(hill_formula)
                                      )
             
     

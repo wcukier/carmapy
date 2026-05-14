@@ -499,19 +499,33 @@ opacity_files = {
     "Al2O3": "KH18/Al2O3[s].txt"
 }
 
-# Taken from Gao and Benneke 2018
 atmo_dict = {
-    "Pure H2": {
-        "rmu_0": 8.76e-5,
-        "rmu_t0": 293.85,
-        "rmu_c": 72,
-        "thcond_0": 71.4857,
-        "thcond_1": .3912,
-        "thcond_2": 3.1607e-5,
+        "Pure H2": {
+        "rmu_1": 1.7970e-6, # Taken from Gao et al. 2023
+        "rmu_2": 0.685,
+        "rmu_3": -0.59,
+        "rmu_4": 140,
+        "thcond_0": 7992.77, #Fit to CRC 106th ed 1 MPa
+        "thcond_1": 38.08,
+        "thcond_2": -1.2585e-4,
+        "CP": 1.3e8
+    },
+    "Pure H2 Old": { # Taken from Gao and Benneke 2018
+        "rmu_1": 6.3624e-6,
+        "rmu_2": 0,
+        "rmu_3": 72,
+        "rmu_4": 0,
+        "thcond_0": 100*71.4857,
+        "thcond_1": 100*.3912,
+        "thcond_2": 100*3.1607e-5,
         "CP": 1.3e8
     }
 } 
 
+
+references = {
+    
+}
 
 JUPITER_RADIUS = 6.995e9 #cm
 BAR_TO_BARYE = 1e6

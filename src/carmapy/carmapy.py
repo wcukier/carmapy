@@ -857,9 +857,10 @@ class Carma:
         return k_B * T/(self.wt_mol * PROTON_MASS * self.surface_grav)
 
     def set_atmospheric_parameters(self, 
-                                   rmu_0: float, 
-                                   rmu_t0: float, 
-                                   rmu_c: float,
+                                   rmu_1: float, 
+                                   rmu_2: float, 
+                                   rmu_3: float,
+                                   rmu_4: float,
                                    thcond_0: float,
                                    thcond_1: float,
                                    thcond_2: float,
@@ -868,9 +869,8 @@ class Carma:
 
         Notes
         -----
-        1. Atmospheric viscosity, `rmu`, is set by the following formula
-           (the Sutherland equation): 
-           `rmu = rmu_0 * ((rmu_t0 + tmu_c)/(T + rmu_t0)) * (T/rmu_t0) ** 1.5`
+        1. Atmospheric viscosity, `rmu`, is set by the following formula: 
+           `rmu = rmu_1 * T^rmu_2 / (1 + rmu_3/T + rmu_4/T^2)`
            where `T` is the local atmospheric temperature
         
         2. Atmosphgeric thermal conductivity, `thcond` is set by the following
@@ -879,12 +879,14 @@ class Carma:
 
         Parameters
         ----------
-        rmu_0 : float
-            Viscosoty scaling term [Poise]
-        rmu_t0 : float
-             Viscosity reference temp [K]
-        rmu_c : float
-            Viscosity Sutherland constant [K]
+        rmu_1 : float
+            Viscosoty scaling term [Poise / K^rmu_2]
+        rmu_2 : float
+             Viscosity exponent [dimentionless]
+        rmu_3 : float
+            Viscosity linear term [K]
+        rmu_4 : float
+            Viscosity quadratic term [K^2]
         thcond_0 : float
             Consant thermal conductivity term [ergs/s/cm/K]
         thcond_1 : float
@@ -895,9 +897,10 @@ class Carma:
             Specific heat capacity of the atmosphere [erg/g/K]
         """
         self.atmo = {
-            "rmu_0": rmu_0,
-            "rmu_t0": rmu_t0,
-            "rmu_c": rmu_c,
+            "rmu_1": rmu_1,
+            "rmu_2": rmu_2,
+            "rmu_3": rmu_3,
+            "rmu_4": rmu_4,
             "thcond_0": thcond_0,
             "thcond_1": thcond_1,
             "thcond_2": thcond_2,
@@ -1159,9 +1162,10 @@ class Carma:
                 "rplanet":              self.r_planet,
                 "velocity_avg":         self.velocity_avg,
                 "met":                  self.log_metallicity,
-                "rmu_0":                self.atmo["rmu_0"],
-                "rmu_t0":               self.atmo["rmu_t0"],
-                "rmu_c":                self.atmo["rmu_c"],
+                "rmu_1":                self.atmo["rmu_1"],
+                "rmu_2":                self.atmo["rmu_2"],
+                "rmu_3":                self.atmo["rmu_3"],
+                "rmu_4":                self.atmo["rmu_4"],
                 "thcond_0":             self.atmo["thcond_0"],
                 "thcond_1":             self.atmo["thcond_1"],
                 "thcond_2":             self.atmo["thcond_2"],
@@ -1209,7 +1213,7 @@ class Carma:
             f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\trho_cond\t"
                     "surften_0\tcoldia\tvp_offset\tvp_tcoeff\tis_type3\t"
                     "surften_slope\tvp_metcoeff\tvplogpcoeff\tlat_heat_e\t"
-                    "stofact\n")
+                    "stofact\thill_formula\n")
             
             for key in self.gases.keys():
                 gas : "Gas" = self.gases[key]
@@ -1234,7 +1238,8 @@ class Carma:
                         f'{gas.vp_metcoeff:<.18e}\t'
                         f'{gas.vp_logpcoeff:<.18e}\t'
                         f'{gas.lat_heat_e:<.18e}\t'
-                        f'{gas.stofact:2d}'
+                        f'{gas.stofact:2d}\t'
+                        f'{gas.hill_formula}'
                         '\n')
         
         # TODO: check for names which are too long

@@ -196,6 +196,7 @@ subroutine test_day()
 
 
   character(30)      	:: name
+  character(30)      	:: hill_formula
   character(30)  :: type_spec
   character(30)      	:: gname
   character(len=3)	:: fileprefix
@@ -225,7 +226,7 @@ subroutine test_day()
 
   character(len=20)   :: file_pos
 
-  real(kind=f)  :: rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
+  real(kind=f)  :: rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP
   real(kind=f)  :: distance_btwn_elements, circumference, rotation_counter, slope, intercept
   real(kind=f)  :: current_distance, num_steps_btwn, current_step, RPLANET_DAT, restart_distance
   integer       :: closeto_temp_profile
@@ -237,7 +238,7 @@ subroutine test_day()
          g_boundary_file, p_boundary_file
   
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
-         met, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
+         met, rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
@@ -515,7 +516,7 @@ subroutine test_day()
 
     read(10, *) name, wtmol, iroutine, icomposition, wtmol_dif, rho_cond, surften_0, &
      coldia, vp_offset, vp_tcoeff, is_type3, surften_slope, vp_metcoeff, vp_logpcoeff, &
-     lat_heat_e, stofact
+     lat_heat_e, stofact, hill_formula
 
     write(*,*) "Add "//trim(name) //" ..."
     call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rho_cond, surften_0, &
@@ -760,7 +761,7 @@ subroutine test_day()
                          	      yc(:), dy(:), &
                          	      zc(:), zl(:), p(:), &
                          	      pl(:), t(:), wtmol_air(:), grav(:), rplanet, &
-                                rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, &
+                                rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP, &
                          	      rc, winds=winds(:), ekz=ekz(:), met=met, t0 = t0_in)
   if (rc < 0) stop "    *** FAILED CARMASTATE_CreateFromReference ***"
   
@@ -806,7 +807,7 @@ subroutine test_day()
               yc(:), dy(:), &
               zc(:), zl(:), p(:), &
               pl(:), t(:), wtmol_air(:), grav(:), rplanet, &
-              rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, &
+              rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP, &
               rc, told=t(:), winds=winds(:), ekz=ekz(:), &
               ftopp=ftopp,fbotp=fbotp,pctop=pctop,pcbot=pcbot, &
               gctop=gctop,gcbot=gcbot,ftopg=ftopg,fbotg=fbotg,met=met, t0=t0_in)
@@ -902,19 +903,19 @@ subroutine test_day()
 
       write(*,*) 'Recorded'
       if (IS_2D .eq. 1) then
-        write(lun,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunf,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunfp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunrates,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunratesp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lun,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunf,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunfp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunrates,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunratesp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
       else
-        write(lun,'(f25.15)') (istep)*dtime
-        write(lunp,'(f25.15)') (istep)*dtime
-        write(lunf,'(f25.15)') (istep)*dtime
-        write(lunfp,'(f25.15)') (istep)*dtime
-        write(lunrates,'(f25.15)') (istep)*dtime
-        write(lunratesp,'(f25.15)') (istep)*dtime
+        write(lun,'(f25.5)') (istep)*dtime !TODO -- change to just istep?
+        write(lunp,'(f25.5)') (istep)*dtime
+        write(lunf,'(f25.5)') (istep)*dtime
+        write(lunfp,'(f25.5)') (istep)*dtime
+        write(lunrates,'(f25.5)') (istep)*dtime
+        write(lunratesp,'(f25.5)') (istep)*dtime
       end if
 
       do j = 1, NBIN
