@@ -245,7 +245,7 @@ subroutine test_day()
          NCOAG, IS_2D, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
          ibbnd_gc
 
-  real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e
+  real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
   integer :: is_type3, stofact
 
   real(kind=f), allocatable ::tempr(:), pre(:), prel(:), alt(:), altl(:), wtmol_air(:), grav(:), ekz(:), ekzl(:), wtmol_gas(:)
@@ -516,13 +516,13 @@ subroutine test_day()
 
     read(10, *) name, wtmol, iroutine, icomposition, wtmol_dif, rho_cond, surften_0, &
      coldia, vp_offset, vp_tcoeff, is_type3, surften_slope, vp_metcoeff, vp_logpcoeff, &
-     lat_heat_e, stofact, hill_formula
+     lat_heat_e, desorption, stofact, hill_formula
 
     write(*,*) "Add "//trim(name) //" ..."
     call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rho_cond, surften_0, &
      coldia, vp_offset, vp_tcoeff,  rc, is_type3=INT(is_type3), surften_slope=surften_slope,&
      vp_metcoeff=vp_metcoeff, vp_logpcoeff=vp_logpcoeff, wtmol_dif=wtmol_dif, &
-     lat_heat_e=lat_heat_e, stofact=stofact)
+     lat_heat_e=lat_heat_e, stofact=stofact, desorption=desorption)
 
     if (rc < 0) stop "    *** FAILED ***"
 

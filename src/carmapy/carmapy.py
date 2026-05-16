@@ -1213,7 +1213,7 @@ class Carma:
             f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\trho_cond\t"
                     "surften_0\tcoldia\tvp_offset\tvp_tcoeff\tis_type3\t"
                     "surften_slope\tvp_metcoeff\tvplogpcoeff\tlat_heat_e\t"
-                    "stofact\thill_formula\n")
+                    "desorption\tstofact\thill_formula\n")
             
             for key in self.gases.keys():
                 gas : "Gas" = self.gases[key]
@@ -1238,6 +1238,7 @@ class Carma:
                         f'{gas.vp_metcoeff:<.18e}\t'
                         f'{gas.vp_logpcoeff:<.18e}\t'
                         f'{gas.lat_heat_e:<.18e}\t'
+                        f'{gas.desorption:<.18e}\t'
                         f'{gas.stofact:2d}\t'
                         f'{gas.hill_formula}'
                         '\n')
@@ -1624,6 +1625,9 @@ class Gas:
     lat_heat_e: float = -1
     """ Latent heat of evaporation, if not provided derived from other inputs (see note 3) """
 
+    desorption: float = -1
+    """ Desorption energy [eV]; if -1 (default), computed as 0.5 * latent heat of evaporation per molecule """
+
     stofact: int
     """ The stoichiometry factor between the gas phase and the condensate """
     
@@ -1658,6 +1662,7 @@ class Gas:
         self.is_typeIII     = kwargs.get("is_typeIII",    defaults["is_typeIII"])
         self.stofact        = kwargs.get("stofact",       defaults["stofact"])
         self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
+        self.desorption     = kwargs.get("desorption",    defaults.get("desorption", -1))
         self.hill_formula   = kwargs.get("hill_formula",  defaults["hill_formula"])
         self.boundary       = kwargs.get("boundary",      _DEFAULT_GAS_BC)
 
