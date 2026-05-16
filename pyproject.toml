@@ -17,6 +17,20 @@ dependencies = [
 ]
 readme = "README.md"
 
+[project.optional-dependencies]
+test = ["pytest>=8.0", "pytest-timeout"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --timeout=120"
+markers = [
+    "unit: fast, no Fortran binary required",
+    "parsing: uses committed fixture output files",
+    "integration: requires carmapy.exe, ~seconds to 2 min",
+    "regression: full tutorial run, ~25 min",
+    "slow: alias for regression",
+]
+
 [tool.setuptools]
 license-files = ["LICENSE"]
 

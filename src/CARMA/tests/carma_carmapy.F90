@@ -37,6 +37,7 @@ subroutine test_day()
   integer    :: NLONGITUDE 
   integer   :: NGROWTH, NNUC, NCOAG
   integer   :: IS_2D
+  integer   :: t_evolves
   integer   :: igridv
   integer   :: idocoag
   logical   :: do_coag
@@ -242,7 +243,7 @@ subroutine test_day()
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
-         NCOAG, IS_2D, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
+         NCOAG, IS_2D, t_evolves, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
          ibbnd_gc
 
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
@@ -263,6 +264,9 @@ subroutine test_day()
 
 
   write(*,*) ""
+
+  ! Defaults for namelist params that may be missing from older input.nml files.
+  t_evolves = 0   ! 0 = T,P fixed across the run -> setupgkern caches its outputs
 
   open(unit=10, file=nml_file, status='old')
     read(10, nml=input_params)
@@ -585,7 +589,8 @@ subroutine test_day()
   call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, do_fixedinit=.TRUE., do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
                         do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=10, &
-                        itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc)
+                        itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc, &
+                        do_t_evolves=(t_evolves .ne. 0))
   if (rc < 0) stop "    *** FAILED CARMA_Initialize ***"
 
   write(*,*) " "

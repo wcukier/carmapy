@@ -126,7 +126,10 @@ class Carma:
 
     iappend: int
     """ 1 if and only if a restarted run should add to existing files (default 0)"""
-    
+
+    t_evolves: bool
+    """ True if T/P change between timesteps (e.g. radiative coupling). Default False. """
+
     groups: dict[str, "Group"]
     """ Dictionary of group objects indexed by group name used in the sim """
 
@@ -154,6 +157,7 @@ class Carma:
 
         self.idiag:         int         = 0
         self.iappend:       int         = 0
+        self.t_evolves:     bool        = False
 
 
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
@@ -1189,6 +1193,7 @@ class Carma:
                 "NNUC":                 len(self.nucs),
                 "NCOAG":                len(self.coags),
                 "IS_2D":                int(self.is_2d),
+                "t_evolves":            int(self.t_evolves),
                 "igridv":               self.igridv,
                 "iappend":              self.iappend,
                 "itbnd_pc":             _bc2int(self.top_bound_type_cloud),

@@ -14,12 +14,22 @@ F90DOC = ../../bin/f90doc-0.4.0/f90doc
 PACKAGE =	CARMA
 TGZ =		CARMA.tar
 
-FFLAGS = -O3 
-# FFLAGS += -traceback 
-# FFLAGS += -pg 
-# FFLAGS += -ggdb -O0 -tr=aceback 
+FFLAGS = -O3
+# FFLAGS += -traceback
+# FFLAGS += -pg
+# FFLAGS += -ggdb -O0 -tr=aceback
 #FFLAGS += -DSINGLE                    # for single precision
 #FFLAGS += -DDEBUG                     # for debug print statements
+
+# Profiling build: `make all FORTRAN=gfortran PROFILE=1` (or ifort).
+# Drops to -O2 + frame pointers so gprof's call graph isn't erased by inlining.
+ifeq ($(PROFILE),1)
+  PROFILE_FFLAGS  = -pg -O2 -fno-omit-frame-pointer
+  PROFILE_LDFLAGS = -pg
+else
+  PROFILE_FFLAGS  =
+  PROFILE_LDFLAGS =
+endif
 
 
 # Add options for the Intel Fortran compiler.
@@ -87,7 +97,24 @@ endif
 
 ifeq ($(FORTRAN),gfortran)
   FFLAGS += -ffree-line-length-512 -O3
-  # FFLAGS += -fexceptions -fbackslash 
+  # -fstack-arrays: put automatic arrays on the stack regardless of size.
+  # Hot kernels (psolve, growevapl, etc.) declare `real :: tmp(NBIN)` where
+  # NBIN is runtime, which otherwise forces a heap malloc/free pair on every
+  # call. Profiling showed allocator traffic dominated several inner kernels.
+  FFLAGS += -fstack-arrays
+  # -march=native bakes in the build machine's CPU features. Default ON for
+  # source installs (pip install builds locally), where it gives free speed.
+  # Set NATIVE=0 when building portable wheels: e.g. `make NATIVE=0`.
+  NATIVE ?= 1
+  ifeq ($(NATIVE),1)
+    FFLAGS += -march=native
+  endif
+  FFLAGS += -funroll-loops
+  # Link-time optimization. Enables cross-file inlining of small leaf routines
+  # (smallconc, csolve, etc.) that are otherwise opaque function calls.
+  FFLAGS  += -flto
+  LDFLAGS += -flto
+  # FFLAGS += -fexceptions -fbackslash
   # FFLAGS += -fPIC -fno-omit-frame-pointer -ffixed-line-length-none
   #FLIBS= $RPATH $MLIBS -lm
   FOPTIMFLAGS = -O3
@@ -98,7 +125,7 @@ endif
 
 ifeq ($(FORTRAN),gcc)
   FFLAGS += -ffree-line-length-512 -O3
-  # FFLAGS += -fexceptions -fbackslash 
+  # FFLAGS += -fexceptions -fbackslash
   # FFLAGS += -fPIC -fno-omit-frame-pointer -ffixed-line-length-none
   #FLIBS= $RPATH $MLIBS -lm
   FOPTIMFLAGS = -O3
@@ -106,6 +133,10 @@ ifeq ($(FORTRAN),gcc)
 
   #LDFLAGS = -pthread -shared -Wl, -Wl,--no-undefined
 endif
+
+# Apply profile flags last so they override -O3 / pick up -pg.
+FFLAGS  += $(PROFILE_FFLAGS)
+LDFLAGS += $(PROFILE_LDFLAGS)
 
 # Overridning the implicit rules, which would try to use m2c to
 # create the .mod.

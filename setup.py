@@ -15,9 +15,12 @@ class BuildFortranBinary(build_ext):
 
         # Try Intel compiler first
         env = os.environ.copy()
+        # Pass NATIVE through to the Makefile. Default 1 (source installs build for
+        # the local CPU). Wheel builds set CARMAPY_NATIVE=0 for portable binaries.
+        native = os.environ.get("CARMAPY_NATIVE", "1")
         compilers = [
-            ("ifort", ["make", "all", "FORTRAN=ifort"]),
-            ("gfortran", ["make", "all", "FORTRAN=gfortran"]),
+            ("ifort", ["make", "all", "FORTRAN=ifort", f"NATIVE={native}"]),
+            ("gfortran", ["make", "all", "FORTRAN=gfortran", f"NATIVE={native}"]),
         ]
         built = False
 

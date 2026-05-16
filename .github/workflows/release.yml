@@ -57,6 +57,11 @@ jobs:
         env:
           FC: ${{ env.GFORTRAN }}
           CIBW_SKIP: ""
+          # Wheels must run on any user CPU, so omit `-march=native`.
+          # CIBW_ENVIRONMENT forwards the var into the cibuildwheel containers
+          # used for the Linux matrix entries. setup.py reads it and passes
+          # NATIVE=0 to `make`.
+          CIBW_ENVIRONMENT: "CARMAPY_NATIVE=0"
 
       # Upload wheels
       - uses: actions/upload-artifact@v4
