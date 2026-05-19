@@ -1100,13 +1100,14 @@ class Carma:
         if bot_flux is not None:
             gas.boundary["bot_flux"] = bot_flux
 
-    def run(self, 
+    def run(self,
             suppress_output=False,
-            error_on_warn=True) -> None:
+            error_on_warn=True,
+            nthreads=1) -> None:
         """Runs the CARMA Simulation.
 
         Creates a directory at the path described by the name of the simulation
-        and populates it with the input files required to run the CARMA 
+        and populates it with the input files required to run the CARMA
         executable.  Runs and print the stdout from the CARMA executable unless
         suppress_output is true.  The carma executable will also write to output
         files in the created directory.
@@ -1120,6 +1121,9 @@ class Carma:
         error_on_warn: bool, optional
             If true will throw an error if carmapy's common sense checks fail
             (NOT YET IMPLEMENTED)
+
+        nthreads : int, optional
+            Number of OpenMP threads to use, by default 1
 
         """
         if self.is_2d and self.velocity_avg < 0:
@@ -1136,7 +1140,19 @@ class Carma:
         os.makedirs(path, exist_ok=True)
         os.makedirs(os.path.join(path, "inputs"), exist_ok=True)
 
-        shutil.copy(os.path.join(SRC, "carmapy", "carmapy.exe"), path)
+        _exe_src = os.environ.get(
+            "CARMAPY_EXE", os.path.join(SRC, "carmapy", "carmapy.exe")
+        )
+        shutil.copy(_exe_src, path)
+
+        if nthreads > 1:
+            nm_out = subprocess.run(["nm", _exe_src], capture_output=True, text=True).stdout
+            omp_enabled = "GOMP_parallel" in nm_out or "__kmpc_fork_call" in nm_out
+            if not omp_enabled:
+                raise RuntimeError(
+                    f"nthreads={nthreads} requested but carmapy.exe was not built with "
+                    "OpenMP. Reinstall with CARMAPY_OPENMP=1."
+                )
 
         
         path_end = os.path.basename(path) 
@@ -1408,16 +1424,13 @@ class Carma:
         with _cd(path):
 
             try:
-                subprocess.run(["export", "OMP_NUM_THREADS=1"], 
-                               shell=True,
-                               stdout=subprocess.PIPE)
-                
-                subprocess.run(["export", "KMP_STACKSIZE=128M"],
-                                shell=True,
-                                stdout=subprocess.PIPE)
+                _env = os.environ.copy()
+                _env["OMP_NUM_THREADS"] = str(nthreads)
+                _env["KMP_STACKSIZE"] = "128M"
                 p = subprocess.Popen(
-                    os.path.join(SRC, "carmapy", "carmapy.exe"), 
-                    shell=False, 
+                    os.path.join(path, "carmapy.exe"),
+                    shell=False,
+                    env=_env,
                     stdout=subprocess.PIPE)
                 
                 while p.poll() is None:

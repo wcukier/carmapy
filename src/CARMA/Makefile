@@ -15,6 +15,8 @@ PACKAGE =	CARMA
 TGZ =		CARMA.tar
 
 FFLAGS = -O3
+EXTRA_FFLAGS ?=
+FFLAGS += $(EXTRA_FFLAGS)
 # FFLAGS += -traceback
 # FFLAGS += -pg
 # FFLAGS += -ggdb -O0 -tr=aceback
@@ -132,6 +134,12 @@ ifeq ($(FORTRAN),gcc)
   FDEBUGFLAGS = -g
 
   #LDFLAGS = -pthread -shared -Wl, -Wl,--no-undefined
+endif
+
+OPENMP ?= 0
+ifeq ($(OPENMP),1)
+  FFLAGS  += -fopenmp
+  LDFLAGS += -fopenmp
 endif
 
 # Apply profile flags last so they override -O3 / pick up -pg.
