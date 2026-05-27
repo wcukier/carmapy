@@ -208,32 +208,42 @@ class Results:
         sat_vp = np.zeros((NZ, NGAS, NT))
         ts = np.zeros(NT)
         if carma.is_2d: step = np.zeros(NT, dtype=int)
-        
+
+        block_rows = NBIN * NZ
+        gas_idx = NELEM + 2 + 2 * np.arange(NGAS)
+        sat_idx = NELEM + 3 + 2 * np.arange(NGAS)
+        ncols_block = None  # detected from first data line
+
         for it in range(NT-1):
-            if carma.is_2d:
-                (t_step, 
-                current_distance, 
-                rotation_counter,
-                current_step,
-                longitude) = f.readline().split()
-
-                step[it] = int(float(current_step))
-            else:
-                t_step = f.readline()
-
-            if t_step:
-                ts[it] = (it + 1) * carma.dt * carma.output_gap
-                for ibin in range(NBIN):
-                    for iz in range(NZ):
-                        line = f.readline()
-                        line = np.array(line.split(), dtype=float)
-                        for ielem in range(NELEM):
-                            numden[iz, ielem, ibin, it] = line[ielem+2]
-                        for igas in range(NGAS):
-                            gas_abund[iz, igas, it] = line[NELEM + 2+ 2*igas]
-                            sat_vp[iz, igas, it] = line[NELEM + 3 + 2*igas]
-            else:
+            header = f.readline()
+            if not header:
                 break
+
+            if carma.is_2d:
+                parts = header.split()
+                if len(parts) < 5:
+                    break
+                ts[it] = float(parts[0])
+                step[it] = int(float(parts[3]))
+            else:
+                ts[it] = float(header)
+
+            lines = [f.readline() for _ in range(block_rows)]
+            if not lines[-1]:
+                break
+            if ncols_block is None:
+                ncols_block = len(lines[0].split())
+            flat = np.fromstring(' '.join(lines), sep=' ', dtype=float)
+            if flat.size != block_rows * ncols_block:
+                break
+            block = flat.reshape(NBIN, NZ, ncols_block)
+
+            # numden[iz, ielem, ibin, it] = block[ibin, iz, 2+ielem]
+            numden[:, :, :, it] = block[:, :, 2:2+NELEM].transpose(1, 2, 0)
+            # gas_abund/sat_vp don't depend on ibin in the original loop;
+            # all NBIN rows for the same (iz,it) carry identical values.
+            gas_abund[:, :, it] = block[0, :, gas_idx].T
+            sat_vp[:, :, it]    = block[0, :, sat_idx].T
 
         numden_groups = np.zeros((NZ, NGROUP, NBIN, NT))
         
@@ -352,25 +362,37 @@ class Results:
         file_path = os.path.join(path, f"rates_{path_end}.txt")
         f = open(file_path)
 
+        rows_per_step = NBIN * NZ * (NELEM + NGROUP)
+        ncols_rate = None
+
         for it in range(n_tstep):
             t_step = f.readline()
+            if not t_step:
+                break
 
-            for ibin in range(NBIN):
-                for iz in range(NZ):
-                    for ielem in range(NELEM):
-                        line = np.array(f.readline().split(), dtype=float)
-                        hom_nuc_gain_rates[iz, ibin, ielem, it] = line[3]
-                        het_nuc_gain_rates[iz, ibin, ielem, it] = line[4]
-                        grow_gain_rates[iz, ibin, ielem, it] = line[5]
-                        evap_gain_rates[iz, ibin, ielem, it] = line[6]
-                    
-                    for igroup in range(NGROUP):
-                        line = np.array(f.readline().split(), dtype=float)
-                        
-                        nuc_loss_rates[iz, ibin, igroup, it] = line[3]
-                        grow_loss_rates[iz, ibin, igroup, it] = line[4]
-                        evap_loss_rates[iz, ibin, igroup, it] = line[5]
-                        coremass_frac[iz, ibin, igroup, it] = line[6]
+            lines = [f.readline() for _ in range(rows_per_step)]
+            if not lines[-1]:
+                break
+            if ncols_rate is None:
+                ncols_rate = len(lines[0].split())
+            arr = np.fromstring(' '.join(lines), sep=' ', dtype=float)
+            if arr.size != rows_per_step * ncols_rate:
+                break
+            arr = arr.reshape(NBIN, NZ, NELEM + NGROUP, ncols_rate)
+
+            elem_rows  = arr[:, :, :NELEM, :]              # (NBIN, NZ, NELEM, 7)
+            group_rows = arr[:, :, NELEM:, :]              # (NBIN, NZ, NGROUP, 7)
+
+            # Target axis order is (NZ, NBIN, N{ELEM|GROUP}, NT) — transpose (1,0,2)
+            hom_nuc_gain_rates[:, :, :, it] = elem_rows[..., 3].transpose(1, 0, 2)
+            het_nuc_gain_rates[:, :, :, it] = elem_rows[..., 4].transpose(1, 0, 2)
+            grow_gain_rates[:, :, :, it]    = elem_rows[..., 5].transpose(1, 0, 2)
+            evap_gain_rates[:, :, :, it]    = elem_rows[..., 6].transpose(1, 0, 2)
+
+            nuc_loss_rates[:, :, :, it]  = group_rows[..., 3].transpose(1, 0, 2)
+            grow_loss_rates[:, :, :, it] = group_rows[..., 4].transpose(1, 0, 2)
+            evap_loss_rates[:, :, :, it] = group_rows[..., 5].transpose(1, 0, 2)
+            coremass_frac[:, :, :, it]   = group_rows[..., 6].transpose(1, 0, 2)
         
 
 
