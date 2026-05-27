@@ -512,7 +512,7 @@ atmo_dict = {
     },
     "Pure H2 Old": { # Taken from Gao and Benneke 2018
         "rmu_1": 6.3624e-6,
-        "rmu_2": 0,
+        "rmu_2": 0.5,
         "rmu_3": 72,
         "rmu_4": 0,
         "thcond_0": 100*71.4857,

@@ -27,3 +27,6 @@ build/**
 wheelhouse/*
 claude/**
 CLAUDE.md
+benchmarks/**
+TODO.md
+

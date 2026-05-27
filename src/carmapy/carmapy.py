@@ -215,7 +215,7 @@ class Carma:
             if output_gap != int(output_gap):
                 raise TypeError("dt must be a integer")
             output_gap = int(output_gap)
-            if dt <= 0:
+            if output_gap <= 0:
                 raise ValueError("output_gap must be positive")
             
         if n_tstep:
@@ -984,12 +984,12 @@ class Carma:
         if top_boundary_type not in ALLOWED_BCs: 
             raise ValueError(f"top_boundary_type must be one of {ALLOWED_BCs}")
 
-        if bottom_boundary_type not in ALLOWED_BCs: 
-            raise ValueError(f"bottom_boundary_type must be one of "
+        if bot_boundary_type not in ALLOWED_BCs:
+            raise ValueError(f"bot_boundary_type must be one of "
                              f"{ALLOWED_BCs}")
 
         self.top_bound_type_gas = top_boundary_type
-        self.bot_bound_type_gas = bottom_boundary_type
+        self.bot_bound_type_gas = bot_boundary_type
         
     def set_cloud_boundary(self, 
                             group: Union[str, "Group"],
@@ -1428,7 +1428,7 @@ class Carma:
                 _env["OMP_NUM_THREADS"] = str(nthreads)
                 _env["KMP_STACKSIZE"] = "128M"
                 p = subprocess.Popen(
-                    os.path.join(path, "carmapy.exe"),
+                    "./carmapy.exe",
                     shell=False,
                     env=_env,
                     stdout=subprocess.PIPE)

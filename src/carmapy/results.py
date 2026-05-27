@@ -817,11 +817,12 @@ class Results:
         np.savetxt(file_path, np.transpose(data), header=header, fmt="%.18e", comments="")
         print(f"Wrote file: {file_path}")
 
-    def gen_picaso_cloud_file(self, 
-                              wavelengths: np.ndarray, 
+    def gen_picaso_cloud_file(self,
+                              wavelengths: np.ndarray,
                               file_path: str = None,
                               mie_table_path: str = None,
-                              skip_groups=[]):
+                              skip_groups=[],
+                              n_avg: int = 20):
         """Generate cloud opacity tables for use in picaso. Picaso is a python 
         package which can calculate spectra and is available at 
         https://github.com/natashabatalha/picaso.
@@ -847,6 +848,9 @@ class Results:
         skip_groups : list, optional
             The indices of any cloud groups to exclude from the opacity 
             calculation, by default None
+        n_avg : int, optional
+            The number of timesteps to average the cloud size distribution over 
+            while generating the cloud file.  Defaults to 20.
         """
 
         self.carma._citation["picaso"] = True
@@ -864,10 +868,11 @@ class Results:
 
         for i in range(len(carma.groups)):
             if i in skip_groups: continue
-            beta_ext, beta_sca, g_avg = _get_cloud_opacities(carma, 
-                                                             i, 
+            beta_ext, beta_sca, g_avg = _get_cloud_opacities(carma,
+                                                             i,
                                                              wavelengths,
-                                                             mie_table_path)
+                                                             mie_table_path,
+                                                             n_avg=n_avg)
 
             beta_exts.append(beta_ext)
             beta_scas.append(beta_sca)
@@ -903,11 +908,12 @@ class Results:
 
 
 
-def _get_cloud_opacities(carma, 
-                         i, 
-                         wavelengths, 
+def _get_cloud_opacities(carma,
+                         i,
+                         wavelengths,
                          mie_table_path = None,
-                         min_columnden = 1e-25):
+                         min_columnden = 1e-25,
+                         n_avg = 20):
 
     name = carma.results.group_names[i]
 
@@ -955,7 +961,7 @@ def _get_cloud_opacities(carma,
     g_interp = RectBivariateSpline(r_unique, λ_unique, g)
 
 
-    numdens = np.mean(carma.results.numden[:, i, :, -20:], axis=2)
+    numdens = np.mean(carma.results.numden[:, i, :, -n_avg:], axis=2)
     columndens = np.sum(numdens, axis=0)
 
     weighted_qext = np.zeros((carma.NZ, carma.NBIN, len(wavelengths)))

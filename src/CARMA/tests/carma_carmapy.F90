@@ -759,9 +759,7 @@ subroutine test_day()
   endif
 
   call CARMASTATE_CreateFromReference(cstate, carma_ptr, time, dtime, NZ, &
-                         	      ! igridv, I_CART, lat, lon, &
-                                 I_CART, I_CART, lat, lon, &
-
+                         	      igridv, I_CART, lat, lon, &
                          	      xc(:), dx(:), &
                          	      yc(:), dy(:), &
                          	      zc(:), zl(:), p(:), &
@@ -807,7 +805,7 @@ subroutine test_day()
     ! Create a CARMASTATE for this column.
     call CARMASTATE_Create(&
               cstate, carma_ptr, time, dtime, NZ, &
-              I_CART, I_CART, lat, lon, &
+              igridv, I_CART, lat, lon, &
               xc(:), dx(:), &
               yc(:), dy(:), &
               zc(:), zl(:), p(:), &

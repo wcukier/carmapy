@@ -27,6 +27,7 @@ markers = [
     "unit: fast, no Fortran binary required",
     "parsing: uses committed fixture output files",
     "integration: requires carmapy.exe, ~seconds to 2 min",
+    "pathway: per-physics-pathway autoregression vs committed .npz references, requires carmapy.exe",
     "regression: full tutorial run, ~25 min",
     "slow: alias for regression",
 ]

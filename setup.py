@@ -18,14 +18,20 @@ class BuildFortranBinary(build_ext):
         # Pass NATIVE through to the Makefile. Default 1 (source installs build for
         # the local CPU). Wheel builds set CARMAPY_NATIVE=0 for portable binaries.
         native = os.environ.get("CARMAPY_NATIVE", "1")
+        openmp = os.environ.get("CARMAPY_OPENMP", "0")
         compilers = [
-            ("ifort", ["make", "all", "FORTRAN=ifort", f"NATIVE={native}"]),
-            ("gfortran", ["make", "all", "FORTRAN=gfortran", f"NATIVE={native}"]),
+            ("ifort", ["make", "all", "FORTRAN=ifort", f"NATIVE={native}", f"OPENMP={openmp}"]),
+            ("gfortran", ["make", "all", "FORTRAN=gfortran", f"NATIVE={native}", f"OPENMP={openmp}"]),
         ]
         built = False
 
         os.makedirs(os.path.join(SRC, "CARMA", "build", "carma"), exist_ok=True)
         shutil.copyfile(os.path.join(SRC, "CARMA", "Makefile"), os.path.join(SRC, "CARMA", "build", "carma", "Makefile"))
+
+        try:
+            subprocess.call(["make", "clean"], cwd=os.path.join(SRC, "CARMA", "build", "carma"))
+        except Exception:
+            pass
 
         for name, cmd in compilers:
             try:

@@ -58,7 +58,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.NZ = nml["input_params"]["NZ"] 
     carma.NLONGITUDE = nml["input_params"]["NLONGITUDE"]
     carma.is_2d = nml["input_params"]["IS_2D"]
-    carma.igridv - nml["input_params"]["igridv"]
+    carma.igridv = nml["input_params"]["igridv"]
     carma.NBIN = nml["input_params"]["NBIN"]
     carma.output_gap = nml["input_params"]["iskip"]
     carma.n_tstep  = nml["input_params"]["nstep"]
@@ -111,6 +111,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
              vp_metcoeff,
              vp_logpcoeff,
              lat_heat_e,
+             desorption,
              stofact,
              hill_formula) = shlex.split(line[:-1])
             
@@ -128,8 +129,9 @@ def load_carma(path: str, restart: int =0) -> Carma:
                                      vp_tcoeff = float(vp_tcoeff),
                                      vp_metcoeff = float(vp_metcoeff),
                                      vp_logpcoeff = float(vp_logpcoeff),
-                                     is_typeIII = bool(is_typeIII),
+                                     is_typeIII = bool(int(is_typeIII)),
                                      lat_heat_e=float(lat_heat_e),
+                                     desorption=float(desorption),
                                      stofact=int(stofact),
                                      hill_formula=str(hill_formula)
                                      )
@@ -209,9 +211,10 @@ def load_carma(path: str, restart: int =0) -> Carma:
             g = carma.gases[key]
             _, gctop, gcbot, ftopg, fbotg = shlex.split(f.readline()[:-1])
 
+            scale = carma.wt_mol / g.wtmol_dif
             g.boundary = {
-                "top_conc": float(gctop),
-                "bot_conc": float(gcbot),
+                "top_conc": (float(gctop) - 1e-50) * scale,
+                "bot_conc": (float(gcbot) - 1e-50) * scale,
                 "top_flux": float(ftopg),
                 "bot_flux": float(fbotg)
             }

@@ -315,14 +315,11 @@ def calculate_mucos(core: Union[str, "Gas"],
     surften_shell = shell.surften_0 - T_ref * shell.surften_slope
 
 
-    mu = (surften_core - surften_interface) / surften_shell
-    mu = min(mu, np.cos(0.1/180 * np.pi)) # set max to cos(0.1 deg)
-    mu = max(mu, -np.cos(0.1/180 * np.pi)) # set min to -cos(0.1 deg)
+  mu = (surften_core - surften_interface) / surften_shell
+  mu = min(mu, np.cos(0.1/180 * np.pi)) # set max to cos(0.1 deg)
+  mu = max(mu, -np.cos(0.1/180 * np.pi)) # set min to -cos(0.1 deg)
 
-    print("surftens", surften_core, surften_shell, mu)
-
-
-    return mu
+  return mu
   
   
         
