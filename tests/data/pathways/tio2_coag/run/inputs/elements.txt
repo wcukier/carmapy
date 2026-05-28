@@ -1,0 +1,2 @@
+igroup	name	rho	process	igas
+1	"Pure TiO2"                        4.2500	"Volatile"     	 2

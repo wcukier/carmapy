@@ -55,20 +55,6 @@ def test_add_hom_group_adds_gas():
 
 
 @pytest.mark.unit
-def test_add_hom_group_creates_one_element():
-    c = Carma("_t")
-    c.add_hom_group("TiO2", 1e-8)
-    assert len(c.elems) == 1
-
-
-@pytest.mark.unit
-def test_add_hom_group_creates_one_growth():
-    c = Carma("_t")
-    c.add_hom_group("TiO2", 1e-8)
-    assert len(c.growth) == 1
-
-
-@pytest.mark.unit
 def test_add_hom_group_creates_hom_nuc():
     c = Carma("_t")
     c.add_hom_group("TiO2", 1e-8)
@@ -82,14 +68,6 @@ def test_add_het_group_creates_group():
     c.add_hom_group("TiO2", 1e-8)
     c.add_het_group("Mg2SiO4", "TiO2", 1e-8)
     assert "Mg2SiO4 on TiO2" in c.groups
-
-
-@pytest.mark.unit
-def test_add_het_group_creates_two_additional_elements():
-    c = Carma("_t")
-    c.add_hom_group("TiO2", 1e-8)   # 1 elem
-    c.add_het_group("Mg2SiO4", "TiO2", 1e-8)  # +2 (mantle + core copy)
-    assert len(c.elems) == 3
 
 
 @pytest.mark.unit

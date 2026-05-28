@@ -1,0 +1,2 @@
+name	rmin
+"Pure KCl"                         1.000000000000000e-08

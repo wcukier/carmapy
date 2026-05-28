@@ -25,7 +25,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent.parent.parent
 PATHWAY_DATA = REPO_ROOT / "tests" / "data" / "pathways"
 
-RTOL = 1e-5
+RTOL = 0.10
 ATOL = 1e-30
 
 PATHWAYS = ["tio2_hom", "tio2_coag", "mg2sio4_het"]

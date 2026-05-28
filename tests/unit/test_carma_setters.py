@@ -58,13 +58,10 @@ def test_set_stepping_partial_update_preserves_n_tstep():
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(strict=True, reason="Bug: validates dt instead of output_gap for positivity")
 def test_set_stepping_output_gap_negative_raises():
-    # Bug in set_stepping: the positivity check uses `dt` instead of `output_gap`
-    # (carmapy.py ~L215: `if dt <= 0` should be `if output_gap <= 0`)
     c = Carma("_t")
     with pytest.raises(ValueError):
-        c.set_stepping(dt=100, output_gap=-1)  # should raise but doesn't due to bug
+        c.set_stepping(dt=100, output_gap=-1)
 
 
 # ── set_physical_params ───────────────────────────────────────────────────────
@@ -179,14 +176,6 @@ def test_cloud_boundary_type_stored():
 # ── set_gas_boundary_type ─────────────────────────────────────────────────────
 
 @pytest.mark.unit
-@pytest.mark.xfail(strict=True, reason="Bug: NameError - uses 'bottom_boundary_type' instead of 'bot_boundary_type'")
 def test_set_gas_boundary_type_valid():
-    # Bug in set_gas_boundary_type (carmapy.py ~L983):
-    # `if bottom_boundary_type not in ALLOWED_BCs` raises NameError
-    # Fix: change to `if bot_boundary_type not in ALLOWED_BCs`
     c = Carma("_t")
-    # This should succeed but raises NameError due to the bug
-    try:
-        c.set_gas_boundary_type("fixed_flux", "fixed_conc")
-    except NameError:
-        raise AssertionError("NameError: bug confirmed - bottom_boundary_type undefined")
+    c.set_gas_boundary_type("fixed_flux", "fixed_conc")

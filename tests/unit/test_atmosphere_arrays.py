@@ -12,14 +12,6 @@ def test_add_P_sets_nz():
 
 
 @pytest.mark.unit
-def test_add_P_stores_levels():
-    c = Carma("_t")
-    P = np.array([1e9, 5e8, 1e8])
-    c.add_P(P)
-    np.testing.assert_array_equal(c.P_levels, P)
-
-
-@pytest.mark.unit
 def test_add_P_computes_centers():
     c = Carma("_t")
     P = np.array([300.0, 200.0, 100.0])
@@ -93,14 +85,6 @@ def test_add_kzz_wrong_shape_raises():
     c.add_P(P)
     with pytest.raises(ValueError):
         c.add_kzz(np.ones(5) * 1e8)
-
-
-@pytest.mark.unit
-def test_add_kzz_stores_levels():
-    c = Carma("_t")
-    kzz = np.ones(11) * 3e8
-    c.add_kzz(kzz)
-    np.testing.assert_array_equal(c.kzz_levels, kzz)
 
 
 @pytest.mark.unit

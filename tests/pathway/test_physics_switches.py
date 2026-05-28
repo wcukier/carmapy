@@ -38,7 +38,7 @@ DT           = 250
 
 # Tolerances: set after running generate_physics_fixtures.py --measure-error.
 # Current values are intentionally generous until empirically tightened.
-NUMDEN_RTOL = 0.50   # TODO: tighten after measuring run-to-run variability
+NUMDEN_RTOL = 0.10
 NUMDEN_ATOL = 1.0    # gate near-zero cells
 GAS_RTOL    = 0.10
 GAS_ATOL    = 1e-8

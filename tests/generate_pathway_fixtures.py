@@ -51,7 +51,7 @@ def _build_pathway(name, path, example_levels):
         c.add_gas("TiO2")
         c.add_gas("Mg2SiO4")
         c.add_hom_group("TiO2", 1e-8)
-        c.add_het_group("Mg2SiO4", "TiO2", 1e-8)
+        c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
 
     elif name == "multispecies":
         c.add_gas("TiO2")
@@ -59,7 +59,7 @@ def _build_pathway(name, path, example_levels):
         c.add_gas("Mg2SiO4")
         c.add_hom_group("TiO2", 1e-8)
         c.add_hom_group("KCl", 1e-8)
-        c.add_het_group("Mg2SiO4", "TiO2", 1e-8)
+        c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
         c.add_coag("Pure TiO2")
 
     populate_abundances_at_cloud_base(c)

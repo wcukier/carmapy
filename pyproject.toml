@@ -54,5 +54,5 @@ build = "cp310-*"
 
 [tool.cibuildwheel.macos]
 before-build = "brew install gcc"
-environment = { FC = "gfortran", FORTRAN = "gfortran" }
+environment = { FC = "gfortran", FORTRAN = "gfortran", CARMAPY_NATIVE = "0" }
 repair-wheel-command = "delocate-wheel -v -w {dest_dir} {wheel}"

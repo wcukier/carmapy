@@ -40,10 +40,6 @@ def _mock_popen():
 
 
 @pytest.mark.unit
-@pytest.mark.xfail(
-    strict=True,
-    reason="load_carma has bugs: (1) igridv subtraction L61, (2) gases.txt unpack mismatch L99",
-)
 def test_load_then_run_reproduces_input_files(tmp_path, example_levels):
     """After load_carma(dir1), re-running into dir2 should produce identical inputs."""
     from carmapy.carmapy import Carma
@@ -78,10 +74,21 @@ def test_load_then_run_reproduces_input_files(tmp_path, example_levels):
         c2.run(suppress_output=True)
 
     # ── Assertion: every input file should be byte-identical ─────────────────
+    # input.nml legitimately contains the run directory name (filename/
+    # filename_restart), which differs by design here. Strip those lines before
+    # comparing.
+    def _read_nml_filtered(path):
+        with open(path) as f:
+            return [ln for ln in f
+                    if not ln.lstrip().startswith(("filename ", "filename_restart "))]
+
     mismatched = []
     for rel in DETERMINISTIC_FILES:
         f1 = os.path.join(dir1, rel)
         f2 = os.path.join(dir2, rel)
-        if not filecmp.cmp(f1, f2, shallow=False):
+        if rel == "inputs/input.nml":
+            if _read_nml_filtered(f1) != _read_nml_filtered(f2):
+                mismatched.append(rel)
+        elif not filecmp.cmp(f1, f2, shallow=False):
             mismatched.append(rel)
     assert not mismatched, f"Files differ after roundtrip: {mismatched}"
