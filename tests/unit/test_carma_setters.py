@@ -37,8 +37,8 @@ def test_set_stepping_sets_output_gap():
 @pytest.mark.unit
 def test_set_stepping_sets_n_tstep():
     c = Carma("_t")
-    c.set_stepping(n_tstep=500)
-    assert c.n_tstep == 500
+    c.set_stepping(n_tstep=5000)
+    assert c.n_tstep == 5000
 
 
 @pytest.mark.unit
@@ -52,9 +52,9 @@ def test_set_stepping_partial_update_preserves_output_gap():
 @pytest.mark.unit
 def test_set_stepping_partial_update_preserves_n_tstep():
     c = Carma("_t")
-    c.n_tstep = 888
+    c.n_tstep = 8880
     c.set_stepping(dt=100)
-    assert c.n_tstep == 888
+    assert c.n_tstep == 8880
 
 
 @pytest.mark.unit
