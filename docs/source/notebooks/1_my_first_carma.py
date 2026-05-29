@@ -32,7 +32,7 @@ carma = carmapy.Carma("my_first_carma")
 # how many timesteps to run
 
 # %%
-carma.set_stepping(dt=100, output_gap=2000, n_tstep=24000)
+carma.set_stepping(dt=100, output_gap=1000, n_tstep=24000)
 
 # %% [markdown]
 # The parameters tell carmapy the following

@@ -768,7 +768,9 @@ class Results:
 
         return fig, ax
 
-    def gen_picaso_atm_file(self, file_path: str = None) -> None:
+    def gen_picaso_atm_file(self, file_path: str = None,
+                            longitude: int = None,
+                            suppress_output: bool = False) -> None:
         """Generates an atmosphere file for use in picaso.
         Picaso is a python package which can calculate spectra and is available
         at https://github.com/natashabatalha/picaso.
@@ -776,17 +778,27 @@ class Results:
         Parameters
         ----------
         file_path : str, optional
-            The path to save the file to.  If not provided, creates a file 
+            The path to save the file to.  If not provided, creates a file
             located in the directory storing the carma simulation.
+        longitude : int
+            Longitude index to use.  Required for 2-D runs; must not be set
+            for 1-D runs.
+        suppress_output : bool, optional
+            If True, suppress the "Wrote file" confirmation message.
 
         """
         self.carma._citation["picaso"] = True
+
+        if self.carma.is_2d and longitude is None:
+            raise ValueError("longitude is required for 2-D runs")
+        if not self.carma.is_2d and longitude is not None:
+            raise ValueError("longitude cannot be set for 1-D runs")
 
         if not file_path: file_path = os.path.join(self.path, 'fastchem.atm')
 
 
         # species = ['H2O1', 'C1H4', 'C1O1', 'C1O2', 'Na', 'K', 'H2S1', 'C1H1N1_1', 'O2S1', 'H', 'H2', 'He', 'H1-', 'H1+', 'e-']
-        species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4', 
+        species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4',
                    'C1O1','C1O2','O2','N','H1N1','C1N1','C1H1N1_1','N1O1',
                    'H2N1','N2','H3N1','H1S1','H2O4S1','H2S1','S','S2','O1S1',
                    'C1S1','C1O1S1','C1S2','N1S1','O2S1','S4','S8','S3','O1S2',
@@ -806,8 +818,10 @@ class Results:
 
         metallicity = 10**self.carma.log_metallicity
 
-        data = get_fastchem_abundances(self.carma.T_levels, self.carma.P_levels, species, metallicity)
-        data = np.vstack((self.carma.P_levels/BAR_TO_BARYE, self.carma.T_levels, data))
+        T = self.carma.T_levels[:, longitude] if self.carma.is_2d else self.carma.T_levels
+
+        data = get_fastchem_abundances(T, self.carma.P_levels, species, metallicity)
+        data = np.vstack((self.carma.P_levels/BAR_TO_BARYE, T, data))
 
         header = "pressure\ttemperature"
         for s in species_labels:
@@ -815,16 +829,18 @@ class Results:
             header += s
 
         np.savetxt(file_path, np.transpose(data), header=header, fmt="%.18e", comments="")
-        print(f"Wrote file: {file_path}")
+        if not suppress_output: print(f"Wrote file: {file_path}")
 
     def gen_picaso_cloud_file(self,
                               wavelengths: np.ndarray,
                               file_path: str = None,
                               mie_table_path: str = None,
                               skip_groups=[],
-                              n_avg: int = 20):
-        """Generate cloud opacity tables for use in picaso. Picaso is a python 
-        package which can calculate spectra and is available at 
+                              n_avg: int = 20,
+                              longitude: int = None,
+                              suppress_output: bool = False):
+        """Generate cloud opacity tables for use in picaso. Picaso is a python
+        package which can calculate spectra and is available at
         https://github.com/natashabatalha/picaso.
 
         Parameters
@@ -832,28 +848,38 @@ class Results:
         wavelengths : np.ndarray
             The wavelengths at which to calculate to opacities [cm]
         file_path : str, optional
-            The path to save the file to.  If not provided, creates a file 
-            located in the directory storing the carma simulation.            
+            The path to save the file to.  If not provided, creates a file
+            located in the directory storing the carma simulation.
         mie_table_path : str
             The directory in which the mie tables of the species are located.
-            It is assumed that each cloud species used has a .dat file in that 
-            directory named with the name of the cloud species (ie 'Mg2SiO4 on 
-            TiO2.dat'), the first row of the table is a header row, and the 
-            columns are radius[cm], wavelength[cm], extinction efficiency 
-            (Q_ext), scattering efficiency (Q_sca), and asymmetry factor (g). 
-            The  columns must be in that order and separated by whitespace.  If 
-            no path is provided, the carma default tables will be used but these 
+            It is assumed that each cloud species used has a .dat file in that
+            directory named with the name of the cloud species (ie 'Mg2SiO4 on
+            TiO2.dat'), the first row of the table is a header row, and the
+            columns are radius[cm], wavelength[cm], extinction efficiency
+            (Q_ext), scattering efficiency (Q_sca), and asymmetry factor (g).
+            The  columns must be in that order and separated by whitespace.  If
+            no path is provided, the carma default tables will be used but these
             might be less accurate, even for the same species, as they might not
-            be calculated at the same particle size and wavelengths. 
+            be calculated at the same particle size and wavelengths.
         skip_groups : list, optional
-            The indices of any cloud groups to exclude from the opacity 
+            The indices of any cloud groups to exclude from the opacity
             calculation, by default None
         n_avg : int, optional
-            The number of timesteps to average the cloud size distribution over 
+            The number of timesteps to average the cloud size distribution over
             while generating the cloud file.  Defaults to 20.
+        longitude : int
+            Longitude index to use.  Required for 2-D runs; must not be set
+            for 1-D runs.
+        suppress_output : bool, optional
+            If True, suppress the "Wrote file" confirmation message.
         """
 
         self.carma._citation["picaso"] = True
+
+        if self.carma.is_2d and longitude is None:
+            raise ValueError("longitude is required for 2-D runs")
+        if not self.carma.is_2d and longitude is not None:
+            raise ValueError("longitude cannot be set for 1-D runs")
 
         if not file_path: file_path = os.path.join(self.path, 'clouds.atm')
 
@@ -872,7 +898,8 @@ class Results:
                                                              i,
                                                              wavelengths,
                                                              mie_table_path,
-                                                             n_avg=n_avg)
+                                                             n_avg=n_avg,
+                                                             longitude=longitude)
 
             beta_exts.append(beta_ext)
             beta_scas.append(beta_sca)
@@ -902,7 +929,7 @@ class Results:
                     +f"{g_avg[iz, iwave]}\t"
                     +f"{d_tau[iz, iwave]}\n")
 
-        print(f"Wrote file: {file_path}")
+        if not suppress_output: print(f"Wrote file: {file_path}")
 
 
 
@@ -913,7 +940,8 @@ def _get_cloud_opacities(carma,
                          wavelengths,
                          mie_table_path = None,
                          min_columnden = 1e-25,
-                         n_avg = 20):
+                         n_avg = 20,
+                         longitude = None):
 
     name = carma.results.group_names[i]
 
@@ -961,7 +989,11 @@ def _get_cloud_opacities(carma,
     g_interp = RectBivariateSpline(r_unique, λ_unique, g)
 
 
-    numdens = np.mean(carma.results.numden[:, i, :, -n_avg:], axis=2)
+    if longitude is not None:
+        # numden_2d is already the mean over all timesteps at each longitude
+        numdens = carma.results.clouds[name]["numden_2d"][:, :, longitude]
+    else:
+        numdens = np.mean(carma.results.numden[:, i, :, -n_avg:], axis=2)
     columndens = np.sum(numdens, axis=0)
 
     weighted_qext = np.zeros((carma.NZ, carma.NBIN, len(wavelengths)))

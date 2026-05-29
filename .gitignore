@@ -31,3 +31,4 @@ benchmarks/**
 TODO.md
 
 .claude/
+docs/source/notebooks/2d_carmapy/picaso_outputs/**
