@@ -29,6 +29,10 @@
       ~Carma.run
       ~Carma.set_atmospheric_parameters
       ~Carma.set_atmospheric_parameters_from_defaults
+      ~Carma.set_cloud_boundary
+      ~Carma.set_cloud_boundary_type
+      ~Carma.set_gas_boundary
+      ~Carma.set_gas_boundary_type
       ~Carma.set_nmr
       ~Carma.set_physical_params
       ~Carma.set_stepping
@@ -41,12 +45,21 @@
 
    .. autosummary::
    
+      ~Carma.coags
       ~Carma.dt
+      ~Carma.elems
+      ~Carma.gases
+      ~Carma.groups
+      ~Carma.growth
+      ~Carma.iappend
+      ~Carma.is_2d
       ~Carma.kzz_levels
       ~Carma.log_metallicity
       ~Carma.n_tstep
+      ~Carma.name
       ~Carma.NBIN
       ~Carma.NLONGITUDE
+      ~Carma.nucs
       ~Carma.NZ
       ~Carma.output_gap
       ~Carma.P_centers
@@ -55,6 +68,7 @@
       ~Carma.restart
       ~Carma.surface_grav
       ~Carma.T_centers
+      ~Carma.t_evolves
       ~Carma.T_levels
       ~Carma.velocity_avg
       ~Carma.wt_mol
@@ -81,6 +95,10 @@
 .. automethod:: Carma.run
 .. automethod:: Carma.set_atmospheric_parameters
 .. automethod:: Carma.set_atmospheric_parameters_from_defaults
+.. automethod:: Carma.set_cloud_boundary
+.. automethod:: Carma.set_cloud_boundary_type
+.. automethod:: Carma.set_gas_boundary
+.. automethod:: Carma.set_gas_boundary_type
 .. automethod:: Carma.set_nmr
 .. automethod:: Carma.set_physical_params
 .. automethod:: Carma.set_stepping

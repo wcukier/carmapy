@@ -23,6 +23,7 @@
 
    .. autosummary::
    
+      ~Group.boundary
       ~Group.core
       ~Group.mantle
    

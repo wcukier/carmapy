@@ -228,6 +228,12 @@ class Carma:
         if dt: self.dt = dt
         if output_gap: self.output_gap = output_gap
         if n_tstep: self.n_tstep = n_tstep
+
+        if self.output_gap >= self.n_tstep:
+            raise ValueError(
+                f"output_gap ({self.output_gap}) must be less than "
+                f"n_tstep ({self.n_tstep})"
+            )
             
         
     def set_physical_params(self, 

@@ -45,7 +45,7 @@ def example_levels(t=2000) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
         path = "example_levels2"
     else:
         raise ValueError(
-            "t must be either 1000 or 2000 (or left blank to default to 1000)")
+            "t must be either 1000 or 2000 (or left blank to default to 2000)")
 
     data = np.genfromtxt(os.path.join(SRC, "example_data", path), comments='#')
 
@@ -58,49 +58,39 @@ def example_levels(t=2000) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     return P_levels, T_levels, kzz_levels, mu_levels
 
 
-def example_2d_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def example_2d_levels() -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Loads example atmospheric structure "levels" for a 2d CARMApy run.
-    Atmospheric levels describe the boundaries between atmospheric layers and 
-    thus the length of "levels" arrays is one more than that of the "centers" 
-    arrays.
 
-    The files are taken from a GCM run of GJ1214 b [#steinrueck2025]_  
-
-    References
-    ----------
-    .. [#steinrueck2025] Maria E. Steinrueck et al 2025 ApJ 985 98
-
+    The bundled profile is a hot Jupiter (Teq = 1800 K, log g = 3.3 cgs,
+    Rp = 1.3 Rjup, solar metallicity, no drag, no TiO/VO) derived from a GCM
+    grid and latitude-averaged over |lat| <= 20°. The eddy diffusion profile
+    follows Moses et al. (2021) Eq 1 with a 1e11 cm²/s ceiling.
 
     Returns
     -------
     P_levels : np.ndarray
         Pressure levels array (NZ) [barye]
-    T_levels : np.ndarray 
+    T_levels : np.ndarray
         Temperature levels array (NZ, NLONGITUDE) [K]
     kzz_levels : np.ndarray
         Eddy diffusion coefficients (NZ) [cm²/s]
+    U_levels : np.ndarray
+        Zonal wind speed (NZ, NLONGITUDE) [cm/s]
     longitudes : np.ndarray
         Longitude points (NLONGITUDE) [degrees]
     """
-    levels_data = np.genfromtxt(os.path.join(SRC, 
-                                             "example_data", 
-                                             "2d_levels.txt"), skip_header=1)
-
-    P_levels   = levels_data[:, 0] * 10 # Pa to barye
+    levels_data = np.genfromtxt(
+        os.path.join(SRC, "example_data", "2d_levels.txt"), skip_header=1
+    )
+    P_levels = levels_data[:, 0]    # barye
     kzz_levels = levels_data[:, 1]
 
-    T_levels = np.genfromtxt(os.path.join(SRC, 
-                                             "example_data", 
-                                             "2d_temps.txt"))
-    
-    longitudes = np.genfromtxt(os.path.join(SRC, 
-                                             "example_data", 
-                                             "2d_longitudes.txt"))
+    T_levels = np.genfromtxt(os.path.join(SRC, "example_data", "2d_temps.txt"))
+    U_levels = np.genfromtxt(os.path.join(SRC, "example_data", "2d_winds.txt"))
+    longitudes = np.genfromtxt(os.path.join(SRC, "example_data", "2d_longitudes.txt"))
 
-
-
-    return P_levels, T_levels, kzz_levels, longitudes
+    return P_levels, T_levels, kzz_levels, U_levels, longitudes
 
 
 
