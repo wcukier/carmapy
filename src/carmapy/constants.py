@@ -527,7 +527,7 @@ references = {
     
 }
 
-JUPITER_RADIUS = 6.995e9 #cm
+JUPITER_RADIUS = 7.1492e9 #cm
 BAR_TO_BARYE = 1e6
 k_B = 1.381e-16 #erg/K
 PROTON_MASS =  1.673e-24 # g

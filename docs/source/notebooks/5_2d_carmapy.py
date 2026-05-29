@@ -25,6 +25,9 @@
 import carmapy
 from matplotlib import pyplot as plt
 import numpy as np
+import warnings
+import os
+
 
 carma = carmapy.Carma("2d_carmapy", is_2d=True)
 
@@ -109,7 +112,7 @@ carmapy.chemistry.populate_abundances_at_cloud_base(carma)
 # computer.  If you are following along locally, uncomment the cell below.
 
 # %%
-# carma.run()
+# carma.run(suppress_output=True)
 
 # %% [markdown]
 # For 2-D CARMApy in particular it is recommended to restart a longer run with
@@ -121,7 +124,7 @@ carmapy.chemistry.populate_abundances_at_cloud_base(carma)
 # %%
 carma.restart=1
 carma.set_stepping(dt=800, output_gap=1, n_tstep=3000)
-carma.run(suppress_output=True)
+carma.run()
 
 # %% [markdown]
 # As before, we can read our results with `carma.read_results()`
@@ -251,3 +254,235 @@ plt.xlabel("Longitude [degrees]")
 plt.colorbar(label="Nucleation Gain Rate (cm⁻³ s⁻¹)")
 plt.title(species)
 plt.show()
+
+# %% [markdown]
+# ## Limb-Asymmetric Transmission Spectra
+#
+# 2D CARMApy gives us the ability to look at longitudinal variations in 
+# observables.  One example of this is CARMApy is able to create spectra that
+# show the difference between the morning terminator and the evening terminator
+#
+# As covered in [tutorial 3](3_generating_spectra_with_picaso.ipynb),
+# `gen_picaso_atm_file()` and `gen_picaso_cloud_file()` write the atmosphere
+# and cloud input files that PICASO needs.  For 2-D runs both methods require
+# a `longitude` index, which selects the temperature profile and the
+# time-averaged cloud number density for that longitude column.
+#
+# > **Note:** this section requires PICASO to be installed and configured
+# > (see https://natashabatalha.github.io/picaso/installation.html).  The
+# > `PYSYN_CDBS` and `picaso_refdata` environment variables must be set before
+# > importing PICASO, either in your shell rc or inline in the cell below.
+
+# %%
+
+# This section expects `picaso_refdata` and `PYSYN_CDBS` to already be set in
+# your environment (e.g. in your shell rc). If you'd rather set them inline,
+# uncomment and edit:
+os.environ['picaso_refdata'] = '/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/reference'
+os.environ['PYSYN_CDBS'] = '/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/PYSYN_CDBS'
+
+from picaso import justdoit as jdi
+
+# Identify the longitude indices closest to the morning and evening limbs
+morning_idx = int(np.argmin(np.abs(longitudes + 90)))
+evening_idx = int(np.argmin(np.abs(longitudes -   90)))
+
+print(f"Morning limb: lon = {longitudes[morning_idx]:.1f}°  (index {morning_idx})")
+print(f"Evening limb: lon = {longitudes[evening_idx]:.1f}°  (index {evening_idx})")
+
+out_dir = os.path.join(carma.name, "picaso_outputs")
+os.makedirs(out_dir, exist_ok=True)
+
+λs = np.linspace(1e-4, 2e-3, 1000)  # cm — wavelength grid for Mie scattering
+
+for label, idx in [("morning", morning_idx), ("evening", evening_idx)]:
+    carma.results.gen_picaso_atm_file(
+        file_path=os.path.join(out_dir, f"fastchem_{label}.atm"),
+        longitude=idx,
+    )
+    carma.results.gen_picaso_cloud_file(
+        λs,
+        file_path=os.path.join(out_dir, f"clouds_{label}.atm"),
+        longitude=idx,
+    )
+
+# %% [markdown]
+# With the PICASO input files written, we can compute the transmission spectra.
+# The main difference between this and [tutorial 3](3_generating_spectra_with_picaso.ipynb)
+# is that these are transmission spectra so we need to specify the star properties.
+
+# %%
+Teq   = 1800.0  # K (from example_2d_levels profile)
+log_met = 0.0
+
+GRAV_CONST = 6.674e-8  # cm^3 g^-1 s^-2
+Mp  = carma.surface_grav * carma.r_planet**2 / GRAV_CONST
+
+opa   = jdi.opannection(wave_range=[0.5, 15])
+R_BIN = 500
+
+
+def compute_transmission(atm_path, cloud_path):
+    case = jdi.inputs(calculation="transmission")
+    case.phase_angle(0)
+    case.gravity(
+        mass=Mp, mass_unit=jdi.u.Unit("g"),
+        radius=carma.r_planet, radius_unit=jdi.u.Unit("cm"),
+    )
+
+    case.star(opa, 6500, 0.0, 4.2, radius=1.5, radius_unit=jdi.u.Unit("R_sun"),
+              database="phoenix")
+
+    case.atmosphere(filename=atm_path, sep=r"\s+")
+    case.clouds(filename=cloud_path, sep=r"\s+")
+
+    df = case.spectrum(opa, full_output=True, calculation="transmission")
+
+    wno, rprs2 = df["wavenumber"], df["transit_depth"]
+    wno_bin, rprs2_bin = jdi.mean_regrid(wno, rprs2, R=R_BIN)
+
+    return 1e4 / wno_bin, rprs2_bin * 1e6   # µm, ppm
+
+
+print("Computing morning limb spectrum...")
+λ_morning, depth_morning = compute_transmission(
+    os.path.join(out_dir, "fastchem_morning.atm"),
+    os.path.join(out_dir, "clouds_morning.atm"),
+)
+
+print("Computing evening limb spectrum...")
+λ_evening, depth_evening = compute_transmission(
+    os.path.join(out_dir, "fastchem_evening.atm"),
+    os.path.join(out_dir, "clouds_evening.atm"),
+)
+
+depth_combined = 0.5 * (depth_morning + depth_evening)
+
+# %% [markdown]
+# We can now plot our spectra:
+
+# %%
+fig, ax = plt.subplots(figsize=(12, 4.5))
+
+ax.plot(λ_morning,  depth_morning,  color="#3f90da", lw=2,
+        label="Morning limb", alpha=0.85)
+ax.plot(λ_evening,  depth_evening,  color="#bd1f01", lw=2,
+        label="Evening limb", alpha=0.85)
+ax.plot(λ_morning,  depth_combined, color="gray",    lw=1,
+        label="Combined")
+
+ax.set_xlabel("Wavelength [µm]")
+ax.set_ylabel("Transit Depth [ppm]")
+ax.set_xlim(0.5, 15)
+ax.legend(framealpha=0.9)
+
+
+fig.tight_layout()
+plt.show()
+
+# %% [markdown]
+# As you can see, the morning spectrum is a lot flatter than the evening spectrum.
+# If you look up to where we plotted number densities earlier, you can see that
+# the morning limb is a lot cloudier than the evening limb -- this is what creates
+# the flatter morning spectrum
+
+# %% [markdown]
+# ## Thermal Emission Phase Curve
+#
+# Another observable that 2-D CARMApy enables is the thermal emission phase
+# curve, which tracks how the thermal flux from the planet changes as
+# it orbits its star and different longitudes rotate into view. 
+#
+# > **Note:** because this requires one PICASO run per sampled longitude, this
+# > section can take several minutes to run.
+
+# %%
+band_range    = (2.0, 4.0)    # µm
+n_phase       = 200           # number of orbital phase points
+stride        = 4
+
+lon_idxs = np.arange(0, carma.NLONGITUDE, stride)
+lons = longitudes[lon_idxs]
+dlon        = 360.0 / len(lon_idxs)
+
+lambdas = np.linspace(1e-4, 1e-3, 1000)  # cloud file wavelength grid
+opa_thermal = jdi.opannection(wave_range=list(band_range))
+
+# %% [markdown]
+# We loop over the sampled longitude columns, write the PICASO input files, run
+# the thermal spectrum, and integrate the flux over the 2–4 µm band.
+
+# %%
+
+band_flux = np.zeros(len(lon_idxs))
+
+for k, ilong in enumerate(lon_idxs):
+    atm_path = os.path.join(out_dir, f"fastchem_lon{ilong:2d}.atm")
+    cloud_path = os.path.join(out_dir, f"clouds_lon{ilong:2d}.atm")
+
+    carma.results.gen_picaso_atm_file(file_path=atm_path, longitude=ilong,
+                                      suppress_output=True)
+    carma.results.gen_picaso_cloud_file(lambdas, file_path=cloud_path, longitude=ilong,
+                                        suppress_output=True)
+
+    case = jdi.inputs(calculation="thermal")
+
+    case.phase_angle(0)
+    case.gravity(gravity=carma.surface_grav, gravity_unit=jdi.u.Unit("cm/(s**2)"),
+                 radius=carma.r_planet, radius_unit=jdi.u.Unit("cm"))
+
+    case.star(opa_thermal, 6500, 0.0, 4.2,
+              radius=1.5, radius_unit=jdi.u.Unit("R_sun"), database="phoenix")
+
+    case.atmosphere(filename=atm_path, sep=r"\s+")
+    case.clouds(filename=cloud_path, sep=r"\s+")
+
+    with warnings.catch_warnings(): # supress picaso warnings
+        warnings.simplefilter("ignore")
+
+        df = case.spectrum(opa_thermal, full_output=True, calculation="thermal")
+        wno = np.asarray(df["wavenumber"])
+        fp  = np.asarray(df["thermal"])
+
+        order   = np.argsort(wno)
+        wno, fp = wno[order], fp[order]
+        
+        ls  = 1e4 / wno
+        mask    = (ls >= band_range[0]) & (ls <= band_range[1])
+        band_flux[k] = np.trapezoid(fp[mask], wno[mask])
+
+
+# %% [markdown]
+# Now that we have spectra at each of the sampled longitude points, we can 
+# create a phase curve.  Each visible point on the planet will contribute a flux
+# proportional to the cosine of the angle of the line of sight to the normal
+
+# %%
+phase       = np.linspace(0.0, 1.0, n_phase)
+lon_obs = 360.0 * phase
+
+
+mu         = np.cos((lons[None, :] - lon_obs[:, None])*np.pi/180)   # (N_PHASE, N_LON)
+weight     = np.clip(mu, 0.0, None) * 2 * np.pi / len(lons)
+
+phase_flux = np.sum(band_flux[None, :] * weight, axis=1)
+phase_norm = phase_flux / phase_flux.max()
+
+contrast = phase_flux.max() / max(phase_flux.min(), 1e-30)
+
+plt.subplots(figsize=(8, 4))
+
+plt.plot(phase, phase_norm, color="darkorange", lw=2)
+
+plt.plot([0.5, 0.5], [0, 1], ls=":", color="grey", lw=1, label="Primary transit")
+
+plt.xlabel("Orbital phase  (0 = secondary eclipse,  0.5 = transit)")
+plt.ylabel("Relative phase-curve flux")
+
+plt.xlim(0, 1)
+plt.legend(framealpha=0.9)
+
+fig.tight_layout()
+plt.show()
+
+# %%

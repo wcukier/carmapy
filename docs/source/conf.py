@@ -13,9 +13,10 @@ from importlib.metadata import version as _get_version
 sys.path.insert(0, os.path.abspath('../../src/'))
 
 if os.environ.get("READTHEDOCS") == "True":
-    _refdata = "/home/docs/checkouts/readthedocs.org/user_builds/carmapy/checkouts/latest/picaso/reference"
+    _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    _refdata = os.path.join(_repo_root, "picaso", "reference")
     os.environ.setdefault("picaso_refdata", _refdata)
-    os.environ.setdefault("PYSYN_CDBS", _refdata)
+    os.environ.setdefault("PYSYN_CDBS", os.path.join(_repo_root, "picaso", "reference", "stellar_grids"))
 
     # Patch Carma.run on RTD so tutorials can skip long runs without exposing
     # RTD-specific kwargs to readers. Convention: pass suppress_output=True in

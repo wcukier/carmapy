@@ -6,6 +6,49 @@ on:
   workflow_dispatch:
 
 jobs:
+  run_tests:
+    name: Tests (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-14]
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install gfortran (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran
+
+      - name: Install gfortran (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew update
+          brew install gcc
+          echo "$(brew --prefix gcc)/bin" >> $GITHUB_PATH
+          echo "FC=$(brew --prefix gcc)/bin/gfortran" >> $GITHUB_ENV
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install carmapy with test extras
+        env:
+          CARMAPY_NATIVE: "0"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run tests
+        run: pytest
+
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -89,7 +132,7 @@ jobs:
           path: dist/*.tar.gz
 
   upload_all:
-    needs: [build_wheels, make_sdist]
+    needs: [run_tests, build_wheels, make_sdist]
     environment: pypi
     permissions:
       id-token: write
