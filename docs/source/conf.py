@@ -12,6 +12,27 @@ import sys
 from importlib.metadata import version as _get_version
 sys.path.insert(0, os.path.abspath('../../src/'))
 
+if os.environ.get("READTHEDOCS") == "True":
+    _refdata = "/home/docs/checkouts/readthedocs.org/user_builds/carmapy/checkouts/latest/picaso/reference"
+    os.environ.setdefault("picaso_refdata", _refdata)
+    os.environ.setdefault("PYSYN_CDBS", _refdata)
+
+    # Patch Carma.run on RTD so tutorials can skip long runs without exposing
+    # RTD-specific kwargs to readers. Convention: pass suppress_output=True in
+    # a notebook cell to make that run a no-op on RTD (pre-committed output
+    # files are read instead). Calls without suppress_output still execute but
+    # always get suppress_output=True so Fortran output doesn't flood the build log.
+    import carmapy as _carmapy
+    _original_run = _carmapy.Carma.run
+    def _rtd_run(self, *args, suppress_output=False, **kwargs):
+        if suppress_output:
+            return
+        return _original_run(self, *args, suppress_output=True, **kwargs)
+    _carmapy.Carma.run = _rtd_run
+else:
+    os.environ["PYSYN_CDBS"]     = "/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/PYSYN_CDBS"
+    os.environ["picaso_refdata"] = "/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/reference"
+
 
 project = 'carmapy'
 copyright = '2025, Wolf Cukier'
@@ -40,10 +61,15 @@ exclude_patterns = []
 # }
 
 
-nbsphinx_allow_errors = False
+nbsphinx_allow_errors = True
 autodoc_typehints = "description"
 autosummary_generate = True
-nbsphinx_execute = 'never'
+nbsphinx_execute = 'auto'
+nbsphinx_timeout = 1800
+
+nbsphinx_custom_formats = {
+    ".py": ["jupytext.reads", {"fmt": "py:percent"}],
+}
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

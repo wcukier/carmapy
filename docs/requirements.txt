@@ -4,6 +4,7 @@
     pyfastchem
     f90nml
     nbsphinx
+    jupytext
     sphinx_rtd_theme
     ipykernel
     sphinx_autodoc_typehints

@@ -10,6 +10,7 @@
       :signatures: short
 
    
+      calculate_mucos
       find_cloud_base
       get_fastchem_abundances
       populate_abundances_at_cloud_base
@@ -18,6 +19,7 @@
 
 
 
+  .. autofunction:: calculate_mucos
   .. autofunction:: find_cloud_base
   .. autofunction:: get_fastchem_abundances
   .. autofunction:: populate_abundances_at_cloud_base

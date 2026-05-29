@@ -284,7 +284,7 @@ class Results:
 
         self.gases = {}
         for i in range(1, len(self.gas_names)):
-            self.gases[self.gas_names[i]] = gas_abund[:, i, :]
+            self.gases[self.gas_names[i]] = self.gas_abund[:, i, :]
 
         self.clouds = {}
         for i in range(len(self.group_names)):

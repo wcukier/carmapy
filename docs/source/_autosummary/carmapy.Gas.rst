@@ -16,7 +16,9 @@
 
    .. autosummary::
    
+      ~Gas.boundary
       ~Gas.coldia
+      ~Gas.desorption
       ~Gas.gcomp
       ~Gas.hill_formula
       ~Gas.is_typeIII

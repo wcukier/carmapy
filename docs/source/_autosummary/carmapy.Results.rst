@@ -15,6 +15,7 @@
    
       ~Results.gen_picaso_atm_file
       ~Results.gen_picaso_cloud_file
+      ~Results.plot_condensation_curves
       ~Results.plot_numdens
       ~Results.plot_toa_gas
    
@@ -47,6 +48,7 @@
 
 .. automethod:: Results.gen_picaso_atm_file
 .. automethod:: Results.gen_picaso_cloud_file
+.. automethod:: Results.plot_condensation_curves
 .. automethod:: Results.plot_numdens
 .. automethod:: Results.plot_toa_gas
 

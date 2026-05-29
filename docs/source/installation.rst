@@ -31,6 +31,17 @@ as long as at least one of those commands returns as file path rather than sayin
 "ifort not found" or "gfortran not found" then you should be good to proceed with
 installation.
 
+OpenMP
+------
+carmapy allows for running the code on multiple threads with OpenMP.  To install
+with OpenMP you will need to compile the code on your computer with the environment
+variable `CARMAPY_OPENMP=1`.  To do this with pip and bypassing github run::
+
+   CARMAPY_OPENMP=1 pip install --no-binary=carmapy --force-reinstall carmapy
+
+If installing from github replace the pip install line with::
+
+   CARMAPY_OPENMP=1 pip install --upgrade .
 
 Testing Installation
 --------------------
