@@ -37,7 +37,7 @@ build:
       - cd picaso/reference/opacities && mv opacities_0.3_15_R15000.db opacities.db
       - cd picaso/reference && export picaso_refdata=`pwd`
       - mkdir -p picaso/reference/stellar_grids
-      - cd picaso/reference/stellar_grids && curl -o synphot5.tar.gz 'http://ssb.stsci.edu/trds/tarfiles/synphot5.tar.gz'
+      - cd picaso/reference/stellar_grids && curl -fL -o synphot5.tar.gz 'https://ssb.stsci.edu/trds/tarfiles/synphot5.tar.gz'
       - cd picaso/reference/stellar_grids && tar -xvzf synphot5.tar.gz
       - cd picaso/reference/stellar_grids && export PYSYN_CDBS=`pwd`
 
