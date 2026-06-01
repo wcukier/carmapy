@@ -28,6 +28,7 @@ wheelhouse/*
 claude/**
 CLAUDE.md
 benchmarks/**
+benchmark/** 
 TODO.md
 
 .claude/
