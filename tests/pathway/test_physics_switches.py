@@ -84,12 +84,12 @@ def _build_switch_carma(variant, path, example_levels):
                    "high_lat_heat", "high_viscosity",
                    "wind_up", "wind_down"):
         c.add_gas("TiO2")
+        group = c.add_hom_group("TiO2", 1e-8)
         if variant == "high_lat_heat":
-            gas = c.gases["TiO2"]
-            # Natural latent heat: L = vp_tcoeff * ln(10) * R_gas / wtmol_dif
-            natural_lhe = gas.vp_tcoeff * math.log(10) * 8.314e7 / gas.wtmol_dif
-            gas.lat_heat_e = natural_lhe * 100
-        c.add_hom_group("TiO2", 1e-8)
+            # Condensate (latent heat, vapor pressure) properties are owned by
+            # the group. Natural latent heat: L = vp_tcoeff * ln(10) * R_gas / wtmol_dif
+            natural_lhe = group.vp_tcoeff * math.log(10) * 8.314e7 / group.gas.wtmol_dif
+            group.lat_heat_e = natural_lhe * 100
         if variant == "coag_on":
             c.add_coag("Pure TiO2")
 

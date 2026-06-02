@@ -1007,7 +1007,7 @@ def _get_cloud_opacities(carma,
             # print(2 * np.pi * carma.results.r[ibin, i]/ wavelengths[ilambda])
             #
 
-            r = carma.results.r[ibin, i] * 1e-4
+            r = carma.results.r[ibin, i] * 1e-4 # micron to cm
             wavelength = wavelengths[ilambda]
 
             weight_term =  np.pi * r**2 * numdens[:, ibin]

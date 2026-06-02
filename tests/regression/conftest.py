@@ -29,8 +29,7 @@ def _build_canonical(name: str):
     P, T, kzz, mu = example_levels()
     c = Carma(name)
     c.set_atmospheric_parameters_from_defaults("Pure H2")
-    c.add_gas("TiO2")
-    c.add_gas("Mg2SiO4")
+    # The condensate (group) methods create their reservoir gases internally.
     c.add_hom_group("TiO2", 1e-8)
     c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
     c.add_P(P)

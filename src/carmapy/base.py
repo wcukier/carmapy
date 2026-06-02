@@ -87,20 +87,15 @@ def load_carma(path: str, restart: int =0) -> Carma:
 
     io = nml["io_files"]
 
+    # Condensate properties are owned by the group. The group reservoir gas is
+    # re-linked below via the growth pathways, so it is left as None here.
     with open(os.path.join(path, io["groups_file"]), "r") as f:
         f.readline()
         for line in f:
-            name, rmin = shlex.split(line[:-1])
-            carma.groups[name] = Group(len(carma.groups)+1, name, float(rmin))
-        
-    with open(os.path.join(path, io["gases_file"]), "r") as f:
-        f.readline()
-        for line in f:
-            (name, 
-             wtmol, 
-             _, 
-             gcomp, 
-             wtmol_dif,
+            (name,
+             rmin,
+             wtmol,
+             _,
              rho_cond,
              surften_0,
              coldia,
@@ -113,28 +108,40 @@ def load_carma(path: str, restart: int =0) -> Carma:
              lat_heat_e,
              desorption,
              stofact,
+             wtmol_core) = shlex.split(line[:-1])
+            carma.groups[name] = Group(len(carma.groups)+1,
+                                       name,
+                                       float(rmin),
+                                       None,
+                                       wtmol=float(wtmol),
+                                       wtmol_core=float(wtmol_core),
+                                       rho_cond=float(rho_cond),
+                                       surften_0=float(surften_0),
+                                       surften_slope=float(surften_slope),
+                                       coldia=float(coldia),
+                                       vp_offset=float(vp_offset),
+                                       vp_tcoeff=float(vp_tcoeff),
+                                       vp_metcoeff=float(vp_metcoeff),
+                                       vp_logpcoeff=float(vp_logpcoeff),
+                                       is_typeIII=bool(int(float(is_typeIII))),
+                                       lat_heat_e=float(lat_heat_e),
+                                       desorption=float(desorption),
+                                       stofact=int(float(stofact)))
+
+    with open(os.path.join(path, io["gases_file"]), "r") as f:
+        f.readline()
+        for line in f:
+            (name,
+             wtmol_dif,
+             gcomp,
              hill_formula) = shlex.split(line[:-1])
-            
-            name= name[:-len(' Vapor')]
-            carma.gases[name] = Gas(name, 
-                                     len(carma.gases)+1, 
-                                     wtmol=float(wtmol), 
-                                     wtmol_dif=float(wtmol_dif),
-                                     gcomp = int(gcomp),
-                                     rho_cond = float(rho_cond),
-                                     surften_0 = float(surften_0),
-                                     surften_slope = float(surften_slope),
-                                     coldia = float(coldia),
-                                     vp_offset = float(vp_offset),
-                                     vp_tcoeff = float(vp_tcoeff),
-                                     vp_metcoeff = float(vp_metcoeff),
-                                     vp_logpcoeff = float(vp_logpcoeff),
-                                     is_typeIII = bool(int(is_typeIII)),
-                                     lat_heat_e=float(lat_heat_e),
-                                     desorption=float(desorption),
-                                     stofact=int(stofact),
-                                     hill_formula=str(hill_formula)
-                                     )
+
+            name = name[:-len(' Vapor')]
+            carma.gases[name] = Gas(name,
+                                    len(carma.gases)+1,
+                                    wtmol_dif=float(wtmol_dif),
+                                    gcomp=int(float(gcomp)),
+                                    hill_formula=str(hill_formula))
             
     
     with open(os.path.join(path, io["elements_file"]), "r") as f:
@@ -249,7 +256,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
 def available_species() -> None:
     """Prints the gas species available in the carmapy defaults
     """
-    print(list(gas_dict.keys())[1:])
+    print(list(group_dict.keys())[1:])
 
 
 def included_mucos(species):
@@ -263,4 +270,4 @@ def included_mucos(species):
         The name of the gas species for which to see the available contact 
         angles
     """
-    print(gas_dict[species]["mucos_dict"])
+    print(group_dict[species]["mucos_dict"])

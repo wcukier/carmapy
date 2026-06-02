@@ -1,4 +1,4 @@
-from carmapy.constants import *
+from carmapy.constants import * 
 from carmapy.results import *
 from carmapy.chemistry import calculate_mucos
 import os
@@ -446,27 +446,29 @@ class Carma:
 
     
     def add_het_group(self, 
-                      gas: Union[str, "Gas"], 
+                      mantle_group: Union[str, "Group"],
                       seed_group: Union[str, "Group"], 
                       rmin: float, 
                       mucos: float = None, 
                       add_coag: bool = False,
-                      T_ref: float = 1000) -> "Group":
-        """Adds a heterogeneously nucleating group to the simulation.  Assumes
-        the gas nucleates on the seed particle. If a string is passed to `gas`, 
-        will use the carmapy default parameters for that gas if that gas does 
-        not already exist in the simulation.  Additionally adds the gas and any 
-        created elements, nuc objects, growth objects, and coag objects to the 
+                      T_ref: float = 1000,
+                      **kwargs) -> "Group":
+        """Adds a heterogeneously nucleating group to the simulation.  If a 
+        string is passed to `group`, will use the carmapy default parameters for 
+        that group.  Additionally adds the group and any created gases, 
+        elements, nuc objects, growth objects, and coag objects to the 
         simulation.
 
         Parameters
         ----------
-        gas : Union[str, Gas]
-            Gas object, name of already created gas, or name of the default 
-            carmapy gas that nucleates on the seed particle
+        mantle_group : Union[str, Group]
+            Group object, or the chemical formula of the carmapy
+            default condensate that serves as the mantle (ie shell) of the 
+            condensate
         seed_group : Union[str, Group]
-            Group object, name of group, or name of gas that formed the group
-            which serves as the seed particle for the condensate
+            Group object, name of group, or the chemical formula of the carmapy
+            default condensate that serves as the seed particle (ie core) for  
+            the condensate.  Group must already exist in the carma object
         rmin : float
             Minimum radius of the condensate [cm]
         mucos : float, optional
@@ -478,6 +480,8 @@ class Carma:
         T_ref : float, optional
             If a mucos is not provided, will use Young's equation to calculate
             the mucos at this temperature
+        **kwargs:
+            These are passed to the newly created group object
 
         Returns
         -------
@@ -485,39 +489,70 @@ class Carma:
             The created group consisting of the gas nucleated onto the seed 
             particle
         """
-        if type(gas) == type(""):
-            gas = self.gases.get(gas, gas)
-            if type(gas) == type(""): gas = Gas(gas, len(self.gases) + 1)
-        self.gases[gas.name] = gas
-        
-        if type(seed_group) == type(""):
-            seed_group = self.groups["Pure "+seed_group.split(" ")[-1]]
-        
-        core_string = seed_group.name.split(" ")[-1]
-        name =  gas.name + " on " + core_string
-        group = Group(len(self.groups)+1, name, rmin)
-        self.groups[name] = group
+
+        if isinstance(seed_group, str):
+            if seed_group in self.groups.keys():
+                seed_group = self.groups[seed_group]
+            else:
+                seed_group = self.groups["Pure "+seed_group.split(" ")[-1]]
+
+        if isinstance(mantle_group, str):
+            # Resolve the reservoir gas. Built-in condensates look it up in
+            # group_dict; a custom condensate (not in group_dict) may supply a
+            # `gas_phase` kwarg naming the gas, otherwise the condensate name is
+            # used. The gas (and its gas-phase properties: wtmol_dif, hill_formula,
+            # gcomp) should be created beforehand with add_gas(); it is reused
+            # here. The kwargs to this method are condensate (group) properties.
+            gas_phase = kwargs.pop("gas_phase", None)
+            if mantle_group in group_dict:
+                gas_name = group_dict[mantle_group]["gas_phase"]
+            else:
+                gas_name = gas_phase if gas_phase is not None else mantle_group
+            if gas_name not in self.gases:
+                self.gases[gas_name] = Gas(gas_name, len(self.gases) + 1)
+            gas = self.gases[gas_name]
+
+            core_string = seed_group.name.split(" ")[-1]
+            name = mantle_group + " on " + core_string
+
+            material = mantle_group
+
+            wtmol_core = kwargs.pop("wtmol_core", seed_group.wtmol)
+            group = Group(len(self.groups)+1,
+                        name,
+                        rmin,
+                        gas,
+                        material=mantle_group,
+                        wtmol_core=wtmol_core,
+                        **kwargs)
+            self.groups[name] = group
+
    
         if not mucos:
-            mucos = gas_dict[gas.name]["mucos_dict"].get(
-                        seed_group.name.split(" ")[-1], -5)
-            if mucos < -1:
-                print("seed gas:", list(self.gases.keys())[seed_group.core.igas - 1])
+            mucos = None
+            if group.material in group_dict.keys():
+                mucos = group_dict[group.material]["mucos_dict"].get(
+                            seed_group.name.split(" ")[-1], None)
+
+            if not mucos: # TODO: see if the fortran version of this calculation is better for temperature dependence
+                print("seed group:", seed_group.name)
                 mucos = calculate_mucos(
-                    self.gases[list(self.gases.keys())[seed_group.core.igas - 1]], 
-                    gas, 
+                    seed_group, 
+                    group, 
                     T_ref)
         
         self.nucs.append(Nuc(seed_group, group, True, gas, mucos))
         
-        mantle_elem = Element(f"{gas.name} Mantle ({core_string})", 
-                                len(self.elems)+1, 
-                              group, gas.rho_cond, "Volatile", 
-                              self.gases[gas.name].igas)
+        mantle_elem = Element(f"{material} Mantle ({core_string})",
+                                len(self.elems)+1,
+                                group,
+                                group.rho_cond,
+                                "Volatile",
+                                self.gases[gas.name].igas)
         self.elems[mantle_elem.name] = mantle_elem
         group.mantle = mantle_elem
 
-        core_elem = seed_group.coreify(len(self.elems)+1, group, gas.name)
+        core_elem = seed_group.coreify(len(self.elems)+1, group, group.material)
         self.elems[core_elem.name] = core_elem
         group.core = core_elem
         
@@ -530,19 +565,20 @@ class Carma:
         return group
         
     def add_hom_group(self, 
-                      gas: Union[str, "Gas"],
+                      group: Union[str, "Group"],
                       rmin: float,
-                      add_coag: bool = False) -> "Group":
-        """Adds a heterogeneously nucleating group to the simulation.  Assumes
-        the gas homogeneously nucleates. If a string is passed to `gas`, 
-        will use the carmapy default parameters for that gas if that gas does 
-        not already exist in the simulation.  Additionally adds the gas and any 
-        created elements, nuc objects, growth objects, and coag objects to the 
+                      add_coag: bool = False,
+                      **kwargs) -> "Group":
+        """Adds a homogeneously nucleating group to the simulation.  
+        If a string is passed to `groups`, will use the carmapy default 
+        parameters for that group if that group does not already exist in the 
+        simulation.  Additionally adds the group and any created gases, 
+        elements, nuc objects, growth objects, and coag objects to the 
         simulation.
 
         Parameters
         ----------
-        gas : Union[str, Gas]
+        group : Union[str, Group]
             Gas object, name of already created gas, or name of the default 
             carmapy gas that homogeneously nucleates
         rmin : float
@@ -550,27 +586,42 @@ class Carma:
         add_coag : bool, optional
             If true, allows coagulation of this particle onto itself,
             by default False
-
+        **kwargs:
+            kwargs are passed to the newly created group object
         Returns
         -------
         Group
             The created group consisting of the homogeneously nucleated gas
         """
-        if type(gas) == type(""):
-            gas = self.gases.get(gas, gas)
-            if type(gas) == type(""): gas = Gas(gas, len(self.gases) + 1)
-        self.gases[gas.name] = gas
-            
-        name = "Pure "+ gas.name
-        group = Group(len(self.groups)+1, name, rmin)
-        self.groups[name] = group
+        if isinstance(group, str):
+            # See add_het_group: a custom condensate (not in group_dict) may
+            # supply a `gas_phase` kwarg, else the condensate name is the gas name.
+            gas_phase = kwargs.pop("gas_phase", None)
+            if group in group_dict:
+                gas_name = group_dict[group]["gas_phase"]
+            else:
+                gas_name = gas_phase if gas_phase is not None else group
+            if gas_name not in self.gases:
+                self.gases[gas_name] = Gas(gas_name, len(self.gases) + 1)
+            gas = self.gases[gas_name]
+
+            name = "Pure "+ group
+
+            group = Group(len(self.groups)+1,
+                        name,
+                        rmin,
+                        gas,
+                        material=group,
+                        **kwargs)
+
+            self.groups[name] = group
         
 
         
         self.nucs.append(Nuc(group, group, False, gas,  0))
-        
-        elem = Element("Pure "+ gas.name, len(self.elems)+1, 
-                            group, gas.rho_cond, "Volatile", 
+
+        elem = Element("Pure "+ group.material, len(self.elems)+1,
+                            group, group.rho_cond, "Volatile",
                             self.gases[gas.name].igas)
         group.core = elem
         self.elems[elem.name] = elem
@@ -600,12 +651,20 @@ class Carma:
             The gas which was added to the simulation.
         """
         if type(gas) == type(""):
-            self.gases[gas] = self.gases.get(gas, 
-                                               Gas(gas, len(self.gases)+1, 
-                                                **kwargs))
+            # Accept either a gas-phase name (e.g. "Zn") or a condensate / group
+            # name (e.g. "ZnS"); resolve the latter to the gas it condenses from.
+            if gas in group_dict and gas not in gas_dict:
+                warnings.warn(
+                    f"'{gas}' is a condensate (group) name, not a gas. Adding its "
+                    f"gas-phase reservoir '{group_dict[gas]['gas_phase']}' instead. "
+                    f"Pass the gas-phase name to add_gas() to silence this warning.")
+                gas = group_dict[gas]["gas_phase"]
+            if gas not in self.gases:
+                self.gases[gas] = Gas(gas, len(self.gases)+1, **kwargs)
+            return self.gases[gas]
         else:
-            self.gases[gas] = Gas
-        return gas
+            self.gases[gas.name] = gas
+            return gas
       
     def add_coag(self, group: Union[str, "Group"]) -> None:
         """Adds self coagulation of the given group to the simulation. 
@@ -1230,43 +1289,61 @@ class Carma:
         io = nml["io_files"]
 
         with open(os.path.join(path, io["groups_file"]), "w+") as f:
-            f.write("name\trmin\n")
+            f.write("name\t"
+                    "rmin\t"
+                    "wtmol\t"
+                    "iroutine\t"
+                    "rho_cond\t"
+                    "surften_0\t"
+                    "coldia\t"
+                    "vp_offset\t"
+                    "vp_tcoeff\t"
+                    "is_type3\t"
+                    "surften_slope\t"
+                    "vp_metcoeff\t"
+                    "vp_logpcoeff\t"
+                    "lat_heat_e\t"
+                    "desorption\t"
+                    "stofact\n")
+
             for key in self.groups.keys():
+                group = self.groups[key]
                 name = '"'+key + '"'
-                f.write(f'{name:35s}{self.groups[key].rmin:.15e}\n')
+
+                # if group.igroup == 1: 
+                #     vaprtn = I_VAPRTN_H2O_MURPHY2005
+                # else: 
+                #     vaprtn = I_VAPRTN_USER
+
+                f.write(f'{name:35s}\t'
+                        f'{group.rmin:.15e}\t'
+                        f'{group.wtmol:<.18e}\t'
+                        f'{I_VAPRTN_USER:2d}\t' 
+                        f'{group.rho_cond:<.18e}\t'
+                        f'{group.surften_0:<.18e}\t'
+                        f'{group.coldia:<.18e}\t'
+                        f'{group.vp_offset:<.18e}\t'
+                        f'{group.vp_tcoeff:<.18e}\t'
+                        f'{int(group.is_typeIII):1d}\t'
+                        f'{group.surften_slope:<.18e}\t'
+                        f'{group.vp_metcoeff:<.18e}\t'
+                        f'{group.vp_logpcoeff:<.18e}\t'
+                        f'{group.lat_heat_e:<.18e}\t'
+                        f'{group.desorption:<.18e}\t'
+                        f'{group.stofact:2d}\t'
+                        f'{group.wtmol_core:<.18e}\n'
+                        )
         
         with open(os.path.join(path, io["gases_file"]), "w+") as f:
 
-            f.write("name\twtmol\tivaprtn\ticomp\twtmol_dif\trho_cond\t"
-                    "surften_0\tcoldia\tvp_offset\tvp_tcoeff\tis_type3\t"
-                    "surften_slope\tvp_metcoeff\tvplogpcoeff\tlat_heat_e\t"
-                    "desorption\tstofact\thill_formula\n")
-            
+            f.write("name\twtmol_dif\ticomp\thill_formula\n")
+
             for key in self.gases.keys():
                 gas : "Gas" = self.gases[key]
                 name = '"'+key + ' Vapor"'
 
-                if   gas.gcomp == 1: vaprtn = I_VAPRTN_H2O_MURPHY2005
-                elif gas.gcomp == 2: vaprtn = I_VAPRTN_H2SO4_AYERS1980
-                else: vaprtn = I_VAPRTN_USER
-
-                f.write(f'{name:24s}{gas.wtmol:<.6e}\t'
-                        # f'{gas_dict[key]["rtn"]:2d}\t' 
-                        f'{vaprtn:2d}\t' 
+                f.write(f'{name:24s}{gas.wtmol_dif:<.6e}\t'
                         f'{gas.gcomp:2d}\t'
-                        f'{gas.wtmol_dif:<.18e}\t'
-                        f'{gas.rho_cond:<.18e}\t'
-                        f'{gas.surften_0:<.18e}\t'
-                        f'{gas.coldia:<.18e}\t'
-                        f'{gas.vp_offset:<.18e}\t'
-                        f'{gas.vp_tcoeff:<.18e}\t'
-                        f'{int(gas.is_typeIII):1d}\t'
-                        f'{gas.surften_slope:<.18e}\t'
-                        f'{gas.vp_metcoeff:<.18e}\t'
-                        f'{gas.vp_logpcoeff:<.18e}\t'
-                        f'{gas.lat_heat_e:<.18e}\t'
-                        f'{gas.desorption:<.18e}\t'
-                        f'{gas.stofact:2d}\t'
                         f'{gas.hill_formula}'
                         '\n')
         
@@ -1344,7 +1421,7 @@ class Carma:
             
             for i, key in enumerate(self.gases.keys()):
                 g = self.gases[key]
-                if type(g) == type(1):
+                if isinstance(g, int):
                     if g.nmr < 0:
                         raise AttributeError(f"The nmr for {g.name} "
                                              "was not set.")
@@ -1610,51 +1687,12 @@ class Gas:
     """
     
 
-    wtmol: float 
-    """ Molar mass of the condensate formed by the gas [g/mol] """
-
     gcomp: int = 0
     """ Integer that indicates composition (1 Water, 2 H2SO4, 0 other) """
 
-    wtmol_dif: float 
+    wtmol_dif: float
     """ Molar mass of the gas phase of the gas [g/mol] """
 
-    rho_cond: float 
-    """ Density of the condensate formed by the gas [g/cm³]"""
-
-    surften_0: float 
-    """ Surface tension at 0 K assuming linear trend holds (see note 2) [dyne/cm] """
-
-    surften_slope: float = 0
-    """ Slope of surface tension with temperature (see note 2) [dyne/cm/K]"""
-
-    coldia: float 
-    """ Collisional diameter of the condensate [cm] """
-
-    vp_offset: float 
-    """ Constant term in vapor pressure equation (see note 1)"""
-
-    vp_tcoeff: float 
-    """ Coeficcient to temperature term in vapor pressure equation (see note 1) [K]"""
-
-    vp_metcoeff: float = 0
-    """ Coeficcient to metallicity term in vapor pressure equation (see note 1)"""
-
-    vp_logpcoeff: float = 0
-    """ Coeficcent to pressure term in vapor pressure equation (see note 1)"""
-
-    is_typeIII: bool = False
-    """ True if condensation reaction is a Type III reaction (see Helling & Woitke 2006) [1]_"""
-
-    lat_heat_e: float = -1
-    """ Latent heat of evaporation, if not provided derived from other inputs (see note 3) """
-
-    desorption: float = -1
-    """ Desorption energy [eV]; if -1 (default), computed as 0.5 * latent heat of evaporation per molecule """
-
-    stofact: int
-    """ The stoichiometry factor between the gas phase and the condensate """
-    
     hill_formula: str
     """ The chemical formula of the condensate in hill notation"""
 
@@ -1671,22 +1709,18 @@ class Gas:
         self.nmr: ArrayLike = nmr
 
         defaults = gas_dict.get(name, kwargs)
+        if name not in gas_dict:
+            required = {"wtmol_dif", "hill_formula"}
+            missing = required - kwargs.keys()
+            if missing:
+                raise ValueError(
+                    f"Gas '{name}' is not a carmapy built-in. "
+                    f"Missing required kwargs: {sorted(missing)}. "
+                    "Pass all required properties as kwargs."
+                )
 
-        self.wtmol          = kwargs.get("wtmol",         defaults["wtmol"])
         self.wtmol_dif      = kwargs.get("wtmol_dif",     defaults["wtmol_dif"])
         self.gcomp          = kwargs.get("gcomp",         defaults.get("gcomp", 0))
-        self.rho_cond       = kwargs.get("rho_cond",      defaults["rho_cond"])
-        self.surften_0      = kwargs.get("surften_0",     defaults["surften_0"])
-        self.surften_slope  = kwargs.get("surften_slope", defaults["surften_slope"])
-        self.coldia         = kwargs.get("coldia",        defaults["coldia"])
-        self.vp_offset      = kwargs.get("vp_offset",     defaults["vp_offset"])
-        self.vp_tcoeff      = kwargs.get("vp_tcoeff",     defaults["vp_tcoeff"])
-        self.vp_metcoeff    = kwargs.get("vp_metcoeff",   defaults["vp_metcoeff"])
-        self.vp_logpcoeff   = kwargs.get("vp_logpcoeff",  defaults["vp_logpcoeff"])
-        self.is_typeIII     = kwargs.get("is_typeIII",    defaults["is_typeIII"])
-        self.stofact        = kwargs.get("stofact",       defaults["stofact"])
-        self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
-        self.desorption     = kwargs.get("desorption",    defaults.get("desorption", -1))
         self.hill_formula   = kwargs.get("hill_formula",  defaults["hill_formula"])
         self.boundary       = kwargs.get("boundary",      _DEFAULT_GAS_BC)
 
@@ -1753,6 +1787,9 @@ class Group:
         <Core>" (ie "Mg2SiO4 on TiO2") for heterogeneously nucleating groups
     rmin : float
         The minimum size of the condensate
+    material : str
+        The chemical formula of the mantle material (ie TiO2 or Mg2SiO4), 
+        used to populate fields with default condensate values
 
     Notes
     -----
@@ -1775,7 +1812,77 @@ class Group:
        of the atmosphere (only used if the top cloud boundary condition is
        set to "fixed_flux"). [particles/cm^2/s] Defaults to 0 if not set.
 
+
+    2. The vapor pressure of the condensate is calculated as follows:
+
+        ``vp = 1e6 * 10**(offset - vp_tcoeff/T - vp_metcoeff * met - vp_logp_oeff * log10(P*1e-6))``
+
+        with ``vp`` in baryes, ``T`` in K, and ``P`` in baryes.
+
+    
+    3. The surface tension of the condensate is calculated as follows:
+
+        ``surften = surften_0 - surften_slope * (T)``
+
+        with ``T`` in K and ``surften`` in dyne / cm
+
+    4. If not directly given, the latent heat of evaportation is calculated
+       folowing Charnay et al. 2015 [2]_ TODO: Check this cite
+
+       ``lat_heat_e = vp_coeff * log(10) * R/wtmol_dif``
+
+       where R is the ideal gas constant
+
+    5. All parameters refer to the mantle element of the group unless otherwise
+       noted.
+
+    References
+    ----------
+    .. [1] Helling, C., & Woitke, P. 2006, Astronomy and Astrophysics, 
+       Volume 455, Issue 1, August III 2006, pp325-338, 455, 325
+
+    .. [2] Charnay et al. 2015, ApJL 813, L1
     """
+    
+
+    wtmol: float 
+    """ Molar mass of the condensate [g/mol] """
+
+    wtmol_core: float 
+    """ Molar mass of the core element of the condensate [g/mol] """
+
+    rho_cond: float 
+    """ Density of the condensate [g/cm³]"""
+
+    surften_0: float 
+    """ Surface tension at 0 K assuming linear trend holds (see note 3) [dyne/cm] """
+
+    surften_slope: float = 0
+    """ Slope of surface tension with temperature (see note 3) [dyne/cm/K]"""
+
+    coldia: float 
+    """ Collisional diameter of the condensate [cm] """
+
+    vp_offset: float 
+    """ Constant term in vapor pressure equation (see note 2)"""
+
+    vp_tcoeff: float 
+    """ Coeficcient to temperature term in vapor pressure equation (see note 2) [K]"""
+
+    vp_metcoeff: float = 0
+    """ Coeficcient to metallicity term in vapor pressure equation (see note 2)"""
+
+    vp_logpcoeff: float = 0
+    """ Coeficcent to pressure term in vapor pressure equation (see note 2)"""
+
+    is_typeIII: bool = False
+    """ True if condensation reaction is a Type III reaction (see Helling & Woitke 2006) [1]_"""
+
+    lat_heat_e: float = -1
+    """ Latent heat of evaporation, if not provided derived from other inputs (see note 4) """
+
+    stofact: int
+    """ The stoichiometry factor between the gas phase and the condensate """
 
     core : "Element"
     """ The element which represents the original seed particle. """
@@ -1786,16 +1893,58 @@ class Group:
     boundary: dict
     """ The boundary conditions for the group (see note 1). """
 
+    material: str
+    """ The chemical formula of the condensate """
 
-    def __init__(self, igroup: int, name: str, rmin: float) -> None:
+
+    def __init__(self, igroup: int, name: str, rmin: float, gas: "Gas", material: str="", **kwargs) -> None:
         self.igroup = igroup
         self.name = name
         self.rmin = rmin
         self.core = None
         self.mantle = None
         self.boundary = {}
+        self.gas = gas
+        self.material = material
+
+
+        defaults = group_dict.get(material, kwargs)
+        if material and material not in group_dict:
+            required = {
+                "wtmol", "rho_cond", "surften_0", "surften_slope", "coldia",
+                "vp_offset", "vp_tcoeff", "vp_metcoeff", "vp_logpcoeff",
+                "is_typeIII", "stofact",
+            }
+            missing = required - kwargs.keys()
+            if missing:
+                raise ValueError(
+                    f"Group material '{material}' is not a carmapy built-in. "
+                    f"Missing required kwargs: {sorted(missing)}. "
+                    "Pass all required properties as kwargs."
+                )
+
+        self.wtmol          = kwargs.get("wtmol",         defaults["wtmol"])
+        self.wtmol_core     = kwargs.get("wtmol_core",    -1)
+
+        self.rho_cond       = kwargs.get("rho_cond",      defaults["rho_cond"])
+        self.surften_0      = kwargs.get("surften_0",     defaults["surften_0"])
+        self.surften_slope  = kwargs.get("surften_slope", defaults["surften_slope"])
+        self.coldia         = kwargs.get("coldia",        defaults["coldia"])
+        self.vp_offset      = kwargs.get("vp_offset",     defaults["vp_offset"])
+        self.vp_tcoeff      = kwargs.get("vp_tcoeff",     defaults["vp_tcoeff"])
+        self.vp_metcoeff    = kwargs.get("vp_metcoeff",   defaults["vp_metcoeff"])
+        self.vp_logpcoeff   = kwargs.get("vp_logpcoeff",  defaults["vp_logpcoeff"])
+        self.is_typeIII     = kwargs.get("is_typeIII",    defaults["is_typeIII"])
+        self.stofact        = kwargs.get("stofact",       defaults["stofact"])
+        self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
+        self.desorption     = kwargs.get("desorption",    defaults.get("desorption", -1))
+
+
+
+
+
     
-    def coreify(self, ielem: int, group: "Group", gas_name: str) -> Element:
+    def coreify(self, ielem: int, group: "Group", mantle_name: str) -> Element:
         """Create a core element from the only element of the current group.
         Used to create the core element of a heterogeneously nucleating group
         where this group serves as the seed particles.  Adds the created element
@@ -1807,8 +1956,8 @@ class Group:
             The index of the new element in the Carma simulation
         group : Group
             The group to which the new element belongs
-        gas_name : str
-            Name of the gas resevoir corresponding to the new element
+        mantle : str
+            Name of the condensate mantle corresponding to the new element
 
         Returns
         -------
@@ -1820,7 +1969,7 @@ class Group:
         
         name = core_elem.name
         name = name.split(" ")[-1]
-        name = name + f" Core ({gas_name})"
+        name = name + f" Core ({mantle_name})"
         
         elem = Element(name, ielem, group, core_elem.rho, "Core Mass", core_elem.igas)
         group.core = elem

@@ -11,10 +11,11 @@ def test_add_gas_creates_entry():
 
 
 @pytest.mark.unit
-def test_add_gas_sets_rho_cond():
+def test_add_hom_group_sets_rho_cond():
+    # Condensate density is now owned by the group, not the gas.
     c = Carma("_t")
-    c.add_gas("TiO2")
-    assert c.gases["TiO2"].rho_cond == pytest.approx(RHO_TIO2)
+    group = c.add_hom_group("TiO2", 1e-8)
+    assert group.rho_cond == pytest.approx(RHO_TIO2)
 
 
 @pytest.mark.unit

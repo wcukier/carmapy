@@ -26,30 +26,27 @@ carmapy.available_species()
 
 # %% [markdown]
 # ## Relevant Properties
-# For reasons related to how CARMA was originally designed, condensate properties
-# are tied to the limiting gas reservoir the condensate is formed from.  Thus,
-# defining a custom condensate means creating a custom `carmapy.Gas` object.
-# This unfortunately has a side effect that each gas can only form condensates of
-# a single chemical formula (ie a gas can form Pure Fe and Fe on TiO₂ condensates
-# but cannot also form Fe₂SiO₄ on TiO₂ as the latter has a different chemical
-# formula).
-#
 # A large number of properties need to be defined for a custom condensate; we
 # will go through them below, but you can also see a reference page for the
-# `carmapy.Gas` object
-# [here](https://carmapy.readthedocs.io/en/latest/_autosummary/carmapy.Gas.html)
+# `carmapy.Group` object
+# [here](https://carmapy.readthedocs.io/en/latest/_autosummary/carmapy.Group.html) 
+# and `carmapy.Gas` object
+# [here](https://carmapy.readthedocs.io/en/latest/_autosummary/carmapy.Gas.html) 
+#
 #
 # For purposes of this tutorial, we will be recreating Al₂O₃
 #
-# To do so we need to know the following properties:
+# To do so we need to know the following properties of the gas resevoir:
+# - The molar mass of the limiting gas species
+# - The [Hill Notation](https://en.wikipedia.org/wiki/Chemical_formula#Hill_system)
+#   formula for the gas species
+#
+# And the following properties of the condensate:
 # - The density of the condensate
 # - The molar mass of the condensate
-# - The molar mass of the limiting gas species
 # - The collisional diameter
 # - The cosine of the contact angle between the gas species and any seed
 #   particles it might be condensing on
-# - The [Hill Notation](https://en.wikipedia.org/wiki/Chemical_formula#Hill_system)
-#   formula for the gas species
 # - The formula for the saturation vapor pressure of the condensate (explained
 #   below)
 # - The formula for the surface tension of the condensate (explained below)
@@ -75,8 +72,7 @@ carmapy.available_species()
 # and temperature.  carmapy assumes that the formula for vapor pressure can be
 # parameterized as follows:
 #
-# $$
-# \begin{align*}
+# $$\begin{align*}
 # \log_{10} \frac{p'}{10^6 \text{ barye}} &=  \texttt{vp\_offset} \\
 # &- \frac{\texttt{vp\_tcoeff}}{T} \\
 # &- \texttt{vp\_metcoeff} \cdot [Fe/H] \\
@@ -130,15 +126,14 @@ carmapy.available_species()
 # ### Latent heat of evaporation
 #
 # You can choose to provide a latent heat of evaporation; if you don't, CARMApy
-# will calculate one for you following the assumptions of Charnay et al. 2015
-# (TODO: check this citation):
+# will calculate one:
 #
 # $$\texttt{lat\_heat\_e} = \texttt{vp\_tcoeff} \cdot \ln(10) *
 # \frac{R}{\texttt{wtmol\_dif}}$$
 #
 # where $R$ is the ideal gas constant
 #
-# ## Defining the Gas Object
+# ## Defining the Custom Condensate:
 # First we will set up the carma simulation as we did previously, without adding
 # the Mg₂SiO₄
 
@@ -166,35 +161,39 @@ carma.add_hom_group("TiO2", 1e-8)
 # %% [markdown]
 # Then to add the user-defined condensate, first we add a gas to our carma
 # object with all the relevant properties, and then we add the nucleation
-# pathways we want to consider:
+# pathways we want to consider and the relevant group properties:
 
 # %%
-carma.add_gas("Al_oxide",
-    rho_cond = 3.99,
-    wtmol = 101.926,
+# Gas-phase properties (molar mass of the vapour, fastchem formula) live on the
+# gas:
+carma.add_gas("Al_gas",
     wtmol_dif = 26.98,
-    coldia = 3.825e-8,
     hill_formula = "Al",
-    vp_offset = 17.7,
-    vp_tcoeff = 45892.6,
-    vp_metcoeff = 1.66,
-    vp_logpcoeff = 0,
-    surften_0 = 690,
-    surften_slope = 0,
-    stofact = 2,
-    is_typeIII = True
 )
 
+# Condensate properties (density, vapour pressure, surface tension, ...) live on
+# the group, and are passed when the nucleation pathway is added. The group
+# reuses the "Al_gas" gas created above:
 carma.add_het_group("Al_oxide",
                     "TiO2",
                     1e-8 * 2**(1/3),
-                    mucos=0.724172)
+                    mucos=0.724172,
+                    gas_phase="Al_gas",
+                    rho_cond = 3.99,
+                    wtmol = 101.926,
+                    coldia = 3.825e-8,
+                    vp_offset = 17.7,
+                    vp_tcoeff = 45892.6,
+                    vp_metcoeff = 1.66,
+                    vp_logpcoeff = 0,
+                    surften_0 = 690,
+                    surften_slope = 0,
+                    stofact = 2,
+                    is_typeIII = True)
 
 # %% [markdown]
-# Note that we can add the nucleation pathway by using the name of the gas we
-# defined.
-#
-# **Note: use a short name for the gas — long names (around 12 or more
+
+# **Note: use a short name for the gas and group — long names (around 12 or more
 # characters) have a chance of breaking CARMA**
 #
 # Then, as before, we can populate the gas abundances as follows:
@@ -207,4 +206,4 @@ carmapy.chemistry.populate_abundances_at_cloud_base(carma)
 # following cell:
 
 # %%
-# carma.run()
+carma.run(supress_output=True)

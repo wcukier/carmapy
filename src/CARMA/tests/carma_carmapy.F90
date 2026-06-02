@@ -248,10 +248,23 @@ subroutine test_day()
 
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
   integer :: is_type3, stofact
+  real(kind=f) :: wtmol_core
+  integer :: igrp
 
   real(kind=f), allocatable ::tempr(:), pre(:), prel(:), alt(:), altl(:), wtmol_air(:), grav(:), ekz(:), ekzl(:), wtmol_gas(:)
   real(kind=f), allocatable ::temp_equator(:, :), p_equator_center(:), p_equator_level(:), velocity(:), longitudes(:)
   integer, allocatable :: elem2group(:)
+
+  ! Condensate properties are written per-group by CARMApy (new API), but the
+  ! engine still owns them per-gas. These arrays buffer the group properties so
+  ! they can be translated onto the corresponding gas (the gas grown by each
+  ! group's "Volatile" element) when the gases are created below.
+  real(kind=f), allocatable :: grp_wtmol(:), grp_rho_cond(:), grp_surften_0(:), grp_coldia(:)
+  real(kind=f), allocatable :: grp_vp_offset(:), grp_vp_tcoeff(:), grp_surften_slope(:)
+  real(kind=f), allocatable :: grp_vp_metcoeff(:), grp_vp_logpcoeff(:), grp_lat_heat_e(:)
+  real(kind=f), allocatable :: grp_desorption(:), grp_wtmol_core(:)
+  integer, allocatable :: grp_iroutine(:), grp_is_type3(:), grp_stofact(:)
+  integer, allocatable :: gas2group(:)
 
 
   fileprefix = trim(fileprefix)
@@ -284,6 +297,13 @@ subroutine test_day()
   allocate(tempr(NZ), pre(NZ), prel(NZP1), alt(NZ), altl(NZP1), wtmol_air(NZ), grav(NZ), ekz(NZP1), ekzl(NZP1), wtmol_gas(NGAS))
   allocate(temp_equator(NZ, NLONGITUDE), p_equator_center(NZ), p_equator_level(NZP1), velocity(NLONGITUDE), longitudes(NLONGITUDE))
   allocate(elem2group(NELEM))
+  allocate(grp_wtmol(NGROUP), grp_rho_cond(NGROUP), grp_surften_0(NGROUP), grp_coldia(NGROUP))
+  allocate(grp_vp_offset(NGROUP), grp_vp_tcoeff(NGROUP), grp_surften_slope(NGROUP))
+  allocate(grp_vp_metcoeff(NGROUP), grp_vp_logpcoeff(NGROUP), grp_lat_heat_e(NGROUP))
+  allocate(grp_desorption(NGROUP), grp_wtmol_core(NGROUP))
+  allocate(grp_iroutine(NGROUP), grp_is_type3(NGROUP), grp_stofact(NGROUP))
+  allocate(gas2group(NGAS))
+  gas2group = 0
   allocate(winds(NZ))
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -451,7 +471,12 @@ subroutine test_day()
   open(10, file = groups_file)
   read(10, *)
   do i = 1, NGROUP
-    read(10, *) name, rmin
+    ! New CARMApy group file carries the condensate properties. They are
+    ! buffered here and applied to the corresponding gas (see gas creation).
+    read(10, *) name, rmin, grp_wtmol(i), grp_iroutine(i), grp_rho_cond(i), &
+     grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), grp_vp_tcoeff(i), &
+     grp_is_type3(i), grp_surften_slope(i), grp_vp_metcoeff(i), grp_vp_logpcoeff(i), &
+     grp_lat_heat_e(i), grp_desorption(i), grp_stofact(i), grp_wtmol_core(i)
 
     write(*,*) "Add " //TRIM(name)//"..."
 
@@ -514,19 +539,49 @@ subroutine test_day()
   write(*,*) "  Add Gas(es) ..."
   write(*,*) " "
 
+  ! Build the gas -> group map from the growth pathways: each growth line pairs a
+  ! volatile element (ito) with the gas it exchanges with (igas); elem2group then
+  ! gives the group that owns that gas's condensate properties. Core (Core Mass)
+  ! elements have no growth pathway, so they never appear here. (This file is read
+  ! again below for CARMA_AddGrowth.)
+  open(10, file=growth_file)
+  read(10, *)
+  do i = 1, NGROWTH
+    read(10, *) ito, igas
+    gas2group(igas) = elem2group(ito)
+  enddo
+  close(10)
+
   open(10, file=gases_file)
   read(10, *)
   do i=1, NGAS
 
-    read(10, *) name, wtmol, iroutine, icomposition, wtmol_dif, rho_cond, surften_0, &
-     coldia, vp_offset, vp_tcoeff, is_type3, surften_slope, vp_metcoeff, vp_logpcoeff, &
-     lat_heat_e, desorption, stofact, hill_formula
+    ! New CARMApy gas file holds gas-phase properties only. The condensate
+    ! properties are pulled from the group that condenses this gas. hill_formula
+    ! is read but unused by the engine (it is a Python-side fastchem label).
+    read(10, *) name, wtmol_dif, icomposition, hill_formula
+
+    igrp = gas2group(i)
 
     write(*,*) "Add "//trim(name) //" ..."
-    call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rho_cond, surften_0, &
-     coldia, vp_offset, vp_tcoeff,  rc, is_type3=INT(is_type3), surften_slope=surften_slope,&
-     vp_metcoeff=vp_metcoeff, vp_logpcoeff=vp_logpcoeff, wtmol_dif=wtmol_dif, &
-     lat_heat_e=lat_heat_e, stofact=stofact, desorption=desorption)
+    if (igrp > 0) then
+      call CARMAGAS_Create(carma, i, name, grp_wtmol(igrp), grp_iroutine(igrp), icomposition, &
+       grp_rho_cond(igrp), grp_surften_0(igrp), grp_coldia(igrp), grp_vp_offset(igrp), &
+       grp_vp_tcoeff(igrp), rc, is_type3=grp_is_type3(igrp), surften_slope=grp_surften_slope(igrp), &
+       vp_metcoeff=grp_vp_metcoeff(igrp), vp_logpcoeff=grp_vp_logpcoeff(igrp), wtmol_dif=wtmol_dif, &
+       lat_heat_e=grp_lat_heat_e(igrp), stofact=grp_stofact(igrp), desorption=grp_desorption(igrp))
+    else
+      ! Background gas with no condensate (e.g. H2O when there is no water cloud).
+      ! No group grows it, so its condensate properties are never used; supply
+      ! harmless placeholders and pick the vapor-pressure routine from composition.
+      if (icomposition == I_GCOMP_H2O) then
+        iroutine = I_VAPRTN_H2O_MURPHY2005
+      else
+        iroutine = I_VAPRTN_USER
+      end if
+      call CARMAGAS_Create(carma, i, name, wtmol_dif, iroutine, icomposition, &
+       1._f, 0._f, 1.0e-8_f, 0._f, 0._f, rc, wtmol_dif=wtmol_dif)
+    end if
 
     if (rc < 0) stop "    *** FAILED ***"
 

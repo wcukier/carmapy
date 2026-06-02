@@ -90,7 +90,7 @@ def get_fastchem_abundances(T : np.ndarray,
 def saturation_vapor_pressure(P: ArrayLike, 
                        T:  ArrayLike, 
                        log_met: float,
-                       gas: Union[str, "Gas"]) -> ArrayLike:
+                       group: Union[str, "Group"]) -> ArrayLike:
   """Calculates the saturation vapor pressure for carmapy default gases.
 
   Parameters
@@ -101,7 +101,7 @@ def saturation_vapor_pressure(P: ArrayLike,
       Temperature [K]
   log_met : float
       Log solar metallicity
-  gas : Union[str, Gas]
+  group : Union[str, Group]
       carma Gas object or name of the carmapy default gas
 
   Returns
@@ -110,16 +110,16 @@ def saturation_vapor_pressure(P: ArrayLike,
       The saturation vapor pressure of the gas at each requested P-T point
   """
 
-  if type(gas) == type(""):
-    offset     = gas_dict[gas].get("vp_offset", 0)
-    T_coeff    = gas_dict[gas].get("vp_tcoeff", 0)
-    met_coeff  = gas_dict[gas].get("vp_metcoeff", 0)
-    logp_coeff = gas_dict[gas].get("vp_logpcoeff", 0)
+  if type(group) == type(""):
+    offset     = group_dict[group].get("vp_offset", 0)
+    T_coeff    = group_dict[group].get("vp_tcoeff", 0)
+    met_coeff  = group_dict[group].get("vp_metcoeff", 0)
+    logp_coeff = group_dict[group].get("vp_logpcoeff", 0)
   else:
-    offset     = gas.vp_offset
-    T_coeff    = gas.vp_tcoeff
-    met_coeff  = gas.vp_metcoeff
-    logp_coeff = gas.vp_logpcoeff
+    offset     = group.vp_offset
+    T_coeff    = group.vp_tcoeff
+    met_coeff  = group.vp_metcoeff
+    logp_coeff = group.vp_logpcoeff
 
   return 1e6 * 10**(offset
               - T_coeff/T
@@ -158,16 +158,15 @@ def _populate_fastchem_abundances(carma: "Carma",
   carma.set_nmr(nmr_dict)
 
 
-def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
+def find_cloud_base(carma: "Carma", group: "Union[str, Group]") -> tuple[float, float]:
   """Locates the P-T coordianates of the cloud base.
 
   Parameters
   ----------
   carma : Carma
       A carma object with initialized gases, P-T structure, and log metallicity
-  species : str
-      Either the name of the carmapy default gas to find the cloud base of or 
-      the hill notation chemical formula of the species
+  group : Union[str, Group]
+      The group (or its name) to find the cloud base of
 
   Returns
   -------
@@ -179,8 +178,10 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
 
   carma._citation["fastchem"] = True
 
-  species = carma.gases[species]
-  s = species.hill_formula
+  if isinstance(group, str):
+    group = carma.groups[group]
+
+  s = group.gas.hill_formula
 
   P = carma.P_centers
   T = carma.T_centers
@@ -194,7 +195,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   # print(s)
 
 # TODO make T, P ordering consistent
-  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), species) 
+  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), group) 
   abund = get_fastchem_abundances(T, P, [s], metallicity)[0, :]
 
   i = 1
@@ -202,7 +203,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
     i += 1
     # print(f"{i:2d}\t{sat_vp[i]/P[i]:.2e}\t{abund[i]:.2e}\t{T[i]:.0f}\t{P[i]:.2e}\t{sat_vp[i]:2e}")
     if (i == len(P)): 
-      print(f"{s} does not condense")
+      print(f"{group.name} does not condense")
       return P[i-1], T[i-1]
   
   P_lo, P_hi = P[i-1], P[i]
@@ -219,7 +220,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
     sat_vp = saturation_vapor_pressure(p_t(T),
                                        T, 
                                        np.log10(metallicity), 
-                                       species) / p_t(T)
+                                       group) / p_t(T)
     
     abund = get_fastchem_abundances(np.array([T]), 
                                     np.array([p_t(T)]), 
@@ -253,28 +254,36 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   p_t = interp1d(T, P)
 
   nmr_dict = {"H2O": 0}
+  P_dict = {}
 
-  for s in list(carma.gases.keys())[1:]:
+  for g in list(carma.groups.keys()):
+    group = carma.groups[g]
+    gas = group.gas.name
 
-    P_int, T_int = find_cloud_base(carma, s)
+    P_int, T_int = find_cloud_base(carma, group)
 
-    fast_chem_gas = carma.gases[s].hill_formula
-    if fast_chem_gas == -1: 
-      raise ValueError("{s} is not currently supported by "
-                        "the carmapy fastchem interface")
+    if P_int > P_dict.get(gas, 0):
 
-    metallicity = 10 ** carma.log_metallicity
+      fast_chem_gas = group.gas.hill_formula
 
-    nmr_dict[s] = get_fastchem_abundances(np.array([T_int]), 
-                                          np.array([P_int]), 
-                                          [fast_chem_gas], 
-                                          metallicity)[0]
+      if fast_chem_gas == -1: 
+        raise ValueError("{g} is not currently supported by "
+                          "the carmapy fastchem interface")
+
+      metallicity = 10 ** carma.log_metallicity
+
+      nmr_dict[gas] = get_fastchem_abundances(np.array([T_int]), 
+                                            np.array([P_int]), 
+                                            [fast_chem_gas], 
+                                            metallicity)[0]
+      P_dict[gas] = P_int 
   
-    carma.set_nmr(nmr_dict)
+  
+  carma.set_nmr(nmr_dict)
 
 
-def calculate_mucos(core: Union[str, "Gas"],
-                    shell: Union[str, "Gas"],
+def calculate_mucos(core: Union[str, "Group"],
+                    shell: Union[str, "Group"],
                     T_ref: float,
                     surften_interface = 0.0) -> float:
   """Uses Young's Equation to calculate the cosine of contact angle between
@@ -302,15 +311,15 @@ def calculate_mucos(core: Union[str, "Gas"],
   """
     
   if isinstance(core, str):
-    surften_core = (gas_dict[core]["surften_0"] 
-                      - T_ref * gas_dict[core]["surften_slope"])
+    surften_core = (group_dict[core]["surften_0"] 
+                      - T_ref * group_dict[core]["surften_slope"])
   else:
     surften_core = core.surften_0 - T_ref * core.surften_slope
 
   
   if isinstance(shell, str):
-    surften_shell = (gas_dict[shell]["surften_0"] 
-                      - T_ref * gas_dict[shell]["surften_slope"])
+    surften_shell = (group_dict[shell]["surften_0"] 
+                      - T_ref * group_dict[shell]["surften_slope"])
   else:
     surften_shell = shell.surften_0 - T_ref * shell.surften_slope
 

@@ -55,12 +55,14 @@ def test_svp_kcl_no_metallicity_dependence():
 
 
 @pytest.mark.unit
-def test_svp_gas_object_matches_string():
-    """Passing a Gas object should give the same result as the species name string."""
-    from carmapy.carmapy import Gas
+def test_svp_group_object_matches_string():
+    """Passing a Group object should match the condensate name string.
+
+    Vapor-pressure parameters are now owned by the group (condensate)."""
+    from carmapy.carmapy import Gas, Group
     T = np.array([1200.0])
     P = np.array([1e6])
-    gas_obj = Gas("KCl", 1)
+    grp = Group(1, "Pure KCl", 1e-8, Gas("KCl", 1), material="KCl")
     svp_str = saturation_vapor_pressure(P, T, 0.0, "KCl")
-    svp_obj = saturation_vapor_pressure(P, T, 0.0, gas_obj)
+    svp_obj = saturation_vapor_pressure(P, T, 0.0, grp)
     np.testing.assert_allclose(svp_str, svp_obj, rtol=1e-10)
