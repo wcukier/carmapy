@@ -1167,8 +1167,8 @@ class Carma:
 
     def run(self,
             suppress_output=False,
-            error_on_warn=True,
-            nthreads=1) -> None:
+            nthreads=1,
+            omp_schedule=None) -> None:
         """Runs the CARMA Simulation.
 
         Creates a directory at the path described by the name of the simulation
@@ -1183,12 +1183,14 @@ class Carma:
             If true, will not print stdout from the CARMA executable,
             by default False
 
-        error_on_warn: bool, optional
-            If true will throw an error if carmapy's common sense checks fail
-            (NOT YET IMPLEMENTED)
-
         nthreads : int, optional
             Number of OpenMP threads to use, by default 1
+
+        omp_schedule : str, optional
+            OpenMP loop schedule passed through as OMP_SCHEDULE environment 
+            variable (e.g. "guided" or "dynamic"). Overrides an externally set 
+            OMP_SCHEDULE; if neither is set, defaults to "guided". By default 
+            None
 
         """
         if self.is_2d and self.velocity_avg < 0:
@@ -1218,7 +1220,6 @@ class Carma:
                     f"nthreads={nthreads} requested but carmapy.exe was not built with "
                     "OpenMP. Reinstall with CARMAPY_OPENMP=1."
                 )
-
         
         path_end = os.path.basename(path) 
         
@@ -1510,6 +1511,10 @@ class Carma:
                 _env = os.environ.copy()
                 _env["OMP_NUM_THREADS"] = str(nthreads)
                 _env["KMP_STACKSIZE"] = "128M"
+                if omp_schedule is not None:
+                    _env["OMP_SCHEDULE"] = omp_schedule
+                else:
+                    _env.setdefault("OMP_SCHEDULE", "guided")
                 p = subprocess.Popen(
                     "./carmapy.exe",
                     shell=False,
