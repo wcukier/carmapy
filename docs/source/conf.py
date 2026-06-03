@@ -18,21 +18,9 @@ if os.environ.get("READTHEDOCS") == "True":
     os.environ.setdefault("picaso_refdata", _refdata)
     os.environ.setdefault("PYSYN_CDBS", os.path.join(_repo_root, "picaso", "reference", "stellar_grids"))
 
-    # Patch Carma.run on RTD so tutorials can skip long runs without exposing
-    # RTD-specific kwargs to readers. Convention: pass suppress_output=True in
-    # a notebook cell to make that run a no-op on RTD (pre-committed output
-    # files are read instead). Calls without suppress_output still execute but
-    # always get suppress_output=True so Fortran output doesn't flood the build log.
-    import carmapy as _carmapy
-    _original_run = _carmapy.Carma.run
-    def _rtd_run(self, *args, suppress_output=False, **kwargs):
-        if suppress_output:
-            return
-        return _original_run(self, *args, suppress_output=True, **kwargs)
-    _carmapy.Carma.run = _rtd_run
 else:
-    os.environ["PYSYN_CDBS"]     = "/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/PYSYN_CDBS"
-    os.environ["picaso_refdata"] = "/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/reference"
+    os.environ["PYSYN_CDBS"]     = "/Users/wcukier/Library/CloudStorage/Dropbox/Research/Projects/2026/2026-Brown Dwarfs/picaso/PYSYN_CDBS"
+    os.environ["picaso_refdata"] = "/Users/wcukier/Library/CloudStorage/Dropbox/Research/Projects/2026/2026-Brown Dwarfs/picaso/reference"
 
 
 project = 'carmapy'

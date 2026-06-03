@@ -12,6 +12,17 @@
 #     name: python3
 # ---
 
+# %% {"nbsphinx": "hidden"}
+import os
+import carmapy as _cm
+if os.environ.get("RUN_CARMA") != "True":
+    _orig = _cm.Carma.run
+    def _rtd_run(self, *a, suppress_output=False, **kw):
+        if suppress_output:
+            return
+        return _orig(self, *a, suppress_output=True, **kw)
+    _cm.Carma.run = _rtd_run
+
 # %% [markdown]
 # # Creating Spectra with Picaso
 #
@@ -62,7 +73,7 @@ carma.read_results()
 # appropriately.
 
 # %%
-opacity = jdi.opannection(wave_range=[.1,15])
+opacity = jdi.opannection(wave_range=[.5,15])
 example_case = jdi.inputs(calculation='browndwarf')
 example_case.phase_angle(0)
 
@@ -71,7 +82,7 @@ example_case.phase_angle(0)
 # pass those numbers to picaso:
 
 # %%
-λs = np.linspace(1e-4, 2e-3, 1000)
+λs = np.linspace(5e-4, 2e-3, 1000)
 
 carma.results.gen_picaso_atm_file()
 carma.results.gen_picaso_cloud_file(λs)

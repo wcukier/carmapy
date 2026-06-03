@@ -12,6 +12,17 @@
 #     name: python3
 # ---
 
+# %% {"nbsphinx": "hidden"}
+import os
+import carmapy as _cm
+if os.environ.get("RUN_CARMA") != "True":
+    _orig = _cm.Carma.run
+    def _rtd_run(self, *a, suppress_output=False, **kw):
+        if suppress_output:
+            return
+        return _orig(self, *a, suppress_output=True, **kw)
+    _cm.Carma.run = _rtd_run
+
 # %% [markdown]
 # # Other Features
 #

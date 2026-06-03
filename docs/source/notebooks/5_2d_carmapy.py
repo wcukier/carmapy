@@ -12,9 +12,20 @@
 #     name: python3
 # ---
 
+# %% {"nbsphinx": "hidden"}
+import os
+import carmapy as _cm
+if os.environ.get("RUN_CARMA") != "True":
+    _orig = _cm.Carma.run
+    def _rtd_run(self, *a, suppress_output=False, **kw):
+        if suppress_output:
+            return
+        return _orig(self, *a, suppress_output=True, **kw)
+    _cm.Carma.run = _rtd_run
+
 # %% [markdown]
 # # 2-D CARMApy
-#
+# ## Running 2D CARMApy
 # CARMApy also has a 2-D mode, as described in Powell and Zhang (2024).  It
 # works by advecting the entire cloud column at a constant longitudinal wind
 # speed along the equator while allowing the temperature structure to vary by
@@ -109,10 +120,10 @@ carmapy.chemistry.populate_abundances_at_cloud_base(carma)
 
 # %% [markdown]
 # We can now run our model.  This run should take 20-60 min depending on your
-# computer.  If you are following along locally, uncomment the cell below.
+# computer.  
 
 # %%
-# carma.run(suppress_output=True)
+carma.run(suppress_output=True)
 
 # %% [markdown]
 # For 2-D CARMApy in particular it is recommended to restart a longer run with
@@ -133,6 +144,7 @@ carma.run()
 carma.read_results(read_diag=True)
 
 # %% [markdown]
+# ## 2D CARMApy Results
 # Plotting our results is very similar to in 1-D CARMApy.  Because it is often
 # desired to plot results as a function of longitude instead of timestep, for
 # 2-D runs CARMApy provides the function `carma.results.longitude_map()`. This
@@ -278,8 +290,9 @@ plt.show()
 # This section expects `picaso_refdata` and `PYSYN_CDBS` to already be set in
 # your environment (e.g. in your shell rc). If you'd rather set them inline,
 # uncomment and edit:
-os.environ['picaso_refdata'] = '/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/reference'
-os.environ['PYSYN_CDBS'] = '/Users/wcukier/Dropbox/Research/Projects/24-Brown Dwarfs/picaso/PYSYN_CDBS'
+# path = '/path/to/picaso/reference'
+# os.environ['picaso_refdata'] = path
+# os.environ['PYSYN_CDBS'] = path
 
 from picaso import justdoit as jdi
 
@@ -484,5 +497,3 @@ plt.legend(framealpha=0.9)
 
 fig.tight_layout()
 plt.show()
-
-# %%
