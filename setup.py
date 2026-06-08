@@ -1,4 +1,5 @@
 from setuptools import setup
+from setuptools.dist import Distribution
 from setuptools.command.build_ext import build_ext
 from setuptools.command.build_py import build_py
 
@@ -15,6 +16,22 @@ import shutil
 import sys
 
 SRC = os.path.join(os.path.dirname(__file__), "src")
+
+
+class BinaryDistribution(Distribution):
+    """Force setuptools to treat carmapy as an impure (platform) distribution.
+
+    carmapy ships a compiled ``carmapy.exe`` but declares no ``ext_modules``,
+    so setuptools would otherwise classify the package as pure and install it
+    into *purelib*. With the wheel root declared platlib (see ``BinaryWheel``),
+    that mismatch routes every file into a ``*.data/purelib/`` scheme dir, and
+    auditwheel/delocate reject the binary ("shared library in purelib folder").
+    Reporting ext modules here installs the package to *platlib*, so files land
+    at the wheel root where the repair tools expect them.
+    """
+
+    def has_ext_modules(self):
+        return True
 
 
 class BuildFortranBinary(build_ext):
@@ -94,6 +111,7 @@ class BinaryWheel(bdist_wheel):
 
 
 setup(
+    distclass=BinaryDistribution,
     cmdclass={
         "build_ext": BuildFortranBinary,
         "build_py": CustomBuildPy,
