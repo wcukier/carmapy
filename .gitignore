@@ -34,3 +34,4 @@ TODO.md
 .claude/
 docs/source/notebooks/2d_carmapy/picaso_outputs/**
 docs/source/notebooks/output.log
+docs/source/notebooks/regen_2d.py

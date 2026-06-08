@@ -393,7 +393,21 @@ class Results:
             grow_loss_rates[:, :, :, it] = group_rows[..., 4].transpose(1, 0, 2)
             evap_loss_rates[:, :, :, it] = group_rows[..., 5].transpose(1, 0, 2)
             coremass_frac[:, :, :, it]   = group_rows[..., 6].transpose(1, 0, 2)
-        
+
+        # The Fortran diagnostic collectors integrate each production/loss term
+        # over one model timestep: production terms are multiplied by dtime and
+        # loss terms by (pc * dtime) before being summed over substeps (see
+        # newstate.F90). The raw values are therefore per-cm3 number changes per
+        # dt step, not rates. Divide by carma.dt to recover true rates in
+        # particles cm^-3 s^-1. coremass_frac is a dimensionless fraction and is
+        # left untouched.
+        hom_nuc_gain_rates /= carma.dt
+        het_nuc_gain_rates /= carma.dt
+        grow_gain_rates    /= carma.dt
+        evap_gain_rates    /= carma.dt
+        nuc_loss_rates     /= carma.dt
+        grow_loss_rates    /= carma.dt
+        evap_loss_rates    /= carma.dt
 
 
         for i, key in enumerate(carma.groups.keys()):

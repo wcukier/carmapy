@@ -1,6 +1,14 @@
-from setuptools import setup, Extension
+from setuptools import setup
 from setuptools.command.build_ext import build_ext
 from setuptools.command.build_py import build_py
+
+# bdist_wheel was vendored into setuptools (>=70.1); fall back to the wheel
+# package for older toolchains.
+try:
+    from setuptools.command.bdist_wheel import bdist_wheel
+except ImportError:  # pragma: no cover
+    from wheel.bdist_wheel import bdist_wheel
+
 import subprocess
 import os
 import shutil
@@ -62,15 +70,36 @@ class CustomBuildPy(build_py):
         self.run_command("build_ext")
         super().run()
 
-dummy_ext = Extension("carmapy._dummy", sources=[])
+
+class BinaryWheel(bdist_wheel):
+    """Tag the wheel ``py3-none-<platform>``.
+
+    carmapy bundles a standalone Fortran executable (carmapy.exe) that is
+    invoked via subprocess and does NOT link libpython, so the wheel is
+    platform-specific (right OS/arch) but Python-version agnostic. Marking it
+    impure but py3/none yields one wheel per platform that works on any
+    Python 3, instead of a separate cp310/cp311/cp312/cp313 wheel each.
+    """
+
+    def finalize_options(self):
+        super().finalize_options()
+        # Wheel carries a compiled binary: not a pure-Python ("any") wheel.
+        self.root_is_pure = False
+
+    def get_tag(self):
+        # Keep the platform tag computed by setuptools; relabel interpreter/ABI
+        # as py3/none since the binary is independent of the Python version.
+        _python, _abi, plat = super().get_tag()
+        return "py3", "none", plat
 
 
-setup(    cmdclass={
+setup(
+    cmdclass={
         "build_ext": BuildFortranBinary,
         "build_py": CustomBuildPy,
+        "bdist_wheel": BinaryWheel,
     },
-        ext_modules=[dummy_ext],
-    )
+)
 
 
 

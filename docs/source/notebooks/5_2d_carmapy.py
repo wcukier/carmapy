@@ -41,8 +41,7 @@ import os
 
 
 carma = carmapy.Carma("2d_carmapy", is_2d=True)
-
-carma.set_stepping(dt=5000, output_gap=249999, n_tstep=250000)
+carma.set_stepping(dt=2500, output_gap=249999, n_tstep=1_000_000)
 
 # %% [markdown]
 # Note that for this model it runs for far longer than a 1-D model as it takes
@@ -104,7 +103,7 @@ carma.set_atmospheric_parameters_from_defaults("Pure H2")
 
 # %%
 carma.calculate_z()
-carma.extend_atmosphere(1e9)
+carma.extend_atmosphere(1e11)
 
 # %% [markdown]
 # We will now add the cloud groups to our model. For this hot Jupiter we add

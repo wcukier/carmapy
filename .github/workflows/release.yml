@@ -53,11 +53,15 @@ jobs:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
-      CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+      # The wheel bundles a standalone Fortran binary (not a libpython-linked
+      # extension), so setup.py tags it py3-none-<platform> — one wheel per
+      # platform, valid on any Python 3. Build with a single interpreter; the
+      # chosen cpXY only drives the build and isn't reflected in the wheel tag.
+      CIBW_BUILD: "cp311-*"
     strategy:
       matrix:
         # os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-14]
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-14]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14]
 
     steps:
       # Checkout repo and submodules
@@ -95,7 +99,9 @@ jobs:
         uses: pypa/cibuildwheel@v3.2.1
         env:
           FC: ${{ env.GFORTRAN }}
-          CIBW_SKIP: ""
+          # Skip Alpine/musl-libc wheels: researchers run glibc distros, and
+          # every wheel carries the ~54 MB mie_tables payload.
+          CIBW_SKIP: "*musllinux*"
           # Wheels must run on any user CPU, so omit `-march=native`.
           # CIBW_ENVIRONMENT forwards the var into the cibuildwheel containers
           # used for the Linux matrix entries. setup.py reads it and passes
