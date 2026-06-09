@@ -1,2 +1,7 @@
 recursive-include src/CARMA/source/base *
 prune src/CARMA/source/base.git
+
+# Keep docs (notebooks, large output files) out of the source distribution.
+# These bloat the sdist past PyPI's file-size limit and aren't needed to build.
+prune docs
+recursive-exclude docs *

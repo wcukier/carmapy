@@ -45,5 +45,4 @@ docs/source/notebooks/2d_carmapy_backup/**
 docs/source/notebooks/2d_carmapy_v2/**
 docs/source/notebooks/my_first_carma/fastchem.atm
 docs/source/notebooks/my_first_carma/clouds.atm
-docs/source/notebooks/my_first_carma/inputs/**
-docs/source/notebooks/my_first_carma/*.txt
+
