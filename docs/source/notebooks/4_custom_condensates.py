@@ -83,12 +83,14 @@ carmapy.available_species()
 # and temperature.  carmapy assumes that the formula for vapor pressure can be
 # parameterized as follows:
 #
-# $$\begin{align*}
-# \log_{10} \frac{p'}{10^6 \text{ barye}} &=  \texttt{vp_offset} \\
-# &- \frac{\texttt{vp_tcoeff}}{T} \\
-# &- \texttt{vp_metcoeff} \cdot [Fe/H] \\
-# &- \texttt{vp_logpcoeff} \cdot \log_{10} \frac{P}{10^6 \text{ barye}}
-# \end{align*}$$
+# $$
+# \begin{align*}
+# \log_{10} \frac{p'}{10^6 \text{ barye}} &=  \texttt{vp\_offset} \\
+# &- \frac{\texttt{vp\_tcoeff}}{T} \\
+# &- \texttt{vp\_metcoeff} \cdot [Fe/H] \\
+# &- \texttt{vp\_logpcoeff} \cdot \log_{10} \frac{P}{10^6 \text{ barye}}
+# \end{align*}
+# $$
 #
 # where $p'$ is the saturation vapor pressure, $T$ is the temperature, and $P$
 # is the atmospheric pressure
@@ -102,7 +104,7 @@ carmapy.available_species()
 # ### Surface Tension
 # CARMApy also parameterizes the surface tension of condensates as follows:
 #
-# $$\texttt{surface_tension} = \texttt{surften_0}  - \texttt{surften_slope} * T$$
+# $$\texttt{surface\_tension} = \texttt{surften\_0}  - \texttt{surften\_slope} * T$$
 #
 # where $T$ is the temperature in K.
 #
@@ -139,8 +141,8 @@ carmapy.available_species()
 # You can choose to provide a latent heat of evaporation; if you don't, CARMApy
 # will calculate one:
 #
-# $$\texttt{lat_heat_e} = \texttt{vp_tcoeff} \cdot \ln(10) *
-# \frac{R}{\texttt{wtmol_dif}}$$
+# $$\texttt{lat\_heat\_e} = \texttt{vp\_tcoeff} \cdot \ln(10) *
+# \frac{R}{\texttt{wtmol\_dif}}$$
 #
 # where $R$ is the ideal gas constant
 #

@@ -32,6 +32,18 @@ benchmark/**
 TODO.md
 
 .claude/
+
+# Large CARMA result files are shipped compressed (*.txt.gz) and decompressed
+# at doc-build time by docs/source/conf.py. Ignore the raw decompressed copies.
+docs/source/notebooks/my_first_carma/my_first_carma.txt
+docs/source/notebooks/my_first_carma/rates_my_first_carma.txt
+
 docs/source/notebooks/2d_carmapy/picaso_outputs/**
 docs/source/notebooks/output.log
 docs/source/notebooks/regen_2d.py
+docs/source/notebooks/2d_carmapy_backup/**
+docs/source/notebooks/2d_carmapy_v2/**
+docs/source/notebooks/my_first_carma/fastchem.atm
+docs/source/notebooks/my_first_carma/clouds.atm
+docs/source/notebooks/my_first_carma/inputs/**
+docs/source/notebooks/my_first_carma/*.txt

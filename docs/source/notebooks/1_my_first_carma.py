@@ -43,7 +43,7 @@ carma = carmapy.Carma("my_first_carma")
 # how many timesteps to run
 
 # %%
-carma.set_stepping(dt=100, output_gap=1000, n_tstep=24000)
+carma.set_stepping(dt=100, output_gap=100, n_tstep=24000)
 
 # %% [markdown]
 # The parameters tell carmapy the following
@@ -129,7 +129,7 @@ carma.calculate_z(mu_levs)
 # pressure.
 
 # %%
-carma.extend_atmosphere(1e9)
+carma.extend_atmosphere(1e10)
 
 # %% [markdown]
 # Above we extended the atmosphere to a pressure of $10^{9}$ baryes.
@@ -236,3 +236,19 @@ carma.run(suppress_output=True)
 # should have been created.  The directory stores the state of the model along
 # with the model output—do not move or delete it while the model is running.  The
 # next tutorial will go over how to read the output from that directory.
+
+# %% {"nbsphinx": "hidden"}
+# Re-compress the large result files so the committed ``*.txt.gz`` archives stay
+# in sync after re-running this notebook. These archives keep the files well
+# under GitHub's size limits (avoiding git LFS) and are decompressed at
+# doc-build time by ``docs/source/conf.py``. This only runs after an actual
+# CARMA run (RUN_CARMA=True); on RTD the model is skipped and the result files
+# come straight from the committed archives.
+import gzip
+import shutil
+if os.environ.get("RUN_CARMA") == "True":
+    for _f in ("my_first_carma/my_first_carma.txt",
+               "my_first_carma/rates_my_first_carma.txt"):
+        with open(_f, "rb") as _src, \
+                gzip.open(_f + ".gz", "wb", compresslevel=9) as _dst:
+            shutil.copyfileobj(_src, _dst)

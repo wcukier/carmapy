@@ -118,7 +118,7 @@ carma.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2**(1/3))
 carmapy.chemistry.populate_abundances_at_cloud_base(carma)
 
 # %% [markdown]
-# We can now run our model.  This run should take 20-60 min depending on your
+# We can now run our model.  This run should take 1 - 4 hours depending on your
 # computer.  
 
 # %%
@@ -133,7 +133,7 @@ carma.run(suppress_output=True)
 
 # %%
 carma.restart=1
-carma.set_stepping(dt=800, output_gap=1, n_tstep=1500)
+carma.set_stepping(dt=800, output_gap=1, n_tstep=1000)
 carma.run()
 
 # %% [markdown]

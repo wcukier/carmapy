@@ -70,8 +70,9 @@ carma.results.plot_toa_gas(burn_in=0)
 carma.results.plot_toa_gas(burn_in=8)
 
 # %% [markdown]
-# This model is plausibly converged but it would likely be useful to run it for
-# longer to ensure convergence
+# This model looks plausibly converged.  The oscillatory behavior seen here is 
+# common to see in carmapy runs.  If you want to be sure, you can always run the 
+# model for longer
 
 # %% [markdown]
 # ## Accessing and Plotting Cloud Model Results
@@ -118,7 +119,7 @@ t_step = -1
 
 max_den = np.max(carma.results.clouds["Pure TiO2"]["numden"][:,:,t_step])
 
-levels = np.logspace(int(np.log10(max_den) + 1)-10, int(np.log10(max_den) + 1), 21)
+levels = np.logspace(int(np.log10(max_den) + 1)-5, int(np.log10(max_den) + 1), 31)
 
 plt.contourf(carma.results.clouds["Pure TiO2"]["r"],
              carma.results.P,
@@ -157,7 +158,7 @@ dlnr =r[1] / r[0]
 
 max_den = np.max(carma.results.clouds["Pure TiO2"]["numden"][:,:,t_step]/dlnr)
 
-levels = np.logspace(int(np.log10(max_den) + 1)-10, int(np.log10(max_den) + 1), 21)
+levels = np.logspace(int(np.log10(max_den) + 1)-5, int(np.log10(max_den) + 1), 31)
 
 plt.contourf(carma.results.clouds["Pure TiO2"]["r"],
              carma.results.P,
@@ -197,7 +198,7 @@ mass_density = (carma.results.clouds["Pure TiO2"]["numden"][:,:,t_step]
 
 max_den = np.max(mass_density)
 
-levels = np.logspace(int(np.log10(max_den) + 1)-10, int(np.log10(max_den) + 1), 21)
+levels = np.logspace(int(np.log10(max_den) + 1)-5, int(np.log10(max_den) + 1), 31)
 
 plt.contourf(carma.results.clouds["Pure TiO2"]["r"],
              carma.results.P,
@@ -236,7 +237,7 @@ mass_density = (carma.results.clouds["Mg2SiO4 on TiO2"]["numden"][:,:,t_step]
 
 max_den = np.max(mass_density)
 
-levels = np.logspace(int(np.log10(max_den) + 1)-10, int(np.log10(max_den) + 1), 21)
+levels = np.logspace(int(np.log10(max_den) + 1)-5, int(np.log10(max_den) + 1), 31)
 
 plt.contourf(carma.results.clouds["Mg2SiO4 on TiO2"]["r"],
              carma.results.P,
@@ -277,7 +278,7 @@ mass_density = (carma.results.clouds["Mg2SiO4 on TiO2"]["coremass_frac"][:,:,t_s
 
 max_den = np.max(mass_density)
 
-levels = np.linspace(0, 1, 21)
+levels = np.linspace(0, 1, 31)
 
 plt.contourf(carma.results.clouds["Mg2SiO4 on TiO2"]["r"],
              carma.results.P,
@@ -307,14 +308,15 @@ plt.show()
 # `carma.results.gases` where you can index the dictionary by gas names.  For
 # example, `carma.results.gases["TiO2"]` is a $n_z \times n_t$ array which
 # stores the number mixing ratio of TiO₂ at each z-center and time-step in units
-# of parts-per-million (ppm).  You can access and plot the gas profiles as
+# of parts-per-million (ppm).  Note that we access the gas resevoir for Mg2SiO4
+# with the gas Mg.  You can access and plot the gas profiles as
 # follows:
 
 # %%
 NT = -1
 
 plt.plot(carma.results.gases["TiO2"][:, NT-1], carma.results.P, label="TiO2 (g)")
-plt.plot(carma.results.gases["Mg2SiO4"][:, NT-1], carma.results.P, label="Mg (g)")
+plt.plot(carma.results.gases["Mg"][:, NT-1], carma.results.P, label="Mg (g)")
 
 plt.xscale("log")
 plt.yscale("log")
@@ -381,7 +383,7 @@ for i in range(6):
 
     max_val= np.max(values)
 
-    levels = np.logspace(int(np.log10(max_val) + 1)-10, int(np.log10(max_val) + 1), 21)
+    levels = np.logspace(int(np.log10(max_val) + 1)-10, int(np.log10(max_val) + 1), 31)
 
     cmap = ax.contourf(carma.results.clouds[species]["r"],
                 carma.results.P,
@@ -435,7 +437,7 @@ for i in range(6):
 
     max_val= np.max(values)
 
-    levels = np.logspace(int(np.log10(max_val) + 1)-10, int(np.log10(max_val) + 1), 21)
+    levels = np.logspace(int(np.log10(max_val) + 1)-10, int(np.log10(max_val) + 1), 31)
 
     cmap = ax.contourf(carma.results.clouds[species]["r"],
                 carma.results.P,

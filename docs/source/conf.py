@@ -10,8 +10,33 @@
 import os
 import sys
 import glob
+import gzip
+import shutil
 from importlib.metadata import version as _get_version
 sys.path.insert(0, os.path.abspath('../../src/'))
+
+
+def _decompress_notebook_data():
+    """Decompress ``*.gz`` data files shipped alongside the notebooks.
+
+    Large CARMA result files (e.g. ``my_first_carma.txt``,
+    ``rates_my_first_carma.txt``) are committed in gzip-compressed form to keep
+    them well under GitHub's file-size limits without needing git LFS. The
+    notebooks read the raw ``.txt`` files, so decompress any ``*.gz`` whose
+    decompressed counterpart is missing or stale before Sphinx executes them.
+    """
+    notebooks_dir = os.path.join(os.path.dirname(__file__), "notebooks")
+    for gz_path in glob.glob(os.path.join(notebooks_dir, "**", "*.gz"),
+                             recursive=True):
+        out_path = gz_path[:-len(".gz")]
+        if (os.path.exists(out_path)
+                and os.path.getmtime(out_path) >= os.path.getmtime(gz_path)):
+            continue
+        with gzip.open(gz_path, "rb") as src, open(out_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+
+
+_decompress_notebook_data()
 
 if os.environ.get("READTHEDOCS") == "True":
     _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
