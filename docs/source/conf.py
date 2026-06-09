@@ -9,6 +9,7 @@
 
 import os
 import sys
+import glob
 from importlib.metadata import version as _get_version
 sys.path.insert(0, os.path.abspath('../../src/'))
 
@@ -16,7 +17,24 @@ if os.environ.get("READTHEDOCS") == "True":
     _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
     _refdata = os.path.join(_repo_root, "picaso", "reference")
     os.environ.setdefault("picaso_refdata", _refdata)
-    os.environ.setdefault("PYSYN_CDBS", os.path.join(_repo_root, "picaso", "reference", "stellar_grids"))
+
+    # The STScI synphot tarballs extract under a ``grp/redcat/trds/`` prefix, so
+    # the stellar grids do not sit directly under ``stellar_grids/``. Locate the
+    # phoenix catalog and point PYSYN_CDBS at the dir that contains ``grid/`` so
+    # pysynphot can find ``grid/phoenix/catalog.fits``.
+    _stellar_grids = os.path.join(_refdata, "stellar_grids")
+    _catalogs = glob.glob(
+        os.path.join(_stellar_grids, "**", "grid", "phoenix", "catalog.fits"),
+        recursive=True,
+    )
+    if _catalogs:
+        # .../grid/phoenix/catalog.fits -> .../  (parent of grid/)
+        _pysyn_cdbs = os.path.dirname(
+            os.path.dirname(os.path.dirname(_catalogs[0]))
+        )
+    else:
+        _pysyn_cdbs = _stellar_grids
+    os.environ.setdefault("PYSYN_CDBS", _pysyn_cdbs)
 
 else:
     os.environ["PYSYN_CDBS"]     = "/Users/wcukier/Library/CloudStorage/Dropbox/Research/Projects/2026/2026-Brown Dwarfs/picaso/PYSYN_CDBS"

@@ -133,7 +133,7 @@ carma.run(suppress_output=True)
 
 # %%
 carma.restart=1
-carma.set_stepping(dt=800, output_gap=1, n_tstep=3000)
+carma.set_stepping(dt=800, output_gap=1, n_tstep=1500)
 carma.run()
 
 # %% [markdown]
