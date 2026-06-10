@@ -47,19 +47,30 @@ Fortran binary, so no compiler is needed for a standard install. See the
 ```python
 import carmapy
 
-# Create a simulation and define the atmosphere
+# Create a simulation (the name becomes the output directory)
 carma = carmapy.Carma("my_first_run")
-carma.add_P(P_levels)            # pressure levels [barye]
-carma.add_T(T_levels)            # temperature levels [K]
-carma.add_kzz(kzz_levels)        # eddy diffusion [cm^2/s]
-carma.set_physical_params(surface_grav=g, wt_mol=mu)
-carma.set_atmospheric_parameters_from_defaults("Pure H2")
 
-# Add a cloud species (homogeneous nucleation of TiO2)
-carma.add_hom_group("TiO2", r_min)
+# Set the timestep [s], output cadence, and number of steps
+carma.set_stepping(dt=100, output_gap=100, n_tstep=24000)
 
-# Configure stepping, initialize gas abundances, and run
-carma.set_stepping(n_tstep=600000, dt=dt, output_gap=2500)
+# Load the example atmosphere (a 2000 K Sonora Diamondback profile).
+# All inputs are cgs: P in barye, T in K, kzz in cm^2/s.
+P_levs, T_levs, kzz_levs, mu_levs = carmapy.example.example_levels()
+carma.add_P(P_levs)
+carma.add_T(T_levs)
+carma.add_kzz(kzz_levs)
+
+# Surface gravity [cm/s^2] and mean molecular weight 
+carma.set_physical_params(surface_grav=31600, wt_mol=mu_levs[0])
+carma.set_atmospheric_parameters_from_defaults("Pure H2")  # H2-dominated
+carma.calculate_z(mu_levs)        # derive altitudes from P/T/mu
+
+# Add cloud species: TiO2 nucleates homogeneously, Mg2SiO4 grows on it.
+# The second argument is the minimum particle radius [cm].
+carma.add_hom_group("TiO2", 1e-8)
+carma.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2**(1/3))
+
+# Initialize gas abundances (via FastChem) and run
 carmapy.chemistry.populate_abundances_at_cloud_base(carma)
 carma.run()
 
