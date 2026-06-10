@@ -8,5 +8,5 @@ from .results import *
 from .base import *
 
 from importlib.metadata import version
-__Version__ = version('carmapy')
+__version__ = version('carmapy')
 
