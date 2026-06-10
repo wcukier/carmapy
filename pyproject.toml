@@ -6,6 +6,21 @@ requires-python = ">=3.10"
 authors = [
     {name = "Wolf Cukier", email = "wcukier@uchicago.edu"},
 ]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
     "requests",
     "matplotlib",
@@ -16,6 +31,12 @@ dependencies = [
     "PyMieScatt"
 ]
 readme = "README.md"
+
+[project.urls]
+Homepage = "https://carmapy.readthedocs.io"
+Documentation = "https://carmapy.readthedocs.io"
+Repository = "https://github.com/wcukier/carmapy"
+Issues = "https://github.com/wcukier/carmapy/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-timeout"]
@@ -32,15 +53,12 @@ markers = [
     "slow: alias for regression",
 ]
 
-[tool.setuptools]
-license-files = ["LICENSE"]
-
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
 
 [build-system]
 requires = [
-    "setuptools",
+    "setuptools>=77",
     "setuptools-scm>=8",
     "wheel",
     "cibuildwheel",
