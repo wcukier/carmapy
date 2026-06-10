@@ -14,6 +14,8 @@ from scipy.interpolate import RectBivariateSpline
 
 from collections.abc import Callable
 
+import carmapy.mie as cmie
+
 # petroff 10 color cycle
 petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6",
               "#a96b59", "#e76300", "#b9ac70", "#717581", "#92dadd"]
@@ -27,7 +29,7 @@ class Results:
 
     Parameters
     ----------
-    carma : Carma
+    carma : "Carma"
         The carma simulation to load results from
     read_diag : boolean, optional
         If true reads in the microphysical rates and core mass fraction.
@@ -140,10 +142,12 @@ class Results:
     longitude_map : Callable
     """ A function to transform arrays to be by longitude (see notes) """
 
-    def __init__(self, carma: "Carma", read_diag=False) -> None:
+    def __init__(self, carma: "Carma", read_diag=False, redirectory=None) -> None:
         path = carma.name
         path_end = os.path.basename(path)
         file_path = os.path.join(path, f"{path_end}.txt")
+        if redirectory is not None:
+            file_path = os.path.join(redirectory, f"{path_end}.txt")
 
         f = open(file_path)
 
@@ -164,6 +168,13 @@ class Results:
             (nstep - 1 != carma.n_tstep)+
             (iskip != carma.output_gap)
         ):
+            print(f"NZ: {NZ} vs {carma.NZ}")
+            print(f"NGROUP: {NGROUP} vs {len(carma.groups)}")
+            print(f"NELEM: {NELEM} vs {len(carma.elems)}")
+            print(f"NBIN: {NBIN} vs {carma.NBIN}")
+            print(f"NGAS: {NGAS} vs {len(carma.gases)}")
+            print(f"nstep: {nstep - 1} vs {carma.n_tstep}")
+            print(f"iskip: {iskip} vs {carma.output_gap}")
             raise ValueError(f"Output file inconsistent with carma run")
         
         r = np.zeros((NBIN, NGROUP))
@@ -222,6 +233,8 @@ class Results:
                 t_step = f.readline()
 
             if t_step:
+                if type(t_step) == str: #Janky handling errors
+                    t_step = np.nan
                 ts[it] = t_step
                 for ibin in range(NBIN):
                     for iz in range(NZ):
@@ -239,6 +252,7 @@ class Results:
         
         
         for i, key in enumerate(carma.groups.keys()):
+            print(key)
             group = carma.groups[key]
             if group.mantle:
                 g = group.igroup-1
@@ -249,11 +263,11 @@ class Results:
                 e = group.core.ielem-1
                 numden_groups[:, g, :, :] = numden[:, e, :, :]
 
-            if np.any( numden_groups[:, group.igroup-1, :, :] < 0):
+            if np.any(numden_groups[:, group.igroup-1, :, :] < 0):
                 raise RuntimeError("Error in reading in number densities")
         
         f.close()
-        
+
         n_tstep = it
 
         self.carma = carma
@@ -837,12 +851,13 @@ class Results:
         beta_scas = []
         g_avgs     = []
 
-        P = carma.results.P
+        P = carma.P_levels
         idx = np.argmin(np.abs(P - 1e4))
 
         for i in range(len(carma.groups)):
             if i in skip_groups: continue
-            beta_ext, beta_sca, g_avg = _get_cloud_opacities(carma, 
+            beta_ext, beta_sca, g_avg = _get_cloud_opacities(self,
+                                                             carma,
                                                              i, 
                                                              wavelengths,
                                                              mie_table_path)
@@ -881,13 +896,15 @@ class Results:
 
 
 
-def _get_cloud_opacities(carma, 
+def _get_cloud_opacities(results,
+                         carma, 
                          i, 
                          wavelengths, 
                          mie_table_path = None,
                          min_columnden = 1e-25):
 
-    name = carma.results.group_names[i]
+    names = list(carma.groups.keys())
+    name = names[i]
 
     
     if name.split()[0] == "Pure":
@@ -900,14 +917,13 @@ def _get_cloud_opacities(carma,
     else:
         try:
             data = np.genfromtxt(
-                os.path.join(_SRC, "mie_tables", f'{species}_user.dat'),
+                os.path.join(_SRC, "mie_tables", f'{name}.dat'),
                  delimiter='\t', 
                  names=True)
         except: #TODO: handle this exception properly
-            data = np.genfromtxt(
-                os.path.join(_SRC, "mie_tables", f'{name}.dat'),
-                delimiter='\t', 
-                names=True)
+            # Generate the mie table
+            print('Unable to find mie table for species: ', species, 'Generating table')
+            cmie.gen_mie_table(name, species)
 
          
 
@@ -933,7 +949,7 @@ def _get_cloud_opacities(carma,
     g_interp = RectBivariateSpline(r_unique, λ_unique, g)
 
 
-    numdens = np.mean(carma.results.numden[:, i, :, -20:], axis=2)
+    numdens = np.mean(results.numden[:, i, :, -20:], axis=2)
     columndens = np.sum(numdens, axis=0)
 
     weighted_qext = np.zeros((carma.NZ, carma.NBIN, len(wavelengths)))
@@ -947,7 +963,7 @@ def _get_cloud_opacities(carma,
             # print(2 * np.pi * carma.results.r[ibin, i]/ wavelengths[ilambda])
             #
 
-            r = carma.results.r[ibin, i] * 1e-4
+            r = results.r[ibin, i] * 1e-4
             wavelength = wavelengths[ilambda]
 
             weight_term =  np.pi * r**2 * numdens[:, ibin]
