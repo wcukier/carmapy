@@ -354,6 +354,14 @@ class Carma:
         else:
             self.NZ = len(levels) - 1
 
+        if not np.all(np.diff(levels) < 0):
+            raise ValueError(
+                "Pressure levels must be strictly decreasing: the first "
+                "element corresponds to the bottom of the atmosphere (highest "
+                "pressure) and the last to the top (lowest pressure). Your "
+                "levels appear to be upside down or non-monotonic."
+            )
+
         self.P_centers = (levels[:-1] + levels[1:])/2
         self.P_levels = levels
         
@@ -1188,7 +1196,7 @@ class Carma:
 
         omp_schedule : str, optional
             OpenMP loop schedule passed through as OMP_SCHEDULE environment 
-            variable (e.g. "guided" or "dynamic"). Overrides an externally set 
+            variable (e.g. "guided" or "dynamic"). If set, overrides an externally set 
             OMP_SCHEDULE; if neither is set, defaults to "guided". By default 
             None
 

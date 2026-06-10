@@ -1,6 +1,10 @@
 Installation
 ===============
 
+.. note::
+
+   carmapy requires Python 3.10 or newer.
+
 Installation with pip
 ---------------------
 To install with pip simply write::

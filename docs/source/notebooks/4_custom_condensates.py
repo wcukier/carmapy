@@ -84,12 +84,12 @@ carmapy.available_species()
 # parameterized as follows:
 #
 # $$
-# \begin{align*}
+# \begin{aligned}
 # \log_{10} \frac{p'}{10^6 \text{ barye}} &=  \texttt{vp\_offset} \\
 # &- \frac{\texttt{vp\_tcoeff}}{T} \\
 # &- \texttt{vp\_metcoeff} \cdot [Fe/H] \\
 # &- \texttt{vp\_logpcoeff} \cdot \log_{10} \frac{P}{10^6 \text{ barye}}
-# \end{align*}
+# \end{aligned}
 # $$
 #
 # where $p'$ is the saturation vapor pressure, $T$ is the temperature, and $P$

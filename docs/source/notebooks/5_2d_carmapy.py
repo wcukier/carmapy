@@ -393,7 +393,8 @@ fig.tight_layout()
 plt.show()
 
 # %% [markdown]
-# As you can see, the morning spectrum is a lot flatter than the evening spectrum.
+# As you can see, the morning spectrum is a lot flatter than the evening spectrum
+# (Probably too flat, this likely means our kzz paramaterization was too high).
 # If you look up to where we plotted number densities earlier, you can see that
 # the morning limb is a lot cloudier than the evening limb -- this is what creates
 # the flatter morning spectrum

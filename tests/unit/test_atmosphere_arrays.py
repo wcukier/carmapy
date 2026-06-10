@@ -30,6 +30,22 @@ def test_add_P_wrong_shape_raises():
 
 
 @pytest.mark.unit
+def test_add_P_upside_down_raises():
+    c = Carma("_t")
+    P = np.linspace(1e6, 1e9, 11)  # increasing → bottom-of-atmosphere last
+    with pytest.raises(ValueError):
+        c.add_P(P)
+
+
+@pytest.mark.unit
+def test_add_P_non_monotonic_raises():
+    c = Carma("_t")
+    P = np.array([300.0, 100.0, 200.0])
+    with pytest.raises(ValueError):
+        c.add_P(P)
+
+
+@pytest.mark.unit
 def test_add_T_sets_nz():
     c = Carma("_t")
     T = np.linspace(2000, 1000, 11)
