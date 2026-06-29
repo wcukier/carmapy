@@ -85,7 +85,7 @@ See the [tutorials](https://carmapy.readthedocs.io) for complete, runnable examp
 If you use CARMApy in your work, please cite CARMApy itself along with the
 underlying models it is built on. At a minimum:
 
-> This work uses CARMApy (Cukier et al. in prep), which is built on the
+> This work uses CARMApy (Cukier et al. 2026), which is built on the
 > ExoCARMA (Gao et al. 2018, Powell et al. 2018) version of the CARMA model
 > (Turco et al. 1979, Toon et al. 1988, Bardeen et al. 2008).
 

@@ -5,7 +5,7 @@ The exact citation for CARMApy will depend on which parts of it you are using.
 At a minimum, please cite both CARMApy itself and the underlying models that it
 is built on. For example::
 
-   This work uses CARMApy (Cukier et al. in prep), which is built on the
+   This work uses CARMApy (Cukier et al. 2026), which is built on the
    ExoCARMA (Gao et al. 2018, Powell et al. 2018) version of the CARMA model
    (Turco et al. 1979, Toon et al. 1988, Bardeen et al. 2008).
 
@@ -23,7 +23,7 @@ CARMApy
    @article{CukierinprepCARMApyOpensourcePython,
      title  = {{CARMApy}: A Open-Source Python Wrapper for the Microphysical Cloud Code {CARMA}},
      author = {Cukier, Wolf and Powell, Diana and Zhang, Xi and Gao, Peter and Samra, Dominic and Nagpal, Vighnesh},
-     year   = {in prep}
+     year   = {2026}
    }
 
 ExoCARMA

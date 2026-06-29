@@ -46,3 +46,7 @@ docs/source/notebooks/2d_carmapy_v2/**
 docs/source/notebooks/my_first_carma/fastchem.atm
 docs/source/notebooks/my_first_carma/clouds.atm
 
+JOSS_paper/paper.pdf
+docs/source/notebooks/regen_2d.py
+docs/source/notebooks/my_first_carma/clouds.atm
+docs/source/notebooks/my_first_carma/fastchem.atm
