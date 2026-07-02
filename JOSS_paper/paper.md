@@ -143,12 +143,14 @@ simulation into a python `Results` object for easy analysis by the user.  This
 translation between layers happens once in each direction per run and thus does
 not significantly contribute to computational overhead.
 
+A complete description of the physical processes and numerical methods is 
+provided in the associated paper [@Cukier2026CARMApyOpenSourcePython]
 
 # Research impact statement
 
 `CARMApy` has a high potential for research impact.  The `ExoCARMA` code which
 `CARMApy` upgrades and wraps has already been used in a large number of papers
-[e.g., @Powell2018FormationSilicateTitanium; @Gao2018SedimentationEfficiencyCondensation; @Mang2024MicrophysicalPrescriptionsParameterized; @Rooney2022NewSedimentationModel; @Wong2020OpticalNearinfraredTransmission], although the vast majority of these papers have relied on a small
+[e.g., @Powell2018FormationSilicateTitanium; @Gao2018MicrophysicsKClZnS; @Mang2024MicrophysicalPrescriptionsParameterized; @Rooney2022NewSedimentationModel; @Wong2020OpticalNearinfraredTransmission], although the vast majority of these papers have relied on a small
 handful of coauthors to run the `CARMA` model.  By bringing this code to python,
 along with providing detailed documentation and tutorials, the number of 
 researchers who would be able to run `CARMApy` is significantly greater.  
@@ -192,4 +194,5 @@ NASA Interdisciplinary Consortia for Astrobiology Research grant (80NSSC21K0597)
 VN acknowledges support from the National Science Foundation Graduate Research 
 Fellowship under Grant No. DGE 2140001. D.S. acknowledges funding as part of 
 JWST GO program 3969 (PIs: Espinoza, Powell).
+
 # References
