@@ -148,11 +148,11 @@ not significantly contribute to computational overhead.
 
 `CARMApy` has a high potential for research impact.  The `ExoCARMA` code which
 `CARMApy` upgrades and wraps has already been used in a large number of papers
-(CITES), although the vast majority of these papers have relied on a small
+[e.g., @Powell2018FormationSilicateTitanium; @Gao2018SedimentationEfficiencyCondensation; @Mang2024MicrophysicalPrescriptionsParameterized; @Rooney2022NewSedimentationModel; @Wong2020OpticalNearinfraredTransmission], although the vast majority of these papers have relied on a small
 handful of coauthors to run the `CARMA` model.  By bringing this code to python,
 along with providing detailed documentation and tutorials, the number of 
 researchers who would be able to run `CARMApy` is significantly greater.  
-`CARMApy` is already being used in a number of in prep papers [@CukierinprepCARMApyOpensourcePython; Kennedy et al. in prep; Steinrueck et al. in prep; Samra et al. in prep] with the users spanning
+`CARMApy` is already being used in a number of in prep papers [Cukier et al. in prep; Kennedy et al. in prep; Steinrueck et al. in prep; Samra et al. in prep] with the users spanning
 career stages from undergraduate to post doc, and these users providing 
 feedback on documentation, reporting bugs, and suggesting new features.
 
