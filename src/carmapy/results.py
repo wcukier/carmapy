@@ -214,7 +214,7 @@ class Results:
         sat_idx = NELEM + 3 + 2 * np.arange(NGAS)
         ncols_block = None  # detected from first data line
 
-        for it in range(NT-1):
+        for it in range(NT):
             header = f.readline()
             if not header:
                 break
@@ -264,15 +264,15 @@ class Results:
         
         f.close()
         
-        n_tstep = it
+        n_tstep = it + 1
 
         self.carma = carma
         self.rmass = rmass
         self.r = r
-        self.numden = numden_groups[:,:,:,:it]
-        self.gas_abund = gas_abund[:,:,:it]
-        self.sat_vp = sat_vp[:,:,:it]
-        self.ts = ts[:it]
+        self.numden = numden_groups[:,:,:,:it+1]
+        self.gas_abund = gas_abund[:,:,:it+1]
+        self.sat_vp = sat_vp[:,:,:it+1]
+        self.ts = ts[:it+1]
         self.P = P
         self.Z = Z
         self.T = T

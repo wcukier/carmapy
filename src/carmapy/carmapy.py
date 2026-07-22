@@ -1445,7 +1445,7 @@ class Carma:
             for i in range(1, self.NZ):
                 for key in self.gases.keys():
                     g = self.gases[key]
-                    if len(np.shape(g.nmr)) > 1:
+                    if len(np.shape(g.nmr)) > 0:
                         if len(g.nmr) != self.NZ:
                             raise ValueError(f"The array for nmr of {g.name} "
                                              f"is {len(g.nmr)}.  It should be "
