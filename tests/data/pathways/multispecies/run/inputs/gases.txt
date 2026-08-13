@@ -1,0 +1,5 @@
+name	wtmol_dif	icomp	hill_formula
+"H2O Vapor"             1.801600e+01	 1	H2O1
+"TiO2 Vapor"            7.986600e+01	13	O2Ti1
+"KCl Vapor"             7.450000e+01	 6	Cl1K1
+"Mg Vapor"              2.430500e+01	12	Mg

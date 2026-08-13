@@ -1,0 +1,61 @@
+&input_params
+    is_2d = 0
+    nbin = 80
+    ncoag = 1
+    nelem = 4
+    ngas = 4
+    ngroup = 3
+    ngrowth = 3
+    nlongitude = -1
+    nnuc = 3
+    nsolute = 1
+    nwave = 0
+    nz = 90
+    dtime = 250
+    iappend = 0
+    ibbnd_gc = 1
+    ibbnd_pc = 1
+    idiag = 0
+    igridv = 1
+    irestart = 0
+    iskip = 5
+    itbnd_gc = 2
+    itbnd_pc = 2
+    nstep = 50
+    t_evolves = 0
+/
+
+&io_files
+    centers_file = 'inputs/centers.txt'
+    coag_file = 'inputs/coagulation.txt'
+    elements_file = 'inputs/elements.txt'
+    filename = 'run'
+    filename_restart = 'run_restart'
+    fileprefix = ''
+    g_boundary_file = 'inputs/gbound.txt'
+    gas_input_file = 'inputs/gas_input.txt'
+    gases_file = 'inputs/gases.txt'
+    groups_file = 'inputs/groups.txt'
+    growth_file = 'inputs/growth.txt'
+    levels_file = 'inputs/levels.txt'
+    nuc_file = 'inputs/nucleation.txt'
+    p_boundary_file = 'inputs/pbound.txt'
+    temps_file = 'inputs/temps.txt'
+    winds_file = 'inputs/winds.txt'
+/
+
+&physical_params
+    cp = 130000000.0
+    grav_set = 31600
+    met = 0
+    rmu_1 = 1.797e-06
+    rmu_2 = 0.685
+    rmu_3 = -0.59
+    rmu_4 = 140
+    rplanet = 6991000000.0
+    thcond_0 = 7992.77
+    thcond_1 = 38.08
+    thcond_2 = -0.00012585
+    velocity_avg = -1
+    wtmol_air_set = 2.345644240358553
+/

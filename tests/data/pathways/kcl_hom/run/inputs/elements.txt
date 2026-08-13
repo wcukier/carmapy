@@ -1,0 +1,2 @@
+igroup	name	rho	process	igas
+1	"Pure KCl"                         1.9880	"Volatile"     	 2

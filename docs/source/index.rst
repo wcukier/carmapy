@@ -19,3 +19,4 @@ Contents
    installation
    tutorials
    api
+   citation

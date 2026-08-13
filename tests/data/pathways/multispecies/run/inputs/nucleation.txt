@@ -1,0 +1,4 @@
+ele_from	ele_to	is_het	igas	evap_to	mucos
+  1	  1	0	  2	  0	0.00000000
+  2	  2	0	  3	  0	0.00000000
+  1	  4	1	  4	  1	0.99500000

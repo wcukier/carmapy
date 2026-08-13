@@ -10,5 +10,5 @@ from .utils import *
 from .constants import *
 
 from importlib.metadata import version
-__Version__ = version('carmapy')
+__version__ = version('carmapy')
 

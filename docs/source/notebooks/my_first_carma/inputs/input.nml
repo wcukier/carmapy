@@ -18,10 +18,11 @@
     idiag = 0
     igridv = 1
     irestart = 0
-    iskip = 200
+    iskip = 100
     itbnd_gc = 2
     itbnd_pc = 2
-    nstep = 3000
+    nstep = 24000
+    t_evolves = 0
 /
 
 &io_files
@@ -47,13 +48,14 @@
     cp = 130000000.0
     grav_set = 31600
     met = 0
-    rmu_0 = 8.76e-05
-    rmu_c = 72
-    rmu_t0 = 293.85
+    rmu_1 = 1.797e-06
+    rmu_2 = 0.685
+    rmu_3 = -0.59
+    rmu_4 = 140
     rplanet = 6991000000.0
-    thcond_0 = 71.4857
-    thcond_1 = 0.3912
-    thcond_2 = 3.1607e-05
+    thcond_0 = 7992.77
+    thcond_1 = 38.08
+    thcond_2 = -0.00012585
     velocity_avg = -1
     wtmol_air_set = 2.262911695960343
 /

@@ -2,12 +2,27 @@
 name = "carmapy"
 description = "A python wrapper of the CARMA cloud aerosol model"
 dynamic = ["version"]
+requires-python = ">=3.10"
 authors = [
     {name = "Wolf Cukier", email = "wcukier@uchicago.edu"},
 ]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
     "requests",
-    'importlib-metadata; python_version<"3.10"',
     "matplotlib",
     "numpy",
     "scipy",
@@ -17,15 +32,33 @@ dependencies = [
 ]
 readme = "README.md"
 
-[tool.setuptools]
-license-files = ["LICENSE"]
+[project.urls]
+Homepage = "https://carmapy.readthedocs.io"
+Documentation = "https://carmapy.readthedocs.io"
+Repository = "https://github.com/wcukier/carmapy"
+Issues = "https://github.com/wcukier/carmapy/issues"
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "pytest-timeout"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --timeout=120"
+markers = [
+    "unit: fast, no Fortran binary required",
+    "parsing: uses committed fixture output files",
+    "integration: requires carmapy.exe, ~seconds to 2 min",
+    "pathway: per-physics-pathway autoregression vs committed .npz references, requires carmapy.exe",
+    "regression: full tutorial run, ~25 min",
+    "slow: alias for regression",
+]
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
 
 [build-system]
 requires = [
-    "setuptools",
+    "setuptools>=77",
     "setuptools-scm>=8",
     "wheel",
     "cibuildwheel",
@@ -34,10 +67,17 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 # --- CIBUILDWHEEL CONFIGURATION ---
+# Keep in sync with CIBW_BUILD in .github/workflows/release.yml.
+# The wheel bundles a standalone Fortran binary (not a libpython-linked
+# extension), so setup.py tags it py3-none-<platform>: one wheel per platform,
+# valid on any Python 3. A single interpreter drives the build.
 [tool.cibuildwheel]
-build = "cp310-*"
+build = "cp311-*"
+# Skip Alpine/musl-libc wheels: researchers run glibc distros, and
+# every wheel carries the ~54 MB mie_tables payload.
+skip = "*musllinux*"
 
 [tool.cibuildwheel.macos]
 before-build = "brew install gcc"
-environment = { FC = "gfortran", FORTRAN = "gfortran" }
+environment = { FC = "gfortran", FORTRAN = "gfortran", CARMAPY_NATIVE = "0" }
 repair-wheel-command = "delocate-wheel -v -w {dest_dir} {wheel}"

@@ -250,7 +250,66 @@ RGAS = 8.31430e+07 # Define universal gas constant [ erg / deg_K / mole ]
 
 
 
-gas_dict = { #TODO change to predifined gas objects
+gas_dict = { 
+    "H2O": {
+        "wtmol_dif": WTMOL_H2O,
+        "gcomp": I_GCOMP_H2O,
+        "hill_formula": "H2O1"
+
+    },
+        "KCl": {
+        "wtmol_dif": WTMOL_KCL,
+        "gcomp": I_GCOMP_KCL,
+        "hill_formula": "Cl1K1"
+    },
+        "Zn": {
+        "wtmol_dif": WTMOL_ZN,
+        "gcomp": I_GCOMP_ZNS,
+        "hill_formula": "Zn"
+    },
+        "Na": {
+        "wtmol_dif": WTMOL_NA,
+        "gcomp": I_GCOMP_NA2S,
+        "hill_formula": "Na"
+    },
+        "Mn": {
+        "wtmol_dif": WTMOL_MN,
+        "gcomp": I_GCOMP_MNS,
+        "hill_formula": "Mn"
+    },
+        "Cr": {
+        "wtmol_dif": WTMOL_CR,
+        "gcomp": I_GCOMP_CR,
+        "hill_formula": "Cr"
+    },
+        "Mg": {
+        "wtmol_dif": WTMOL_MG,
+        "gcomp": I_GCOMP_MG2SIO4,
+        "hill_formula": "Mg"
+    },
+        "Fe": {
+        "wtmol_dif": WTMOL_FE,
+        "gcomp": I_GCOMP_FE,
+        "hill_formula": "Fe"
+    },
+        "TiO2": {
+        "wtmol_dif": WTMOL_TIO2,
+        "gcomp": I_GCOMP_TIO2,
+        "hill_formula": "O2Ti1"
+    },
+        "Al": {
+        "wtmol_dif": WTMOL_AL,
+        "gcomp": I_GCOMP_AL2O3,
+        "hill_formula": "Al"
+    },
+        "SiO": { # need better sourcing for these constants
+        "wtmol_dif": 44.0849,
+        "gcomp": I_GCOMP_AL2O3,
+        "hill_formula": "O1Si1"
+    }
+}
+
+group_dict = { 
     "H2O": {
         "cond_rho": RHO_W,
         "rtn": I_VAPRTN_H2O_MURPHY2005,
@@ -259,10 +318,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_H2O,
-        "wtmol_dif": WTMOL_H2O,
-        "gcomp": I_GCOMP_H2O,
         "mucos_dict": {},
-        "hill_formula": "H2O1",
         "opacity_files": "WS15/H2O_complex.txt",
         "rho_cond": RHO_W,
         "surften_0": np.nan,
@@ -270,7 +326,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_H2O,
         "is_typeIII": False,
         "lat_heat_e": np.nan, # ignored
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "H2O"
 
     },
         "KCl": {
@@ -281,10 +338,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_KCL,
-        "wtmol_dif": WTMOL_KCL,
-        "gcomp": I_GCOMP_KCL,
         "mucos_dict": {},
-        "hill_formula": "Cl1K1",
         "opacity_files": "KCl_complex.txt",
         "rho_cond": RHO_KCL,
         "surften_0": 160.4 + 0.07*273.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
@@ -292,7 +346,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_KCL,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "KCl"
     },
         "ZnS": {
         "cond_rho": RHO_ZNS,
@@ -302,10 +357,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 1,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_ZNS,
-        "wtmol_dif": WTMOL_ZN,
-        "gcomp": I_GCOMP_ZNS,
         "mucos_dict": {"KCl": 0.144356},
-        "hill_formula": "Zn",
         "opacity_files": "ZnS_complex.txt",
         "rho_cond": RHO_ZNS,
         "surften_0": 860.0, #  @Citation: Zhang et al. 2003, J. Phys. Chem. B 2003, 107, 13051-13060 
@@ -313,7 +365,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_ZNS,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "Zn"
     },
         "Na2S": {
         "cond_rho": RHO_NA2S,
@@ -323,10 +376,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 0.5,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_NA2S,
-        "wtmol_dif": WTMOL_NA,
-        "gcomp": I_GCOMP_NA2S,
         "mucos_dict": {"TiO2": 0.48481},
-        "hill_formula": "Na",
         "opacity_files": "Na2S_complex.txt",
         "rho_cond": RHO_NA2S,
         "surften_0": 1033, #  @Citation: Elsie Lee's calculations, estimated from enthalpy data
@@ -334,7 +384,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_NA2S,
         "is_typeIII": True,
         "lat_heat_e": -1,
-        "stofact": 2
+        "stofact": 2,
+        "gas_phase": "Na"
     },
         "MnS": {
         "cond_rho": RHO_MNS,
@@ -344,10 +395,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 1,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_MNS,
-        "wtmol_dif": WTMOL_MN,
-        "gcomp": I_GCOMP_MNS,
         "mucos_dict": {"TiO2": 0.214735},
-        "hill_formula": "Mn1S1",
         "opacity_files": "MnS-KH_complex.txt",
         "rho_cond": RHO_MNS,
         "surften_0": 2326, #  @Citation:  Elsie Lee's calculations, estimated from enthalpy data
@@ -355,7 +403,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_MNS,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "Mn"
     },
         "Cr": {
         "cond_rho": RHO_CR,
@@ -365,10 +414,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_CR,
-        "wtmol_dif": WTMOL_CR,
-        "gcomp": I_GCOMP_CR,
         "mucos_dict": {"TiO2": 0.262189},
-        "hill_formula": "Cr",
         "opacity_files": "Cr_complex.txt",
         "rho_cond": RHO_CR,
         "surften_0": 1642 + .2 * 2133.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
@@ -376,7 +422,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_CR,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "Cr"
     },
         "Mg2SiO4": {
         "cond_rho": RHO_MG2SIO4,
@@ -386,10 +433,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 1.4,
         "vp_logpcoeff": 0.2,
         "wtmol": WTMOL_MG2SIO4,
-        "wtmol_dif": WTMOL_MG,
-        "gcomp": I_GCOMP_MG2SIO4,
         "mucos_dict": {"TiO2": 0.995},
-        "hill_formula": "Mg",
         "opacity_files": "Mg2SiO4_amorph.txt",
         "rho_cond": RHO_MG2SIO4,
         "surften_0": 436, #  @!Kazasa et al. 1989 
@@ -397,7 +441,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_MG2SIO4,
         "is_typeIII": True,
         "lat_heat_e": -1,
-        "stofact": 2
+        "stofact": 2,
+        "gas_phase": "Mg"
     },
         "Fe": {
         "cond_rho": RHO_FE,
@@ -407,10 +452,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_FE,
-        "wtmol_dif": WTMOL_FE,
-        "gcomp": I_GCOMP_FE,
         "mucos_dict": {"TiO2": 0.221548},
-        "hill_formula": "Fe",
         "opacity_files": "Fe_complex.txt",
         "rho_cond": RHO_FE,
         "surften_0": 1862 + .39*1803.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
@@ -418,7 +460,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_FE,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "Fe"
     },
         "TiO2": {
         "cond_rho": RHO_TIO2,
@@ -428,10 +471,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_TIO2,
-        "wtmol_dif": WTMOL_TIO2,
-        "gcomp": I_GCOMP_TIO2,
         "mucos_dict": {},
-        "hill_formula": "O2Ti1",
         "opacity_files": "TiO2[s].txt",
         "rho_cond": RHO_TIO2,
         "surften_0": 589.79, #  @Citation: Sindel et al. (2022) sig = 589.79_dp - 0.0708_dp * T
@@ -439,7 +479,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_TIO2,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "TiO2"
     },
         "Al2O3": {
         "cond_rho": RHO_AL2O3,
@@ -449,10 +490,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 1.66,
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_AL2O3,
-        "wtmol_dif": WTMOL_AL,
-        "gcomp": I_GCOMP_AL2O3,
         "mucos_dict": {"TiO2": 0.724172},
-        "hill_formula": "Al",
         "opacity_files": "Al2O3[s].txt",
         "rho_cond": RHO_AL2O3,
         "surften_0": 690, #  @Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
@@ -460,7 +498,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": COLDIA_AL2O3,
         "is_typeIII": True,
         "lat_heat_e": -1,
-        "stofact": 2
+        "stofact": 2,
+        "gas_phase": "Al"
     },
         "SiO": { # need better sourcing for these constants
         "cond_rho": 2.13,
@@ -470,10 +509,7 @@ gas_dict = { #TODO change to predifined gas objects
         "vp_metcoeff": 0,
         "vp_logpcoeff": 0,
         "wtmol": 44.0849,
-        "wtmol_dif": 44.0849,
-        "gcomp": I_GCOMP_AL2O3,
         "mucos_dict": {},
-        "hill_formula": "O1Si1",
         "opacity_files": "SiO_complex.txt",
         "rho_cond": 2.13,
         "surften_0": 500, 
@@ -481,7 +517,8 @@ gas_dict = { #TODO change to predifined gas objects
         "coldia": 4.04e-8,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1
+        "stofact": 1,
+        "gas_phase": "SiO"
     }
 }
 
@@ -499,21 +536,35 @@ opacity_files = {
     "Al2O3": "KH18/Al2O3[s].txt"
 }
 
-# Taken from Gao and Benneke 2018
 atmo_dict = {
-    "Pure H2": {
-        "rmu_0": 8.76e-5,
-        "rmu_t0": 293.85,
-        "rmu_c": 72,
-        "thcond_0": 71.4857,
-        "thcond_1": .3912,
-        "thcond_2": 3.1607e-5,
+        "Pure H2": {
+        "rmu_1": 1.7970e-6, # Taken from Gao et al. 2023
+        "rmu_2": 0.685,
+        "rmu_3": -0.59,
+        "rmu_4": 140,
+        "thcond_0": 7992.77, #Fit to CRC 106th ed 1 MPa
+        "thcond_1": 38.08,
+        "thcond_2": -1.2585e-4,
+        "CP": 1.3e8
+    },
+    "Pure H2 Old": { # Taken from Gao and Benneke 2018
+        "rmu_1": 6.3624e-6,
+        "rmu_2": 0.5,
+        "rmu_3": 72,
+        "rmu_4": 0,
+        "thcond_0": 100*71.4857,
+        "thcond_1": 100*.3912,
+        "thcond_2": 100*3.1607e-5,
         "CP": 1.3e8
     }
 } 
 
 
-JUPITER_RADIUS = 6.995e9 #cm
+references = {
+    
+}
+
+JUPITER_RADIUS = 7.1492e9 #cm
 BAR_TO_BARYE = 1e6
 k_B = 1.381e-16 #erg/K
 PROTON_MASS =  1.673e-24 # g

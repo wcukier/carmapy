@@ -37,6 +37,7 @@ subroutine test_day()
   integer    :: NLONGITUDE 
   integer   :: NGROWTH, NNUC, NCOAG
   integer   :: IS_2D
+  integer   :: t_evolves
   integer   :: igridv
   integer   :: idocoag
   logical   :: do_coag
@@ -196,6 +197,7 @@ subroutine test_day()
 
 
   character(30)      	:: name
+  character(30)      	:: hill_formula
   character(30)  :: type_spec
   character(30)      	:: gname
   character(len=3)	:: fileprefix
@@ -225,7 +227,7 @@ subroutine test_day()
 
   character(len=20)   :: file_pos
 
-  real(kind=f)  :: rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
+  real(kind=f)  :: rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP
   real(kind=f)  :: distance_btwn_elements, circumference, rotation_counter, slope, intercept
   real(kind=f)  :: current_distance, num_steps_btwn, current_step, RPLANET_DAT, restart_distance
   integer       :: closeto_temp_profile
@@ -237,19 +239,32 @@ subroutine test_day()
          g_boundary_file, p_boundary_file
   
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
-         met, rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP
+         met, rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
-         NCOAG, IS_2D, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
+         NCOAG, IS_2D, t_evolves, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
          ibbnd_gc
 
-  real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e
+  real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
   integer :: is_type3, stofact
+  real(kind=f) :: wtmol_core
+  integer :: igrp
 
   real(kind=f), allocatable ::tempr(:), pre(:), prel(:), alt(:), altl(:), wtmol_air(:), grav(:), ekz(:), ekzl(:), wtmol_gas(:)
   real(kind=f), allocatable ::temp_equator(:, :), p_equator_center(:), p_equator_level(:), velocity(:), longitudes(:)
   integer, allocatable :: elem2group(:)
+
+  ! Condensate properties are written per-group by CARMApy (new API), but the
+  ! engine still owns them per-gas. These arrays buffer the group properties so
+  ! they can be translated onto the corresponding gas (the gas grown by each
+  ! group's "Volatile" element) when the gases are created below.
+  real(kind=f), allocatable :: grp_wtmol(:), grp_rho_cond(:), grp_surften_0(:), grp_coldia(:)
+  real(kind=f), allocatable :: grp_vp_offset(:), grp_vp_tcoeff(:), grp_surften_slope(:)
+  real(kind=f), allocatable :: grp_vp_metcoeff(:), grp_vp_logpcoeff(:), grp_lat_heat_e(:)
+  real(kind=f), allocatable :: grp_desorption(:), grp_wtmol_core(:)
+  integer, allocatable :: grp_iroutine(:), grp_is_type3(:), grp_stofact(:)
+  integer, allocatable :: gas2group(:)
 
 
   fileprefix = trim(fileprefix)
@@ -262,6 +277,9 @@ subroutine test_day()
 
 
   write(*,*) ""
+
+  ! Defaults for namelist params that may be missing from older input.nml files.
+  t_evolves = 0   ! 0 = T,P fixed across the run -> setupgkern caches its outputs
 
   open(unit=10, file=nml_file, status='old')
     read(10, nml=input_params)
@@ -279,6 +297,13 @@ subroutine test_day()
   allocate(tempr(NZ), pre(NZ), prel(NZP1), alt(NZ), altl(NZP1), wtmol_air(NZ), grav(NZ), ekz(NZP1), ekzl(NZP1), wtmol_gas(NGAS))
   allocate(temp_equator(NZ, NLONGITUDE), p_equator_center(NZ), p_equator_level(NZP1), velocity(NLONGITUDE), longitudes(NLONGITUDE))
   allocate(elem2group(NELEM))
+  allocate(grp_wtmol(NGROUP), grp_rho_cond(NGROUP), grp_surften_0(NGROUP), grp_coldia(NGROUP))
+  allocate(grp_vp_offset(NGROUP), grp_vp_tcoeff(NGROUP), grp_surften_slope(NGROUP))
+  allocate(grp_vp_metcoeff(NGROUP), grp_vp_logpcoeff(NGROUP), grp_lat_heat_e(NGROUP))
+  allocate(grp_desorption(NGROUP), grp_wtmol_core(NGROUP))
+  allocate(grp_iroutine(NGROUP), grp_is_type3(NGROUP), grp_stofact(NGROUP))
+  allocate(gas2group(NGAS))
+  gas2group = 0
   allocate(winds(NZ))
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -446,7 +471,12 @@ subroutine test_day()
   open(10, file = groups_file)
   read(10, *)
   do i = 1, NGROUP
-    read(10, *) name, rmin
+    ! New CARMApy group file carries the condensate properties. They are
+    ! buffered here and applied to the corresponding gas (see gas creation).
+    read(10, *) name, rmin, grp_wtmol(i), grp_iroutine(i), grp_rho_cond(i), &
+     grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), grp_vp_tcoeff(i), &
+     grp_is_type3(i), grp_surften_slope(i), grp_vp_metcoeff(i), grp_vp_logpcoeff(i), &
+     grp_lat_heat_e(i), grp_desorption(i), grp_stofact(i), grp_wtmol_core(i)
 
     write(*,*) "Add " //TRIM(name)//"..."
 
@@ -509,19 +539,49 @@ subroutine test_day()
   write(*,*) "  Add Gas(es) ..."
   write(*,*) " "
 
+  ! Build the gas -> group map from the growth pathways: each growth line pairs a
+  ! volatile element (ito) with the gas it exchanges with (igas); elem2group then
+  ! gives the group that owns that gas's condensate properties. Core (Core Mass)
+  ! elements have no growth pathway, so they never appear here. (This file is read
+  ! again below for CARMA_AddGrowth.)
+  open(10, file=growth_file)
+  read(10, *)
+  do i = 1, NGROWTH
+    read(10, *) ito, igas
+    gas2group(igas) = elem2group(ito)
+  enddo
+  close(10)
+
   open(10, file=gases_file)
   read(10, *)
   do i=1, NGAS
 
-    read(10, *) name, wtmol, iroutine, icomposition, wtmol_dif, rho_cond, surften_0, &
-     coldia, vp_offset, vp_tcoeff, is_type3, surften_slope, vp_metcoeff, vp_logpcoeff, &
-     lat_heat_e, stofact
+    ! New CARMApy gas file holds gas-phase properties only. The condensate
+    ! properties are pulled from the group that condenses this gas. hill_formula
+    ! is read but unused by the engine (it is a Python-side fastchem label).
+    read(10, *) name, wtmol_dif, icomposition, hill_formula
+
+    igrp = gas2group(i)
 
     write(*,*) "Add "//trim(name) //" ..."
-    call CARMAGAS_Create(carma, i, name, wtmol, INT(iroutine), icomposition, rho_cond, surften_0, &
-     coldia, vp_offset, vp_tcoeff,  rc, is_type3=INT(is_type3), surften_slope=surften_slope,&
-     vp_metcoeff=vp_metcoeff, vp_logpcoeff=vp_logpcoeff, wtmol_dif=wtmol_dif, &
-     lat_heat_e=lat_heat_e, stofact=stofact)
+    if (igrp > 0) then
+      call CARMAGAS_Create(carma, i, name, grp_wtmol(igrp), grp_iroutine(igrp), icomposition, &
+       grp_rho_cond(igrp), grp_surften_0(igrp), grp_coldia(igrp), grp_vp_offset(igrp), &
+       grp_vp_tcoeff(igrp), rc, is_type3=grp_is_type3(igrp), surften_slope=grp_surften_slope(igrp), &
+       vp_metcoeff=grp_vp_metcoeff(igrp), vp_logpcoeff=grp_vp_logpcoeff(igrp), wtmol_dif=wtmol_dif, &
+       lat_heat_e=grp_lat_heat_e(igrp), stofact=grp_stofact(igrp), desorption=grp_desorption(igrp))
+    else
+      ! Background gas with no condensate (e.g. H2O when there is no water cloud).
+      ! No group grows it, so its condensate properties are never used; supply
+      ! harmless placeholders and pick the vapor-pressure routine from composition.
+      if (icomposition == I_GCOMP_H2O) then
+        iroutine = I_VAPRTN_H2O_MURPHY2005
+      else
+        iroutine = I_VAPRTN_USER
+      end if
+      call CARMAGAS_Create(carma, i, name, wtmol_dif, iroutine, icomposition, &
+       1._f, 0._f, 1.0e-8_f, 0._f, 0._f, rc, wtmol_dif=wtmol_dif)
+    end if
 
     if (rc < 0) stop "    *** FAILED ***"
 
@@ -584,7 +644,8 @@ subroutine test_day()
   call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, do_fixedinit=.TRUE., do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
                         do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=10, &
-                        itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc)
+                        itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc, &
+                        do_t_evolves=(t_evolves .ne. 0))
   if (rc < 0) stop "    *** FAILED CARMA_Initialize ***"
 
   write(*,*) " "
@@ -753,14 +814,12 @@ subroutine test_day()
   endif
 
   call CARMASTATE_CreateFromReference(cstate, carma_ptr, time, dtime, NZ, &
-                         	      ! igridv, I_CART, lat, lon, &
-                                 I_CART, I_CART, lat, lon, &
-
+                         	      igridv, I_CART, lat, lon, &
                          	      xc(:), dx(:), &
                          	      yc(:), dy(:), &
                          	      zc(:), zl(:), p(:), &
                          	      pl(:), t(:), wtmol_air(:), grav(:), rplanet, &
-                                rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, &
+                                rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP, &
                          	      rc, winds=winds(:), ekz=ekz(:), met=met, t0 = t0_in)
   if (rc < 0) stop "    *** FAILED CARMASTATE_CreateFromReference ***"
   
@@ -801,12 +860,12 @@ subroutine test_day()
     ! Create a CARMASTATE for this column.
     call CARMASTATE_Create(&
               cstate, carma_ptr, time, dtime, NZ, &
-              I_CART, I_CART, lat, lon, &
+              igridv, I_CART, lat, lon, &
               xc(:), dx(:), &
               yc(:), dy(:), &
               zc(:), zl(:), p(:), &
               pl(:), t(:), wtmol_air(:), grav(:), rplanet, &
-              rmu_0, rmu_t0, rmu_c, thcond_0, thcond_1, thcond_2, CP, &
+              rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP, &
               rc, told=t(:), winds=winds(:), ekz=ekz(:), &
               ftopp=ftopp,fbotp=fbotp,pctop=pctop,pcbot=pcbot, &
               gctop=gctop,gcbot=gcbot,ftopg=ftopg,fbotg=fbotg,met=met, t0=t0_in)
@@ -902,19 +961,19 @@ subroutine test_day()
 
       write(*,*) 'Recorded'
       if (IS_2D .eq. 1) then
-        write(lun,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunf,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunfp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunrates,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunratesp,'(5e25.15)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lun,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunf,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunfp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunrates,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+        write(lunratesp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
       else
-        write(lun,'(f25.15)') (istep)*dtime
-        write(lunp,'(f25.15)') (istep)*dtime
-        write(lunf,'(f25.15)') (istep)*dtime
-        write(lunfp,'(f25.15)') (istep)*dtime
-        write(lunrates,'(f25.15)') (istep)*dtime
-        write(lunratesp,'(f25.15)') (istep)*dtime
+        write(lun,'(f25.5)') (istep)*dtime !TODO -- change to just istep?
+        write(lunp,'(f25.5)') (istep)*dtime
+        write(lunf,'(f25.5)') (istep)*dtime
+        write(lunfp,'(f25.5)') (istep)*dtime
+        write(lunrates,'(f25.5)') (istep)*dtime
+        write(lunratesp,'(f25.5)') (istep)*dtime
       end if
 
       do j = 1, NBIN

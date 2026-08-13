@@ -229,42 +229,44 @@ class Results:
         sat_vp = np.zeros((NZ, NGAS, NT))
         ts = np.zeros(NT)
         if carma.is_2d: step = np.zeros(NT, dtype=int)
-        
-        for it in range(NT-1):
-            try:
-                if carma.is_2d:
-                    (t_step,
-                    current_distance,
-                    rotation_counter,
-                    current_step,
-                    longitude) = f.readline().split()
 
-                    step[it] = int(float(current_step))
-                else:
-                    t_step = f.readline()
+        block_rows = NBIN * NZ
+        gas_idx = NELEM + 2 + 2 * np.arange(NGAS)
+        sat_idx = NELEM + 3 + 2 * np.arange(NGAS)
+        ncols_block = None  # detected from first data line
 
-                if t_step:
-                    if type(t_step) == str: #Janky handling errors
-                        t_step = np.nan
-                    ts[it] = t_step
-                    for ibin in range(NBIN):
-                        for iz in range(NZ):
-                            line = f.readline()
-                            line = np.array(line.split(), dtype=float)
-                            for ielem in range(NELEM):
-                                numden[iz, ielem, ibin, it] = line[ielem+2]
-                            for igas in range(NGAS):
-                                gas_abund[iz, igas, it] = line[NELEM + 2+ 2*igas]
-                                sat_vp[iz, igas, it] = line[NELEM + 3 + 2*igas]
-                else:
-                    break
-            except (ValueError, IndexError):
-                # A time-block was only partially written to disk.
+        for it in range(NT):
+            header = f.readline()
+            if not header:
                 if active_run:
-                    print(f"Active run: incomplete time-block at step {it}, "
-                          f"truncating results to {it} steps")
+                    print(f"Active run: results truncated at {it} complete steps")
+                break
+
+            if carma.is_2d:
+                parts = header.split()
+                if len(parts) < 5:
                     break
-                raise
+                ts[it] = float(parts[0])
+                step[it] = int(float(parts[3]))
+            else:
+                ts[it] = float(header)
+
+            lines = [f.readline() for _ in range(block_rows)]
+            if not lines[-1]:
+                break
+            if ncols_block is None:
+                ncols_block = len(lines[0].split())
+            flat = np.fromstring(' '.join(lines), sep=' ', dtype=float)
+            if flat.size != block_rows * ncols_block:
+                break
+            block = flat.reshape(NBIN, NZ, ncols_block)
+
+            # numden[iz, ielem, ibin, it] = block[ibin, iz, 2+ielem]
+            numden[:, :, :, it] = block[:, :, 2:2+NELEM].transpose(1, 2, 0)
+            # gas_abund/sat_vp don't depend on ibin in the original loop;
+            # all NBIN rows for the same (iz,it) carry identical values.
+            gas_abund[:, :, it] = block[0, :, gas_idx].T
+            sat_vp[:, :, it]    = block[0, :, sat_idx].T
 
         numden_groups = np.zeros((NZ, NGROUP, NBIN, NT))
         
@@ -286,16 +288,16 @@ class Results:
         
         f.close()
 
-        n_tstep = it
+        n_tstep = it + 1
 
         self.active_run = active_run
         self.carma = carma
         self.rmass = rmass
         self.r = r
-        self.numden = numden_groups[:,:,:,:it]
-        self.gas_abund = gas_abund[:,:,:it]
-        self.sat_vp = sat_vp[:,:,:it]
-        self.ts = ts[:it]
+        self.numden = numden_groups[:,:,:,:it+1]
+        self.gas_abund = gas_abund[:,:,:it+1]
+        self.sat_vp = sat_vp[:,:,:it+1]
+        self.ts = ts[:it+1]
         self.P = P
         self.Z = Z
         self.T = T
@@ -307,7 +309,7 @@ class Results:
 
         self.gases = {}
         for i in range(1, len(self.gas_names)):
-            self.gases[self.gas_names[i]] = gas_abund[:, i, :]
+            self.gases[self.gas_names[i]] = self.gas_abund[:, i, :]
 
         self.clouds = {}
         for i in range(len(self.group_names)):
@@ -398,26 +400,52 @@ class Results:
         file_path = os.path.join(path, f"rates_{path_end}.txt")
         f = open(file_path)
 
+        rows_per_step = NBIN * NZ * (NELEM + NGROUP)
+        ncols_rate = None
+
         for it in range(n_tstep):
             t_step = f.readline()
+            if not t_step:
+                break
 
-            for ibin in range(NBIN):
-                for iz in range(NZ):
-                    for ielem in range(NELEM):
-                        line = np.array(f.readline().split(), dtype=float)
-                        hom_nuc_gain_rates[iz, ibin, ielem, it] = line[3]
-                        het_nuc_gain_rates[iz, ibin, ielem, it] = line[4]
-                        grow_gain_rates[iz, ibin, ielem, it] = line[5]
-                        evap_gain_rates[iz, ibin, ielem, it] = line[6]
-                    
-                    for igroup in range(NGROUP):
-                        line = np.array(f.readline().split(), dtype=float)
-                        
-                        nuc_loss_rates[iz, ibin, igroup, it] = line[3]
-                        grow_loss_rates[iz, ibin, igroup, it] = line[4]
-                        evap_loss_rates[iz, ibin, igroup, it] = line[5]
-                        coremass_frac[iz, ibin, igroup, it] = line[6]
-        
+            lines = [f.readline() for _ in range(rows_per_step)]
+            if not lines[-1]:
+                break
+            if ncols_rate is None:
+                ncols_rate = len(lines[0].split())
+            arr = np.fromstring(' '.join(lines), sep=' ', dtype=float)
+            if arr.size != rows_per_step * ncols_rate:
+                break
+            arr = arr.reshape(NBIN, NZ, NELEM + NGROUP, ncols_rate)
+
+            elem_rows  = arr[:, :, :NELEM, :]              # (NBIN, NZ, NELEM, 7)
+            group_rows = arr[:, :, NELEM:, :]              # (NBIN, NZ, NGROUP, 7)
+
+            # Target axis order is (NZ, NBIN, N{ELEM|GROUP}, NT) — transpose (1,0,2)
+            hom_nuc_gain_rates[:, :, :, it] = elem_rows[..., 3].transpose(1, 0, 2)
+            het_nuc_gain_rates[:, :, :, it] = elem_rows[..., 4].transpose(1, 0, 2)
+            grow_gain_rates[:, :, :, it]    = elem_rows[..., 5].transpose(1, 0, 2)
+            evap_gain_rates[:, :, :, it]    = elem_rows[..., 6].transpose(1, 0, 2)
+
+            nuc_loss_rates[:, :, :, it]  = group_rows[..., 3].transpose(1, 0, 2)
+            grow_loss_rates[:, :, :, it] = group_rows[..., 4].transpose(1, 0, 2)
+            evap_loss_rates[:, :, :, it] = group_rows[..., 5].transpose(1, 0, 2)
+            coremass_frac[:, :, :, it]   = group_rows[..., 6].transpose(1, 0, 2)
+
+        # The Fortran diagnostic collectors integrate each production/loss term
+        # over one model timestep: production terms are multiplied by dtime and
+        # loss terms by (pc * dtime) before being summed over substeps (see
+        # newstate.F90). The raw values are therefore per-cm3 number changes per
+        # dt step, not rates. Divide by carma.dt to recover true rates in
+        # particles cm^-3 s^-1. coremass_frac is a dimensionless fraction and is
+        # left untouched.
+        hom_nuc_gain_rates /= carma.dt
+        het_nuc_gain_rates /= carma.dt
+        grow_gain_rates    /= carma.dt
+        evap_gain_rates    /= carma.dt
+        nuc_loss_rates     /= carma.dt
+        grow_loss_rates    /= carma.dt
+        evap_loss_rates    /= carma.dt
 
 
         for i, key in enumerate(carma.groups.keys()):
@@ -794,7 +822,9 @@ class Results:
 
         return fig, ax
 
-    def gen_picaso_atm_file(self, file_path: str = None) -> None:
+    def gen_picaso_atm_file(self, file_path: str = None,
+                            longitude: int = None,
+                            suppress_output: bool = False) -> None:
         """Generates an atmosphere file for use in picaso.
         Picaso is a python package which can calculate spectra and is available
         at https://github.com/natashabatalha/picaso.
@@ -802,17 +832,27 @@ class Results:
         Parameters
         ----------
         file_path : str, optional
-            The path to save the file to.  If not provided, creates a file 
+            The path to save the file to.  If not provided, creates a file
             located in the directory storing the carma simulation.
+        longitude : int
+            Longitude index to use.  Required for 2-D runs; must not be set
+            for 1-D runs.
+        suppress_output : bool, optional
+            If True, suppress the "Wrote file" confirmation message.
 
         """
         self.carma._citation["picaso"] = True
+
+        if self.carma.is_2d and longitude is None:
+            raise ValueError("longitude is required for 2-D runs")
+        if not self.carma.is_2d and longitude is not None:
+            raise ValueError("longitude cannot be set for 1-D runs")
 
         if not file_path: file_path = os.path.join(self.path, 'fastchem.atm')
 
 
         # species = ['H2O1', 'C1H4', 'C1O1', 'C1O2', 'Na', 'K', 'H2S1', 'C1H1N1_1', 'O2S1', 'H', 'H2', 'He', 'H1-', 'H1+', 'e-']
-        species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4', 
+        species = ['H1O1','H2','H2O1','H','O','C1H1','C','C1H2','C1H3','C1H4',
                    'C1O1','C1O2','O2','N','H1N1','C1N1','C1H1N1_1','N1O1',
                    'H2N1','N2','H3N1','H1S1','H2O4S1','H2S1','S','S2','O1S1',
                    'C1S1','C1O1S1','C1S2','N1S1','O2S1','S4','S8','S3','O1S2',
@@ -832,8 +872,10 @@ class Results:
 
         metallicity = 10**self.carma.log_metallicity
 
-        data = get_fastchem_abundances(self.carma.T_levels, self.carma.P_levels, species, metallicity)
-        data = np.vstack((self.carma.P_levels/BAR_TO_BARYE, self.carma.T_levels, data))
+        T = self.carma.T_levels[:, longitude] if self.carma.is_2d else self.carma.T_levels
+
+        data = get_fastchem_abundances(T, self.carma.P_levels, species, metallicity)
+        data = np.vstack((self.carma.P_levels/BAR_TO_BARYE, T, data))
 
         header = "pressure\ttemperature"
         for s in species_labels:
@@ -841,15 +883,18 @@ class Results:
             header += s
 
         np.savetxt(file_path, np.transpose(data), header=header, fmt="%.18e", comments="")
-        print(f"Wrote file: {file_path}")
+        if not suppress_output: print(f"Wrote file: {file_path}")
 
-    def gen_picaso_cloud_file(self, 
-                              wavelengths: np.ndarray, 
+    def gen_picaso_cloud_file(self,
+                              wavelengths: np.ndarray,
                               file_path: str = None,
                               mie_table_path: str = None,
-                              skip_groups=[]):
-        """Generate cloud opacity tables for use in picaso. Picaso is a python 
-        package which can calculate spectra and is available at 
+                              skip_groups=[],
+                              n_avg: int = 20,
+                              longitude: int = None,
+                              suppress_output: bool = False):
+        """Generate cloud opacity tables for use in picaso. Picaso is a python
+        package which can calculate spectra and is available at
         https://github.com/natashabatalha/picaso.
 
         Parameters
@@ -857,25 +902,38 @@ class Results:
         wavelengths : np.ndarray
             The wavelengths at which to calculate to opacities [cm]
         file_path : str, optional
-            The path to save the file to.  If not provided, creates a file 
-            located in the directory storing the carma simulation.            
+            The path to save the file to.  If not provided, creates a file
+            located in the directory storing the carma simulation.
         mie_table_path : str
             The directory in which the mie tables of the species are located.
-            It is assumed that each cloud species used has a .dat file in that 
-            directory named with the name of the cloud species (ie 'Mg2SiO4 on 
-            TiO2.dat'), the first row of the table is a header row, and the 
-            columns are radius[cm], wavelength[cm], extinction efficiency 
-            (Q_ext), scattering efficiency (Q_sca), and asymmetry factor (g). 
-            The  columns must be in that order and separated by whitespace.  If 
-            no path is provided, the carma default tables will be used but these 
+            It is assumed that each cloud species used has a .dat file in that
+            directory named with the name of the cloud species (ie 'Mg2SiO4 on
+            TiO2.dat'), the first row of the table is a header row, and the
+            columns are radius[cm], wavelength[cm], extinction efficiency
+            (Q_ext), scattering efficiency (Q_sca), and asymmetry factor (g).
+            The  columns must be in that order and separated by whitespace.  If
+            no path is provided, the carma default tables will be used but these
             might be less accurate, even for the same species, as they might not
-            be calculated at the same particle size and wavelengths. 
+            be calculated at the same particle size and wavelengths.
         skip_groups : list, optional
-            The indices of any cloud groups to exclude from the opacity 
+            The indices of any cloud groups to exclude from the opacity
             calculation, by default None
+        n_avg : int, optional
+            The number of timesteps to average the cloud size distribution over
+            while generating the cloud file.  Defaults to 20.
+        longitude : int
+            Longitude index to use.  Required for 2-D runs; must not be set
+            for 1-D runs.
+        suppress_output : bool, optional
+            If True, suppress the "Wrote file" confirmation message.
         """
 
         self.carma._citation["picaso"] = True
+
+        if self.carma.is_2d and longitude is None:
+            raise ValueError("longitude is required for 2-D runs")
+        if not self.carma.is_2d and longitude is not None:
+            raise ValueError("longitude cannot be set for 1-D runs")
 
         if not file_path: file_path = os.path.join(self.path, 'clouds.atm')
 
@@ -892,9 +950,11 @@ class Results:
             if i in skip_groups: continue
             beta_ext, beta_sca, g_avg = _get_cloud_opacities(self,
                                                              carma,
-                                                             i, 
+                                                             i,
                                                              wavelengths,
-                                                             mie_table_path)
+                                                             mie_table_path,
+                                                             n_avg=n_avg,
+                                                             longitude=longitude)
 
             beta_exts.append(beta_ext)
             beta_scas.append(beta_sca)
@@ -924,18 +984,20 @@ class Results:
                     +f"{g_avg[iz, iwave]}\t"
                     +f"{d_tau[iz, iwave]}\n")
 
-        print(f"Wrote file: {file_path}")
+        if not suppress_output: print(f"Wrote file: {file_path}")
 
 
 
 
 
 def _get_cloud_opacities(results,
-                         carma, 
-                         i, 
-                         wavelengths, 
+                         carma,
+                         i,
+                         wavelengths,
                          mie_table_path = None,
-                         min_columnden = 1e-25):
+                         min_columnden = 1e-25,
+                         n_avg = 20,
+                         longitude = None):
 
     names = list(carma.groups.keys())
     name = names[i]
@@ -983,7 +1045,10 @@ def _get_cloud_opacities(results,
     g_interp = RectBivariateSpline(r_unique, λ_unique, g)
 
 
-    numdens = np.mean(results.numden[:, i, :, -20:], axis=2)
+    if longitude is not None:
+        numdens = results.clouds[name]["numden_2d"][:, :, longitude]
+    else:
+        numdens = np.mean(results.numden[:, i, :, -n_avg:], axis=2)
     columndens = np.sum(numdens, axis=0)
 
     weighted_qext = np.zeros((carma.NZ, carma.NBIN, len(wavelengths)))

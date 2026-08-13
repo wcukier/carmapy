@@ -6,15 +6,62 @@ on:
   workflow_dispatch:
 
 jobs:
+  run_tests:
+    name: Tests (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-14]
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install gfortran (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gfortran
+
+      - name: Install gfortran (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew update
+          brew install gcc
+          echo "$(brew --prefix gcc)/bin" >> $GITHUB_PATH
+          echo "FC=$(brew --prefix gcc)/bin/gfortran" >> $GITHUB_ENV
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install carmapy with test extras
+        env:
+          CARMAPY_NATIVE: "0"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+
+      - name: Run tests
+        run: pytest
+
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     env:
-      CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+      # The wheel bundles a standalone Fortran binary (not a libpython-linked
+      # extension), so setup.py tags it py3-none-<platform> — one wheel per
+      # platform, valid on any Python 3. Build with a single interpreter; the
+      # chosen cpXY only drives the build and isn't reflected in the wheel tag.
+      CIBW_BUILD: "cp311-*"
     strategy:
       matrix:
         # os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-15-intel, macos-14]
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-14, macos-15]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14]
 
     steps:
       # Checkout repo and submodules
@@ -26,10 +73,6 @@ jobs:
       - name: Set macOS-14 deployment target
         if: startsWith(matrix.os, 'macos-14')
         run: echo "MACOSX_DEPLOYMENT_TARGET=14.0" >> $GITHUB_ENV
-
-      - name: Set macOS-15 deployment target
-        if: startsWith(matrix.os, 'macos-15')
-        run: echo "MACOSX_DEPLOYMENT_TARGET=15.0" >> $GITHUB_ENV
 
       # Install gfortran on macOS
       - name: Install gfortran (macOS)
@@ -56,7 +99,14 @@ jobs:
         uses: pypa/cibuildwheel@v3.2.1
         env:
           FC: ${{ env.GFORTRAN }}
-          CIBW_SKIP: ""
+          # Skip Alpine/musl-libc wheels: researchers run glibc distros, and
+          # every wheel carries the ~54 MB mie_tables payload.
+          CIBW_SKIP: "*musllinux*"
+          # Wheels must run on any user CPU, so omit `-march=native`.
+          # CIBW_ENVIRONMENT forwards the var into the cibuildwheel containers
+          # used for the Linux matrix entries. setup.py reads it and passes
+          # NATIVE=0 to `make`.
+          CIBW_ENVIRONMENT: "CARMAPY_NATIVE=0"
 
       # Upload wheels
       - uses: actions/upload-artifact@v4
@@ -88,7 +138,7 @@ jobs:
           path: dist/*.tar.gz
 
   upload_all:
-    needs: [build_wheels, make_sdist]
+    needs: [run_tests, build_wheels, make_sdist]
     environment: pypi
     permissions:
       id-token: write
