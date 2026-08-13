@@ -3,6 +3,7 @@ import matplotlib as mpl
 import numpy as np
 import os
 import pickle
+import dill
 from types import SimpleNamespace
 
 # petroff 10 color cycle
@@ -27,7 +28,7 @@ def save_results_pkl(results, file_path=None):
 
     # Write the full Results object.
     with open(file_path, "wb") as handle:
-        pickle.dump(results, handle)
+        dill.dump(results, handle)
 
     return file_path
 
@@ -48,7 +49,7 @@ def save_carma_pkl(carma, file_path=None):
 
     # Write the full CARMA object.
     with open(file_path, "wb") as handle:
-        pickle.dump(carma, handle)
+        dill.dump(carma, handle)
 
     return file_path
 
@@ -99,7 +100,7 @@ def fake_carma(path, is_2d=False, nlongitude=1):
 
 
 
-def plot_condensation_curves(self, ax=None, skip_gases=None, **kwargs):
+def plot_condensation_curves(self, ax=None, skip_gases=None, lon_idxs=None, **kwargs):
     """Plots condensation curves for each gas species in the CARMA model
     overlaid on the model's P-T profile.
 
@@ -128,6 +129,9 @@ def plot_condensation_curves(self, ax=None, skip_gases=None, **kwargs):
     fig : matplotlib.figure.Figure
     ax : matplotlib.axes.Axes
     """
+    
+    print(lon_idxs)
+    
     if skip_gases is None:
         skip_gases = []
 
@@ -144,10 +148,20 @@ def plot_condensation_curves(self, ax=None, skip_gases=None, **kwargs):
     log_met = getattr(self, "log_metallicity", 0.0)
 
     if T.ndim > 1:
+        
+        #lons = np.arange(len(lon_idxs))
+        #lons = lons[lon_idxs]
         for i in range(T.shape[1]):
+            #if lon_idxs is None or i in lons:
+            print("Plotting longitude index", i)
             ax.plot(T[:, i], P / 1e6, color="black", lw=0.5, alpha=0.5, **kwargs)
-        T = np.mean(T, axis = 1)  # DOMINIC: use average, which I prefer
-        ax.scatter(T, P / 1e6, color="black", label="P-T profile", **kwargs)
+            #else:
+            #   ax.plot(T[:, i], P / 1e6, color="orange", lw=0.5, alpha=0.5, **kwargs, zorder=-99)
+        if lon_idxs is None:
+            T = np.mean(T, axis=1)  # DOMINIC: use average, which I prefer
+        else:
+            T = np.mean(T[:, lon_idxs], axis = 1)  # DOMINIC: use average, which I prefer
+        ax.plot(T, P / 1e6, color="black", label="Average", **kwargs, lw=3)
     else:
         # P-T profile plotted in black so the colour cycle is free for species
         ax.plot(T, P / 1e6, color="black", lw=2, label="P-T profile", **kwargs)

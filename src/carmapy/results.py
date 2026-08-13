@@ -34,6 +34,12 @@ class Results:
     read_diag : boolean, optional
         If true reads in the microphysical rates and core mass fraction.
         Defaults to False.
+    active_run : boolean, optional
+        If true, treat the output file as belonging to a still-running
+        simulation. The final time-block is allowed to be incomplete (e.g.
+        cut off mid-write); if one is detected, it is discarded and ``NT``
+        is lowered to the number of complete steps read so far, instead of
+        raising an error. Defaults to False.
 
     Notes
     ------
@@ -129,7 +135,10 @@ class Results:
 
     path : str
     """ The path to the CARMA output files """
-    
+
+    active_run : bool
+    """ Whether these results were read from a still-running simulation """
+
     gases : dict[str, np.ndarray]
     """ The number mixing ratio for each of the gases """
 
@@ -142,7 +151,8 @@ class Results:
     longitude_map : Callable
     """ A function to transform arrays to be by longitude (see notes) """
 
-    def __init__(self, carma: "Carma", read_diag=False, redirectory=None) -> None:
+    def __init__(self, carma: "Carma", read_diag=False, redirectory=None,
+                 active_run=False) -> None:
         path = carma.name
         path_end = os.path.basename(path)
         file_path = os.path.join(path, f"{path_end}.txt")
@@ -221,32 +231,40 @@ class Results:
         if carma.is_2d: step = np.zeros(NT, dtype=int)
         
         for it in range(NT-1):
-            if carma.is_2d:
-                (t_step, 
-                current_distance, 
-                rotation_counter,
-                current_step,
-                longitude) = f.readline().split()
+            try:
+                if carma.is_2d:
+                    (t_step,
+                    current_distance,
+                    rotation_counter,
+                    current_step,
+                    longitude) = f.readline().split()
 
-                step[it] = int(float(current_step))
-            else:
-                t_step = f.readline()
+                    step[it] = int(float(current_step))
+                else:
+                    t_step = f.readline()
 
-            if t_step:
-                if type(t_step) == str: #Janky handling errors
-                    t_step = np.nan
-                ts[it] = t_step
-                for ibin in range(NBIN):
-                    for iz in range(NZ):
-                        line = f.readline()
-                        line = np.array(line.split(), dtype=float)
-                        for ielem in range(NELEM):
-                            numden[iz, ielem, ibin, it] = line[ielem+2]
-                        for igas in range(NGAS):
-                            gas_abund[iz, igas, it] = line[NELEM + 2+ 2*igas]
-                            sat_vp[iz, igas, it] = line[NELEM + 3 + 2*igas]
-            else:
-                break
+                if t_step:
+                    if type(t_step) == str: #Janky handling errors
+                        t_step = np.nan
+                    ts[it] = t_step
+                    for ibin in range(NBIN):
+                        for iz in range(NZ):
+                            line = f.readline()
+                            line = np.array(line.split(), dtype=float)
+                            for ielem in range(NELEM):
+                                numden[iz, ielem, ibin, it] = line[ielem+2]
+                            for igas in range(NGAS):
+                                gas_abund[iz, igas, it] = line[NELEM + 2+ 2*igas]
+                                sat_vp[iz, igas, it] = line[NELEM + 3 + 2*igas]
+                else:
+                    break
+            except (ValueError, IndexError):
+                # A time-block was only partially written to disk.
+                if active_run:
+                    print(f"Active run: incomplete time-block at step {it}, "
+                          f"truncating results to {it} steps")
+                    break
+                raise
 
         numden_groups = np.zeros((NZ, NGROUP, NBIN, NT))
         
@@ -270,6 +288,7 @@ class Results:
 
         n_tstep = it
 
+        self.active_run = active_run
         self.carma = carma
         self.rmass = rmass
         self.r = r
@@ -335,17 +354,30 @@ class Results:
                     self.clouds[self.group_names[i]]["numden_2d"], axis=3)
                 
 
-            def longitude_map(arr):
+            def longitude_map(arr, gas_or_cloud="cloud"):
                 index = np.zeros(carma.NLONGITUDE, dtype=int)
-                temp_array = np.zeros((NZ, 
-                                       NBIN, 
-                                       carma.NLONGITUDE, 
-                                       np.max(counts))) * np.nan
-                for it in range(n_tstep):
-                    temp_array[:, :, step[it], index[step[it]]] = arr[:, :, it]
-                    index[step[it]] += 1 
-                
-                return np.nanmean(temp_array, axis=3)
+                if gas_or_cloud == "cloud":
+                    temp_array = np.zeros((NZ, 
+                                        NBIN, 
+                                        carma.NLONGITUDE, 
+                                        np.max(counts))) * np.nan
+                    for it in range(n_tstep):
+                        temp_array[:, :, step[it], index[step[it]]] = arr[:, :, it]
+                        index[step[it]] += 1 
+                    
+                    return np.nanmean(temp_array, axis=3)
+                elif gas_or_cloud == "gas":
+                    temp_array = np.zeros((NZ, 
+                                        carma.NLONGITUDE, 
+                                        np.max(counts))) * np.nan
+                    for it in range(n_tstep):
+                        temp_array[:, step[it], index[step[it]]] = arr[:, it]
+                        index[step[it]] += 1 
+                        
+                    return np.nanmean(temp_array, axis=2)
+                else:
+                    raise ValueError("gas_or_cloud must be 'cloud' or 'gas'")
+                    
             self.longitude_map = longitude_map
 
 
@@ -449,6 +481,8 @@ class Results:
         plt.ylabel("Relative gas bundance (offset)")
         plt.legend(bbox_to_anchor=(1, 1))
         plt.tight_layout()
+        
+        return fig
 
 
     def plot_numdens(self, nlevels=11, min_order = -10, **kwargs) -> None:

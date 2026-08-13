@@ -434,8 +434,8 @@ gas_dict = { #TODO change to predifined gas objects
         "hill_formula": "O2Ti1",
         "opacity_files": "TiO2[s].txt",
         "rho_cond": RHO_TIO2,
-        "surften_0": 535.124, #  @Citation: Lee et al. (2015) TODO: Sindel et al. (2022) sig = 589.79_dp - 0.0708_dp * T
-        "surften_slope": 0.04396,
+        "surften_0": 589.79, #  @Citation: Sindel et al. (2022) sig = 589.79_dp - 0.0708_dp * T
+        "surften_slope": 0.0708,
         "coldia": COLDIA_TIO2,
         "is_typeIII": False,
         "lat_heat_e": -1,

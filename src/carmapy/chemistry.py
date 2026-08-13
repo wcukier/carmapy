@@ -158,7 +158,19 @@ def _populate_fastchem_abundances(carma: "Carma",
   carma.set_nmr(nmr_dict)
 
 
-def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
+def _mean_longitude_slice(carma: "Carma", values: np.ndarray, lon_idxs: np.ndarray) -> np.ndarray:
+  """Average a 2-D longitude field over selected longitude indexes."""
+
+  if not getattr(carma, "is_2d", False):
+    return values
+
+  if lon_idxs is not None:
+    return np.mean(values[:, lon_idxs], axis=1)
+
+  return np.mean(values, axis=1)
+
+
+def find_cloud_base(carma: "Carma", species: str, lon_idxs: None) -> tuple[float, float]:
   """Locates the P-T coordianates of the cloud base.
 
   Parameters
@@ -185,8 +197,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   P = carma.P_centers
   T = carma.T_centers
 
-  # if carma.is_2d: T = np.mean(T, axis=1)
-  if carma.is_2d: T = T[:, 0] # TODO
+  T = _mean_longitude_slice(carma, T, lon_idxs=lon_idxs)
 
 
   metallicity = 10**carma.log_metallicity
@@ -232,7 +243,7 @@ def find_cloud_base(carma: "Carma", species: str) -> tuple[float, float]:
   root = scipy.optimize.root_scalar(_diff, bracket=(T_lo, T_hi)).root
   return p_t(root), root
 
-def populate_abundances_at_cloud_base(carma: "Carma") -> None:
+def populate_abundances_at_cloud_base(carma: "Carma", lon_idxs: None) -> None:
   """Set the number mixing ratios below the cloud base.  Uses the equilibrium
   concentration at the cloud base to determine what the mixing ratio should be
 
@@ -248,7 +259,8 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   P = carma.P_centers
   T = carma.T_centers
 
-  if carma.is_2d: T = np.mean(T, axis=1)
+  # Do averaging if 2D
+  T = _mean_longitude_slice(carma, T, lon_idxs=lon_idxs)
 
   p_t = interp1d(T, P)
 
@@ -256,7 +268,7 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
 
   for s in list(carma.gases.keys())[1:]:
 
-    P_int, T_int = find_cloud_base(carma, s)
+    P_int, T_int = find_cloud_base(carma, s, lon_idxs=lon_idxs)
 
     fast_chem_gas = carma.gases[s].hill_formula
     if fast_chem_gas == -1: 
@@ -319,7 +331,7 @@ def calculate_mucos(core: Union[str, "Gas"],
     mu = min(mu, np.cos(0.1/180 * np.pi)) # set max to cos(0.1 deg)
     mu = max(mu, -np.cos(0.1/180 * np.pi)) # set min to -cos(0.1 deg)
 
-    print("surftens", surften_core, surften_shell, mu)
+    print("surftens (core, shell, mu)", surften_core, surften_shell, mu)
 
 
     return mu
