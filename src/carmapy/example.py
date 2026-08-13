@@ -13,7 +13,7 @@ def example_levels(t=2000) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarr
     the boundaries between atmospheric layers and thus the length of "levels" 
     arrays is one more than that of the "centers" arrays.
 
-    The files are taken from a (default 2000 K), log g = 4.5, f_sed = 4, log [Fe/H] = 1
+    The files are taken from a (default 2000 K), log g = 4.5, f_sed = 4, log [Fe/H] = 0
     sonora diamondback [#morley2024]_ run. 
 
     References

@@ -20,6 +20,7 @@ subroutine test_day()
   use carmagas_mod
   use carmasolute_mod
   use carma_mod
+  use carma_rce
 
   implicit none
 
@@ -165,6 +166,7 @@ subroutine test_day()
 
   integer, parameter    :: lunrates = 55
   integer, parameter    :: lunratesp = 56
+  integer, parameter    :: lunrad = 57
 
   real(kind=f)          :: nretries
   real(kind=f)          :: lastret = 0._f
@@ -205,6 +207,7 @@ subroutine test_day()
   character(len=5)	:: flux = 'flux_'
   character(len=5)	:: diag = 'diag_'
   character(len=6)	:: rates = 'rates_'
+  character(len=12)	:: radpre = 'temperature_'
   character(len=4)	:: filesuffix = '.txt'
   character(len=4)	:: filesuffix_restart = '.dat'
   character(len=100)	:: filename_restart
@@ -221,6 +224,7 @@ subroutine test_day()
   character(len=100)  :: nuc_file
   character(len=100)  :: coag_file
   character(len=100)  :: winds_file
+  character(len=100)  :: optics_file
 
   character(len=100)  ::  g_boundary_file, p_boundary_file
 
@@ -236,10 +240,30 @@ subroutine test_day()
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file,&
          centers_file, levels_file,temps_file, groups_file, elements_file, &
          gases_file, growth_file, nuc_file, coag_file, winds_file, &
-         g_boundary_file, p_boundary_file
+         g_boundary_file, p_boundary_file, optics_file
   
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
          met, rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP
+
+  ! Radiative-convective coupling. Absent from input.nml unless the run was
+  ! configured with Carma.set_radiation(), and inert when do_radiation is 0.
+  type(rce_type)      :: rce
+  integer             :: do_radiation, rad_mode, rad_gap_max, ios_rad
+  ! Set in Python; the clouds' opacity is zeroed in optics_file rather than
+  ! branched on here, so this only records which case the run was.
+  integer             :: cloud_rad
+  character(len=256)  :: ck_table_file
+  real(kind=f)        :: teff, rad_accel, rad_dT_max
+  real(kind=f)        :: rad_dT_tol, rad_dtau_tol
+  ! Which adiabat the convective interior follows: 0 = Parmentier fit,
+  ! 1 = the tabulated H/He gradient read from adiabat_file.
+  integer             :: adiabat
+  character(len=256)  :: adiabat_file
+  integer             :: nsolve_last   !! rce%nsolve as of the previous output
+
+  namelist / radiation / do_radiation, ck_table_file, teff, &
+         rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
+         rad_gap_max, adiabat, adiabat_file, cloud_rad
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
@@ -266,6 +290,16 @@ subroutine test_day()
   integer, allocatable :: grp_iroutine(:), grp_is_type3(:), grp_stofact(:)
   integer, allocatable :: gas2group(:)
 
+  ! Per-group cloud optics, read from optics_file when NWAVE > 0. Generated in
+  ! Python on exactly this bin grid and wavelength set, so they are handed to
+  ! CARMAGROUP_Create as-is; see carmapy.radiation.write_optics_file.
+  real(kind=f), allocatable :: grp_qext(:,:,:), grp_ssa(:,:,:), grp_asym(:,:,:)
+  integer :: opt_ngroup, opt_nwave, opt_nbin, opt_ig, opt_iw, opt_ib
+
+  logical, allocatable :: elem_is_number(:)
+  real(kind=f), allocatable :: grp_r(:,:)   !! bin radii per group [cm]
+  integer :: opt_skip1, opt_skip2, opt_skip3
+
 
   fileprefix = trim(fileprefix)
 
@@ -280,11 +314,28 @@ subroutine test_day()
 
   ! Defaults for namelist params that may be missing from older input.nml files.
   t_evolves = 0   ! 0 = T,P fixed across the run -> setupgkern caches its outputs
+  optics_file = ""  ! only read when NWAVE > 0, i.e. radiatively coupled runs
+
+  do_radiation  = 0        ! 0 = fixed T,P -- the whole radiation group is inert
+  ck_table_file = ""
+  teff          = 0._f
+  rad_mode      = I_RCE_EQUILIBRIUM
+  rad_accel     = 1._f
+  rad_dT_max    = 0.5_f
+  rad_dT_tol    = 1._f
+  rad_dtau_tol  = 0.02_f
+  rad_gap_max   = 100
+  adiabat       = 0
+  adiabat_file  = ""
+  cloud_rad     = 1
 
   open(unit=10, file=nml_file, status='old')
     read(10, nml=input_params)
     read(10, nml=io_files)
     read(10, nml=physical_params)
+    ! Optional: older input.nml files have no radiation group at all, which
+    ! leaves the defaults above and the run behaves exactly as before.
+    read(10, nml=radiation, iostat=ios_rad)
   close(10)
 
   NZP1 = NZ + 1
@@ -296,7 +347,7 @@ subroutine test_day()
 
   allocate(tempr(NZ), pre(NZ), prel(NZP1), alt(NZ), altl(NZP1), wtmol_air(NZ), grav(NZ), ekz(NZP1), ekzl(NZP1), wtmol_gas(NGAS))
   allocate(temp_equator(NZ, NLONGITUDE), p_equator_center(NZ), p_equator_level(NZP1), velocity(NLONGITUDE), longitudes(NLONGITUDE))
-  allocate(elem2group(NELEM))
+  allocate(elem2group(NELEM), elem_is_number(NELEM), grp_r(NBIN, NGROUP))
   allocate(grp_wtmol(NGROUP), grp_rho_cond(NGROUP), grp_surften_0(NGROUP), grp_coldia(NGROUP))
   allocate(grp_vp_offset(NGROUP), grp_vp_tcoeff(NGROUP), grp_surften_slope(NGROUP))
   allocate(grp_vp_metcoeff(NGROUP), grp_vp_logpcoeff(NGROUP), grp_lat_heat_e(NGROUP))
@@ -305,6 +356,44 @@ subroutine test_day()
   allocate(gas2group(NGAS))
   gas2group = 0
   allocate(winds(NZ))
+
+  ! Cloud optics for the radiatively coupled path. NWAVE is 0 for an ordinary
+  ! run, in which case nothing is read and the group optics stay unallocated.
+  if (NWAVE > 0) then
+    allocate(grp_qext(NWAVE, NBIN, NGROUP), grp_ssa(NWAVE, NBIN, NGROUP), &
+             grp_asym(NWAVE, NBIN, NGROUP))
+
+    if (len_trim(optics_file) == 0) then
+      write(*,*) "*** NWAVE > 0 but no optics_file was given in input.nml ***"
+      stop
+    end if
+
+    open(10, file = optics_file, status='old')
+    read(10, *) opt_ngroup, opt_nwave, opt_nbin
+
+    ! A silent shape mismatch here would put the wrong wavelength's optics on
+    ! every bin, so it is checked rather than trusted.
+    if (opt_ngroup /= NGROUP .or. opt_nwave /= NWAVE .or. opt_nbin /= NBIN) then
+      write(*,*) "*** optics_file is (ngroup,nwave,nbin) = ", opt_ngroup, opt_nwave, opt_nbin, &
+                 " but input.nml says ", NGROUP, NWAVE, NBIN, " ***"
+      stop
+    end if
+
+    read(10, *)   ! column header
+    do opt_ig = 1, NGROUP
+      do opt_iw = 1, NWAVE
+        do opt_ib = 1, NBIN
+          read(10, *) opt_skip1, opt_skip2, opt_skip3, &
+                      grp_qext(opt_iw, opt_ib, opt_ig), &
+                      grp_ssa(opt_iw, opt_ib, opt_ig), &
+                      grp_asym(opt_iw, opt_ib, opt_ig)
+        end do
+      end do
+    end do
+    close(10)
+
+    write(*,*) "  Read cloud optics: ", NWAVE, " bands x ", NBIN, " bins x ", NGROUP, " groups"
+  end if
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -480,8 +569,14 @@ subroutine test_day()
 
     write(*,*) "Add " //TRIM(name)//"..."
 
-    call CARMAGROUP_Create(carma, i, name, rmin, 2._f, I_SPHERE, 1._f, &
-    .FALSE., rc, do_vtran=.TRUE., is_sulfate=.FALSE.)
+    if (NWAVE > 0) then
+      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, I_SPHERE, 1._f, &
+      .FALSE., rc, do_vtran=.TRUE., is_sulfate=.FALSE., &
+      qext=grp_qext(:,:,i), ssa=grp_ssa(:,:,i), asym=grp_asym(:,:,i))
+    else
+      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, I_SPHERE, 1._f, &
+      .FALSE., rc, do_vtran=.TRUE., is_sulfate=.FALSE.)
+    end if
 
     if (rc < 0) stop "    *** FAILED ***"
 
@@ -514,6 +609,9 @@ subroutine test_day()
     endif
       call CARMAELEMENT_Create(carma, i, igroup, name, rho, itype, icomposition, rc)
       elem2group(i) = igroup
+      ! Core-mass elements hold a mass concentration in the same array, so only
+      ! the others carry the group's particle number density.
+      elem_is_number(i) = (itype /= I_COREMASS)
       if (rc < 0) stop "    *** FAILED ***"
 
   enddo
@@ -721,7 +819,7 @@ subroutine test_day()
 
     do ibin = 1, NBIN
       write(lun,'(2i4,5e15.5)') igroup, ibin, r(ibin) * 1e4_f, rmass(ibin,igroup), dr(ibin) * 1e4_f, rlow(ibin) * 1e4_f, rup(ibin) * 1e4_f
-    
+      grp_r(ibin, igroup) = r(ibin)
     end do
   end do
 
@@ -749,6 +847,32 @@ subroutine test_day()
   ! Define constant wind speeds (temporally varying winds defined within step loop below)
 
   rho_atm_cgs = p(:) / (RGAS/wtmol_air(:) * t(:))
+
+  ! Set up the radiative-convective coupling. The optics read above are the
+  ! cloud half of it; the ck table is the gas half.
+  if (do_radiation .eq. 1) then
+    if (NWAVE .le. 0) then
+      write(*,*) "*** do_radiation = 1 requires NWAVE > 0 and an optics_file ***"
+      stop
+    end if
+
+    call rce_init(rce, NZ, NBIN, NGROUP, NWAVE, igridv, trim(ck_table_file), &
+                  teff, CP, grav_set, wtmol_air_set, &
+                  adiabat, trim(adiabat_file), &
+                  rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
+                  rad_gap_max, rc)
+    if (rc < 0) stop "    *** FAILED rce_init ***"
+
+    ! The evolving column gets its own output file, so the existing outputs
+    ! keep their format and a fixed-T run produces no extra file at all.
+    open(unit=lunrad, file = radpre // filename(1:len_trim(filename)) // filesuffix, &
+         status="unknown", position=file_pos)
+    write(lunrad,'(3i10,e25.15)') NZ, nstep / iskip, iskip, teff
+    nsolve_last = 0
+
+    write(*,*) "Radiative coupling on: Teff =", teff, &
+               " K; cloud opacity =", cloud_rad
+  end if
 
 
   ! Initialize longitudinal steps
@@ -853,6 +977,16 @@ subroutine test_day()
 
     end if
 
+
+    ! Evolve the temperature profile and the altitude grid before the state is
+    ! built, so this step's microphysics sees the updated column. The cloud
+    ! field is the one left by the previous step, which is what makes the
+    ! coupling explicit.
+    if (do_radiation .eq. 1) then
+      call rce_update(rce, dtime, p(:), pl(:), t(:), zc(:), zl(:), &
+                      NELEM, numden, elem2group, elem_is_number, &
+                      grp_r, grp_qext, grp_ssa, grp_asym)
+    end if
 
     ! To do: change gas input rate; add gaussian distribution to size of CNs being added; change nucleation rate with
     ! substepping; look closer at eddy diffusion machinery, share with Bardeen; read Bardeen's emails more!
@@ -1024,6 +1158,26 @@ subroutine test_day()
         end do
       end do
 
+      ! The radiative column: layer temperatures, heating rates and which
+      ! layers convection left neutrally stable, then the level net fluxes the
+      ! heating was differenced from. F_net at the top is the emergent flux,
+      ! which is what sigma*Teff^4 is checked against.
+      if (do_radiation .eq. 1) then
+        write(lunrad,'(5e25.15)') (istep)*dtime, rce%fnet(NZP1), &
+                                  real(rce%nsolve - nsolve_last, f), &
+                                  real(rce%nzone, f), rce%conv_resid
+        nsolve_last = rce%nsolve
+
+        do i = 1, NZ
+          write(lunrad,'(i5,3e25.15,i3)') i, p(i) * 10._f, t(i), rce%dtdt(i), &
+                                          merge(1, 0, rce%is_conv(i))
+        end do
+
+        do i = 1, NZP1
+          write(lunrad,'(i5,2e25.15)') i, pl(i) * 10._f, rce%fnet(i)
+        end do
+      end if
+
     !endif
 
         write(lunres) istep+1, xc, dx, yc, dy, &
@@ -1046,6 +1200,13 @@ subroutine test_day()
     close(unit=lunres)
 
   end do   ! time loop
+
+  if (do_radiation .eq. 1) then
+    write(*,*) "Radiation: solves =", rce%nsolve, " of", nstep, &
+               " steps; dT clamp fired", rce%nclamp, "times"
+    close(unit=lunrad)
+    call rce_destroy(rce)
+  end if
 
   ! Cleanup the carma state objects
   call CARMASTATE_Destroy(cstate, rc)

@@ -23,6 +23,10 @@ from typing import Union
 
 SRC = os.path.dirname(os.path.dirname(__file__))
 
+_int2rad_mode = {v: k for k, v in RAD_MODES.items()}
+
+_int2adiabat = {v: k for k, v in ADIABAT_CODES.items()}
+
 _int2bc = {
     I_ZERO_CGRAD: "zero_grad",
     I_FIXED_CONC: "fixed_conc",
@@ -59,6 +63,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.NLONGITUDE = nml["input_params"]["NLONGITUDE"]
     carma.is_2d = nml["input_params"]["IS_2D"]
     carma.igridv = nml["input_params"]["igridv"]
+    carma.t_evolves = bool(nml["input_params"]["t_evolves"])
     carma.NBIN = nml["input_params"]["NBIN"]
     carma.output_gap = nml["input_params"]["iskip"]
     carma.n_tstep  = nml["input_params"]["nstep"]
@@ -84,6 +89,25 @@ def load_carma(path: str, restart: int =0) -> Carma:
         "thcond_2": nml["physical_params"]["thcond_2"],
         "CP" : nml["physical_params"]["CP"]
     }
+
+    # Radiative coupling. Absent from an input.nml written before the coupling
+    # existed, in which case the Carma defaults leave it off.
+    rad = nml.get("radiation", {})
+
+    # The adiabat is used by extend_atmosphere too, so it is restored whether
+    # or not the run was radiatively coupled.
+    carma.adiabat = _int2adiabat[rad.get("adiabat", ADIABAT_CODES[ADIABAT_PARMENTIER])]
+
+    if rad.get("do_radiation", 0):
+        carma.ck_table_path = rad["ck_table_file"]
+        carma.teff = rad["teff"]
+        carma.rad_mode = _int2rad_mode[rad["rad_mode"]]
+        carma.rad_accel = rad["rad_accel"]
+        carma.rad_dT_max = rad["rad_dt_max"]
+        carma.rad_dT_tol = rad["rad_dt_tol"]
+        carma.rad_dtau_tol = rad["rad_dtau_tol"]
+        carma.rad_gap_max = rad["rad_gap_max"]
+        carma.cloud_rad = bool(rad["cloud_rad"])
 
     io = nml["io_files"]
 

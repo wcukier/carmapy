@@ -40,6 +40,9 @@ Issues = "https://github.com/wcukier/carmapy/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-timeout"]
+# Only needed to prepare the correlated-k opacity tables for radiatively
+# coupled runs (carmapy.radiation). Running CARMA never imports these.
+radiation = ["pyharp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

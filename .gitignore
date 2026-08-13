@@ -51,3 +51,4 @@ docs/source/notebooks/regen_2d.py
 docs/source/notebooks/my_first_carma/clouds.atm
 docs/source/notebooks/my_first_carma/fastchem.atm
 issues/**
+coupled_brown_dwarf/**

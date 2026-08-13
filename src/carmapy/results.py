@@ -116,6 +116,43 @@ class Results:
     T : np.ndarray
     """ Temperature centers alias [K] (NZ, [NLONG]) """
 
+    T_history : np.ndarray
+    """ Temperature centers at each output of a radiatively coupled run [K]
+    (NZ, NT). None if the run was not radiatively coupled. """
+
+    dTdt : np.ndarray
+    """ Radiative heating rate at each output [K/s] (NZ, NT).  None if the run
+    was not radiatively coupled. """
+
+    flux_net : np.ndarray
+    """ Net upward longwave flux at the cell levels [W/m²] (NZ+1, NT).  None if
+    the run was not radiatively coupled. """
+
+    F_TOA : np.ndarray
+    """ Emergent flux at the top of the atmosphere [W/m²] (NT).  Converges to
+    ``sigma * teff**4``.  None if the run was not radiatively coupled. """
+
+    convective : np.ndarray
+    """ Which layers the convective adjustment left neutrally stable, at each
+    output (NZ, NT), bool.  There may be more than one contiguous zone; see
+    ``convective_zones``.  None if the run was not radiatively coupled. """
+
+    nzone : np.ndarray
+    """ Number of contiguous convective zones at each output (NT).  None if the
+    run was not radiatively coupled. """
+
+    conv_resid : np.ndarray
+    """ Largest fractional superadiabaticity the convective adjustment left
+    behind at each output (NT).  The adjustment stops after a fixed number of
+    sweeps and relaxes the remainder over subsequent steps, so a small non-zero
+    value is normal; a growing one means the profile is moving faster than the
+    adjustment can follow.  None if the run was not radiatively coupled. """
+
+    rad_interval : np.ndarray
+    """ Realized number of timesteps per full radiative solve (NT).  1 means the
+    adaptive cadence is saving nothing.  None if the run was not radiatively
+    coupled. """
+
     group_names : list[str]
     """ The name of each of the simulated groups """
 
@@ -346,6 +383,8 @@ class Results:
 
 
 
+        self._read_temperature(path, path_end, NZ, n_tstep)
+
         if not read_diag: return
 
         hom_nuc_gain_rates = np.zeros((NZ, NBIN, NELEM, n_tstep))
@@ -432,6 +471,252 @@ class Results:
             self.clouds[key]["evap_gain_rate"] = evap_gain_rates[:, :, e, :]
         
         f.close()
+
+    def _read_temperature(self, path, path_end, NZ, n_tstep) -> None:
+        """Read the evolving column written by a radiatively coupled run.
+
+        Leaves every attribute None when the file is absent, which is the case
+        for any run without ``Carma.set_radiation()``.
+        """
+        self.T_history = None
+        self.dTdt      = None
+        self.flux_net  = None
+        self.F_TOA     = None
+        self.convective = None
+        self.nzone     = None
+        self.conv_resid = None
+        self.P_levels_rad = None
+        self.rad_interval = None
+        self.teff      = None
+
+        file_path = os.path.join(path, f"temperature_{path_end}.txt")
+        if not os.path.exists(file_path):
+            return
+
+        with open(file_path) as f:
+            header = f.readline().split()
+            if not header:
+                return
+            nz_file, _, iskip = (int(x) for x in header[:3])
+            self.teff  = float(header[3])
+
+            if nz_file != NZ:
+                raise ValueError("temperature output inconsistent with carma run")
+
+            T_history = np.zeros((NZ, n_tstep))
+            dTdt      = np.zeros((NZ, n_tstep))
+            convective = np.zeros((NZ, n_tstep), dtype=bool)
+            flux_net  = np.zeros((NZ + 1, n_tstep))
+            F_TOA     = np.zeros(n_tstep)
+            nzone     = np.zeros(n_tstep, dtype=int)
+            conv_resid = np.zeros(n_tstep)
+            nsolve    = np.zeros(n_tstep)
+
+            # A run killed mid-output leaves a partial record; nt counts only
+            # the records that read back whole.
+            nt = 0
+            for it in range(n_tstep):
+                scalars = f.readline().split()
+                if len(scalars) < 5:
+                    break
+                _, F_TOA[it], nsolve[it], zones, conv_resid[it] = (
+                    float(x) for x in scalars)
+                nzone[it] = int(zones)
+
+                lines = [f.readline() for _ in range(2 * NZ + 1)]
+                if not lines[-1]:
+                    break
+                block = np.fromstring(' '.join(lines[:NZ]), sep=' ')
+                if block.size != 5 * NZ:
+                    break
+
+                levels = np.fromstring(' '.join(lines[NZ:]), sep=' ')
+                if levels.size != 3 * (NZ + 1):
+                    break
+
+                block = block.reshape(NZ, 5)
+                convective[:, it] = block[:, 4] > 0.5
+                T_history[:, it] = block[:, 2]
+                dTdt[:, it]      = block[:, 3]
+
+                levels = levels.reshape(NZ + 1, 3)
+                flux_net[:, it]  = levels[:, 2]
+                # Fixed for the run; the levels the convective zones are
+                # bounded by, which nothing else on Results carries.
+                self.P_levels_rad = levels[:, 1]
+                nt += 1
+
+        self.T_history = T_history[:, :nt]
+        self.dTdt      = dTdt[:, :nt]
+        self.flux_net  = flux_net[:, :nt]
+        self.F_TOA     = F_TOA[:nt]
+        self.convective = convective[:, :nt]
+        self.nzone     = nzone[:nt]
+        self.conv_resid = conv_resid[:nt]
+
+        # Steps per full radiative solve. A value of 1 means the adaptive
+        # cadence is doing nothing; the ceiling is the run's rad_gap_max.
+        with np.errstate(divide='ignore', invalid='ignore'):
+            self.rad_interval = np.where(nsolve[:nt] > 0,
+                                         iskip / np.maximum(nsolve[:nt], 1),
+                                         np.inf)
+
+    def convective_zones(self, it: int = -1) -> list[tuple[float, float]]:
+        """The convective zones at one output, bottom-up.
+
+        Returns ``(p_bottom, p_top)`` in barye for each contiguous run of
+        convective layers, deepest zone first.  Empty when the column is
+        entirely radiative.
+
+        There is deliberately no single "the RCB": a cloud deck can drive a
+        detached convective layer aloft over a stable region, and reducing that
+        to one boundary pressure would discard it.
+
+        Parameters
+        ----------
+        it : int, optional
+            Which output to report on, by default the last.
+
+        Raises
+        ------
+        ValueError
+            If the run was not radiatively coupled.
+        """
+        if self.convective is None:
+            raise ValueError("the run was not radiatively coupled")
+
+        mask = self.convective[:, it]
+
+        # Edges of each run of True, found on the mask padded with False so a
+        # zone touching the bottom or top of the column is not missed.
+        edges = np.flatnonzero(np.diff(np.concatenate(([False], mask, [False]))))
+        starts, ends = edges[::2], edges[1::2]
+
+        pl = self.P_levels_rad
+
+        return [(pl[s], pl[e]) for s, e in zip(starts, ends)]
+
+    def final_T_levels(self) -> np.ndarray:
+        """The level temperatures the run ended on [K] (NZ+1).
+
+        For an uncoupled run this is ``carma.T_levels`` unchanged.  For a
+        radiatively coupled one the input profile is only the starting guess,
+        so the levels are rebuilt from the last output the same way
+        ``carma_rce`` does -- linear in ``ln p`` with the endpoints
+        extrapolated.
+        """
+        carma = self.carma
+
+        if self.T_history is None:
+            return carma.T_levels
+
+        if carma.is_2d:
+            raise NotImplementedError(
+                "radiative coupling is 1-D only; T_levels for a 2-D run has a "
+                "longitude axis the coupled column does not")
+
+        t  = self.T_history[:, -1]
+        lp  = np.log(carma.P_centers)
+        lpl = np.log(carma.P_levels)
+
+        tl = np.zeros(carma.NZ + 1)
+
+        w = (lpl[1:-1] - lp[1:]) / (lp[:-1] - lp[1:])
+        tl[1:-1] = t[1:] + w * (t[:-1] - t[1:])
+
+        w = (lpl[0] - lp[0]) / (lp[0] - lp[1])
+        tl[0] = t[0] + w * (t[0] - t[1])
+
+        w = (lpl[-1] - lp[-1]) / (lp[-1] - lp[-2])
+        tl[-1] = t[-1] + w * (t[-1] - t[-2])
+
+        return tl
+
+    def final_z_levels(self) -> np.ndarray:
+        """The altitude levels the run ended on [cm] (NZ+1).
+
+        The Fortran regrids the column hydrostatically whenever ``t(:)`` moves,
+        so a coupled run's layer thicknesses are not the ones ``calculate_z``
+        produced at setup.  On an ``I_LOGP`` grid the altitudes are a function
+        of pressure alone and do not move, matching ``rce_regrid_z``.
+        """
+        carma = self.carma
+
+        if self.T_history is None or carma.igridv == I_LOGP:
+            return carma.z_levels
+
+        tl = self.final_T_levels()
+        H = k_B * tl / (carma.wt_mol * PROTON_MASS * carma.surface_grav)
+
+        z_levels = np.zeros(carma.NZ + 1)
+        z_levels[1:] = np.cumsum(
+            H[1:] * np.log(carma.P_levels[:-1] / carma.P_levels[1:]))
+
+        return z_levels
+
+    def plot_temperature_evolution(self, nprofile=8, **kwargs):
+        """Plots how the P-T profile evolved over a radiatively coupled run.
+
+        Draws a sample of profiles from the first output to the last with the
+        final convective zones shaded, the emergent flux relative to
+        ``sigma * Teff**4`` -- the quantity equilibrium drives to 1 -- and where
+        the convective zones sat over the run, which is how a cloud deck
+        reshaping the profile shows itself.
+
+        Parameters
+        ----------
+        nprofile : int, optional
+            Number of profiles to draw between the first and last output,
+            by default 8
+
+        Raises
+        ------
+        RuntimeError
+            If the run was not radiatively coupled.
+        """
+        if self.T_history is None:
+            raise RuntimeError(
+                "No temperature output; this run was not configured with "
+                "Carma.set_radiation()")
+
+        plt.close()
+        fig, (ax, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+
+        nt = self.T_history.shape[1]
+        picks = np.unique(np.linspace(0, nt - 1, min(nprofile, nt)).astype(int))
+        colors = plt.cm.viridis(np.linspace(0, 1, len(picks)))
+
+        for c, it in zip(colors, picks):
+            ax.plot(self.T_history[:, it], self.P * 1e-6, color=c,
+                    label=f"{self.ts[it]:.3g} s", **kwargs)
+
+        for i, (p_bot, p_top) in enumerate(self.convective_zones()):
+            ax.axhspan(p_bot * 1e-6, p_top * 1e-6, color="k", alpha=0.08,
+                       lw=0, label="convective" if i == 0 else None)
+
+        ax.set_yscale("log")
+        ax.invert_yaxis()
+        ax.set_xlabel("Temperature [K]")
+        ax.set_ylabel("Pressure [bar]")
+        ax.legend(fontsize="small")
+
+        sigma_teff4 = 5.670374419e-8 * self.teff ** 4          # W/m^2
+        ax2.plot(self.ts, self.F_TOA / sigma_teff4, color=petroff10[0])
+        ax2.axhline(1, color="k", ls=":", lw=1)
+        ax2.set_xlabel("Time [s]")
+        ax2.set_ylabel(r"$F_{\rm TOA} / \sigma T_{\rm eff}^4$")
+
+        ax3.pcolormesh(self.ts[:nt], self.P * 1e-6,
+                       self.convective.astype(float),
+                       cmap="Greys", vmin=0, vmax=1.4, shading="nearest")
+        ax3.set_yscale("log")
+        ax3.invert_yaxis()
+        ax3.set_xlabel("Time [s]")
+        ax3.set_ylabel("Pressure [bar]")
+        ax3.set_title("convective zones", fontsize="small")
+
+        fig.tight_layout()
+        return fig, (ax, ax2, ax3)
 
     def plot_toa_gas(self, skip_gases = [0], burn_in = 20, **kwargs):
         """Plots the gas abundances at the top of the atmosphere.  Useful for 
@@ -717,7 +1002,9 @@ class Results:
         ax.set_prop_cycle(mpl.cycler(color=petroff10))
 
         P = self.P      # [barye], shape (NZ,)
-        T = self.T      # [K], shape (NZ,) or (NZ, NLONG)
+        # In a radiatively coupled run self.T is only the starting profile, so
+        # the condensation curves have to be read against the evolved one.
+        T = self.T if self.T_history is None else self.T_history[:, t_step]
         if T.ndim > 1:
             T = T[:, 0]  # use first longitude for 2D runs
 
@@ -832,7 +1119,8 @@ class Results:
 
         metallicity = 10**self.carma.log_metallicity
 
-        T = self.carma.T_levels[:, longitude] if self.carma.is_2d else self.carma.T_levels
+        T = (self.carma.T_levels[:, longitude] if self.carma.is_2d
+             else self.final_T_levels())
 
         data = get_fastchem_abundances(T, self.carma.P_levels, species, metallicity)
         data = np.vstack((self.carma.P_levels/BAR_TO_BARYE, T, data))
@@ -927,7 +1215,8 @@ class Results:
         ssas = beta_sca/(beta_ext + 1e-100)
         ssas = np.where(beta_ext==0, 0, ssas)
 
-        dz = np.abs(carma.z_levels[1:] - carma.z_levels[:-1])
+        z_levels = self.final_z_levels()
+        dz = np.abs(z_levels[1:] - z_levels[:-1])
 
         d_tau = beta_ext * dz[:, np.newaxis]
 

@@ -1,6 +1,8 @@
-from carmapy.constants import * 
+from carmapy.constants import *
 from carmapy.results import *
 from carmapy.chemistry import calculate_mucos
+from carmapy.adiabat import (ADIABAT_CODES, ADIABAT_PARMENTIER, ADIABAT_TABLE,
+                             TABLE_FILE, get_adiabat)
 import os
 import shutil
 import f90nml
@@ -35,6 +37,9 @@ def _bc2int(bc):
         if bc == ALLOWED_BCs[i]:
             return BC_INTS[i]
     raise ValueError(f"{bc} not found")
+
+# Matches I_RCE_EQUILIBRIUM / I_RCE_PHYSICAL in carma_rce.F90.
+RAD_MODES = {"equilibrium": 0, "physical": 1}
 
 
 
@@ -158,6 +163,25 @@ class Carma:
         self.idiag:         int         = 0
         self.iappend:       int         = 0
         self.t_evolves:     bool        = False
+
+        # Radiative coupling. Setting ck_table_path to an exported Sonora
+        # correlated-k table (see carmapy.radiation) turns it on: the Mie
+        # tables are regenerated on that table's band set at run() time and
+        # NWAVE follows from it. None means an ordinary fixed-T run.
+        self.ck_table_path: str         = None
+        self.cloud_rad:     bool        = True
+        self.teff:          float       = 0.
+        self.rad_mode:      str         = "equilibrium"
+        self.rad_accel:     float       = 1.
+        self.rad_dT_max:    float       = 0.5
+        self.rad_dT_tol:    float       = 1.
+        self.rad_dtau_tol:  float       = 0.02
+        self.rad_gap_max:   int         = 100
+
+        # Which adiabat sets the temperature below the convective boundary,
+        # and the deep extension built by extend_atmosphere. See
+        # carmapy.adiabat.
+        self.adiabat:       str         = ADIABAT_PARMENTIER
 
 
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
@@ -773,11 +797,12 @@ class Carma:
 
 
     def extend_atmosphere(self, max_P: float, #TODO: See if can do non-iteratively b/c now calculating z later
-                          wt_mol=None, 
-                          method="adiabatic") -> None:
+                          wt_mol=None,
+                          method="adiabatic",
+                          adiabat: str = None) -> None:
         """Extends the atmospheric structure to deeper pressures.  Modifies the
         pressure, temperature, and eddy diffusion levels and requires
-        that they have previously been set.  If ``max_P`` is less than the 
+        that they have previously been set.  If ``max_P`` is less than the
         current maximum pressure, this method does nothing
 
         Parameters
@@ -785,27 +810,33 @@ class Carma:
         max_P : float
             The pressure to which the atmosphere is extended
         wt_mol : ArrayLike, optional
-            The mean molecular weight of the atmosphere.  If an array, each 
-            entry corresponds to one altitude level. Defaults to the mean 
+            The mean molecular weight of the atmosphere.  If an array, each
+            entry corresponds to one altitude level. Defaults to the mean
             molecular weight stored in the carma object
         method : string, optional
             The method to extend the atmosphere.  Options are "adiabatic"
             and "isothermal"
+        adiabat : string, optional
+            Which adiabat ``method="adiabatic"`` follows, overriding
+            ``self.adiabat`` for this call only.  See ``carmapy.adiabat``.
 
         Notes
         -------
-        Atmosphere is extended adiabatically using the fit from Parmentier et 
-        al. (2015) [1]_ to the equation of state described in Saumon (1995) 
-        [2]_.  k_zz is assumed to be proportional to the cube root of the scale
-        height
+        The adiabatic extension follows either the fit from Parmentier et al.
+        (2015) [1]_ to the equation of state described in Saumon (1995) [2]_,
+        or the tabulated gradient of [2]_ itself.  The fit is the default and
+        is accurate below ~1500 K, but it misses the flattening of the adiabat
+        by H2 dissociation, so it runs too hot wherever the extension reaches
+        past ~2000 K.  k_zz is assumed to be proportional to the cube root of
+        the scale height
 
 
         References
         ----------
-        .. [1] Parmentier, V., Guillot, T., Fortney, J. J., & Marley, 
+        .. [1] Parmentier, V., Guillot, T., Fortney, J. J., & Marley,
            M. S. 2015, A&A, 574, A35
 
-        .. [2] Saumon, D., Chabrier, G., & van Horn, H. M. 1995, The 
+        .. [2] Saumon, D., Chabrier, G., & van Horn, H. M. 1995, The
            Astrophysical Journal Supplement Series, 99 (IOP), 713
         """
 
@@ -843,40 +874,38 @@ class Carma:
             H0 = k_B * (self.T_levels[0]
                         / (self.wt_mol * PROTON_MASS * self.surface_grav))
 
-        def K(P, t0, p0):
-            return (t0/(PARMENTIER_A_COEFF 
-                                      - PARMENTIER_B_COEFF * t0)
-                        * (P/p0) ** PARMENTIER_A_COEFF)
-    
-        def new_T(P, t0, p0):
-            return (PARMENTIER_A_COEFF * K(P, t0, p0) 
-                    / (1 + PARMENTIER_B_COEFF * K(P, t0, p0)))
-
         if method == "adiabatic":
-            for i in range(n-1, -1, -1):
-                P_new[i] = self.P_levels[0] * ratio ** (n - i)
-                
+            model = self.adiabat if adiabat is None else adiabat
+            adiabat_of = get_adiabat(model)
+
+            if model == ADIABAT_TABLE:
+                self._citation["adiabat_table"] = True
+
+            P_new[:n] = self.P_levels[0] * ratio ** (n - np.arange(n))
+
+            # One call per column: the tabulated adiabat integrates the whole
+            # pressure grid in a single sweep, and calling it per level would
+            # restart that integration each time.
+            if not self.is_2d:
+                T_new[:n] = adiabat_of(P_new[:n], self.T_levels[0],
+                                       self.P_levels[0])
+            else:
+                for j in range(self.NLONGITUDE):
+                    T_new[:n, j] = adiabat_of(P_new[:n], self.T_levels[0, j],
+                                              self.P_levels[0])
+
+            for i in range(n):
                 if not self.is_2d:
-                    T_new[i] = new_T(P_new[i], 
-                                     self.T_levels[0], 
-                                     self.P_levels[0]) 
-
-                    H = k_B * T_new[i]/(self.wt_mol 
-                                        * PROTON_MASS 
+                    H = k_B * T_new[i]/(self.wt_mol
+                                        * PROTON_MASS
                                         * self.surface_grav)
-                    
-
                 else:
-                    for j in range(self.NLONGITUDE):
-                        T_new[i, j] = new_T(P_new[i], 
-                                            self.T_levels[0, j], 
-                                            self.P_levels[0])
-                        
-                        H = (k_B * np.mean(T_new[i, :])
-                            / (self.wt_mol * PROTON_MASS * self.surface_grav))
-                        
+                    H = (k_B * np.mean(T_new[i, :])
+                         / (self.wt_mol * PROTON_MASS * self.surface_grav))
+
                 kzz_new[i] = self.kzz_levels[0] * (H/H0)**(1/3)
-        
+
+
         elif method == "isothermal":
             for i in range(n-1, -1, -1):
                 P_new[i] = self.P_levels[0] * ratio ** (n - i)
@@ -1173,6 +1202,162 @@ class Carma:
         if bot_flux is not None:
             gas.boundary["bot_flux"] = bot_flux
 
+    def set_radiation(self,
+                      teff: float,
+                      ck_table_path: str,
+                      mode: str = "equilibrium",
+                      cloud_rad: bool = True,
+                      accel: float | None = None,
+                      rad_gap_max: int = 100,
+                      rad_dT_tol: float = 1.0,
+                      rad_dtau_tol: float = 0.02,
+                      dT_max: float = 0.5) -> None:
+        """Couples the temperature profile to radiative transfer.
+
+        Turns the simulation from a fixed-``T`` run into a
+        radiative-convective one.  Every layer evolves under the radiative
+        heating of the gas and the clouds, and a dry convective adjustment then
+        mixes away whatever superadiabatic gradients that leaves, against the
+        adiabat selected by ``self.adiabat``.  The internal flux enters as the
+        net flux through the base of the column, so equilibrium is the state in
+        which the emergent flux matches ``sigma * teff**4``.  Intended for
+        isolated brown dwarfs, where there is no irradiation and ``teff`` is
+        the internal temperature.
+
+        The convective zones are an output, not an input: they are located
+        every step and there may be more than one, since a cloud deck can drive
+        a detached convective layer aloft.  See ``results.convective`` and
+        ``results.convective_zones()``.
+
+        The full radiative transfer runs on an adaptive cadence, but the
+        heating rate it produces is applied on every microphysical timestep, so
+        the profile evolves continuously.  ``rad_gap_max=1`` forces a solve
+        every step.
+
+        Parameters
+        ----------
+        teff : float
+            Effective temperature [K].  For an unirradiated object this is
+            identically the internal temperature.
+        ck_table_path : str
+            Path to a correlated-k opacity table exported by
+            ``carmapy.radiation.export_ck_table``.
+        mode : str, optional
+            ``"equilibrium"`` multiplies the heating rate by ``accel`` to reach
+            radiative-convective equilibrium in a tractable number of steps;
+            ``"physical"`` honours the true time history.  Spin up in the
+            first, produce science in the second.  By default "equilibrium"
+        cloud_rad : bool, optional
+            If False the clouds are still simulated in full but contribute no
+            opacity.  Running the same case with it True and False isolates
+            what the cloud radiative feedback changed.  By default True
+        accel : float, optional
+            Factor decoupling the radiative clock from the microphysical one.
+            Only meaningful in ``"equilibrium"`` mode.  Defaults to 1 (no
+            acceleration).
+        rad_gap_max : int, optional
+            Hard ceiling on the number of timesteps between full solves,
+            by default 100
+        rad_dT_tol : float, optional
+            Force a solve once the accumulated ``max|dT|`` since the last one
+            exceeds this [K], by default 1.0
+        rad_dtau_tol : float, optional
+            Force a solve once the column cloud cross section changes by this
+            fraction, by default 0.02
+        dT_max : float, optional
+            Per-step limit on ``|dT|`` [K], a backstop on the semi-implicit
+            update.  Frequent clamping means the cadence or ``accel`` is too
+            coarse; the count is reported at the end of the run.
+            By default 0.5
+
+        Notes
+        -----
+        Enabling radiation sets ``t_evolves`` to True.  Without it
+        ``setupgkern`` caches its growth kernels from step 1 and serves them
+        for the whole run, which would leave the coupling silently inert.
+        """
+        if mode not in RAD_MODES:
+            raise ValueError(f"mode must be one of {list(RAD_MODES)}, got {mode!r}")
+
+        if teff <= 0:
+            raise ValueError("teff must be positive")
+
+        if not os.path.exists(ck_table_path):
+            raise FileNotFoundError(f"ck table not found: {ck_table_path}")
+
+        if accel is None:
+            accel = 1.0
+        elif mode == "physical" and accel != 1.0:
+            raise ValueError(
+                "accel is only meaningful in equilibrium mode; physical mode "
+                "keeps the radiative and microphysical clocks together")
+
+        if rad_gap_max < 1:
+            raise ValueError("rad_gap_max must be at least 1")
+
+        self.teff = teff
+        self.ck_table_path = ck_table_path
+        self.rad_mode = mode
+        self.cloud_rad = cloud_rad
+        self.rad_accel = accel
+        self.rad_gap_max = rad_gap_max
+        self.rad_dT_tol = rad_dT_tol
+        self.rad_dtau_tol = rad_dtau_tol
+        self.rad_dT_max = dT_max
+
+        self.t_evolves = True
+
+        self._citation["radiation"] = True
+
+
+    def _write_optics(self, path, suppress_output=False) -> int:
+        """Generate the per-group cloud optics for a radiatively coupled run.
+
+        Returns NWAVE -- 0 when radiation is off, which is what keeps the
+        Fortran optics arrays unallocated and the coupling inert.
+
+        The Mie tables are generated on exactly the run's bin grid and the ck
+        table's band set, so the Fortran interpolates nothing at run time.
+        They are cached in the run's own ``inputs/`` directory: generating them
+        costs a Mie call per (bin, band) per group, which is seconds, but there
+        is no reason to repeat it on a restart.
+        """
+        if self.ck_table_path is None:
+            return 0
+
+        from . import radiation
+
+        nband = radiation.band_wavelengths(self.ck_table_path).size
+
+        tables = {}
+        for name, group in self.groups.items():
+            if self.cloud_rad:
+                table_path = os.path.join(
+                    path, "inputs", f"mie_{name.replace(' ', '_')}.dat")
+                tables[name] = radiation.gen_band_mie_table(
+                    name, group.rmin, self.NBIN, self.ck_table_path,
+                    table_path)
+            else:
+                # Clouds are still simulated in full; they just contribute no
+                # opacity. Running the identical solver with zeroed optics is
+                # what makes the cloud_rad=True/False pair a clean comparison,
+                # so this writes zeros rather than taking a different branch.
+                tables[name] = np.zeros((self.NBIN, nband, 3))
+
+        if not self.cloud_rad and not suppress_output:
+            print("Radiation: cloud opacity disabled (cloud_rad=False)")
+
+        radiation.write_optics_file(
+            os.path.join(path, "inputs", "optics.txt"), tables)
+
+        nwave = next(iter(tables.values())).shape[1]
+        if not suppress_output:
+            print(f"Radiation: wrote cloud optics for {len(tables)} group(s) "
+                  f"on {nwave} bands")
+
+        return nwave
+
+
     def run(self,
             suppress_output=False,
             nthreads=1,
@@ -1231,6 +1416,11 @@ class Carma:
         
         path_end = os.path.basename(path) 
         
+        # Cloud optics for a radiatively coupled run. NWAVE stays 0 otherwise,
+        # which is what leaves the Fortran group optics unallocated and the
+        # whole path inert.
+        nwave = self._write_optics(path, suppress_output=suppress_output)
+
         nml = {
             "io_files": {
                 "filename":            path_end,
@@ -1249,6 +1439,7 @@ class Carma:
                 "winds_file":          os.path.join("inputs", "winds.txt"),
                 "p_boundary_file":     os.path.join("inputs", "pbound.txt"),
                 "g_boundary_file":     os.path.join("inputs", "gbound.txt"),
+                "optics_file":         os.path.join("inputs", "optics.txt"),
                 },
             "physical_params" : {
                 "wtmol_air_set":        self.wt_mol,
@@ -1272,7 +1463,7 @@ class Carma:
                 "NGAS":                 len(self.gases),
                 "NBIN":                 self.NBIN,
                 "NSOLUTE":              1,
-                "NWAVE":                0,
+                "NWAVE":                nwave,
                 "NLONGITUDE":           self.NLONGITUDE,
                 "irestart":             int(self.restart),
                 "idiag":                self.idiag,
@@ -1290,7 +1481,27 @@ class Carma:
                 "ibbnd_pc":             _bc2int(self.bot_bound_type_cloud),
                 "itbnd_gc":             _bc2int(self.top_bound_type_gas),
                 "ibbnd_gc":             _bc2int(self.bot_bound_type_gas)
-                }        
+                },
+            # The Fortran reads this group with iostat and falls back to
+            # do_radiation = 0, so it is written unconditionally: an
+            # uncoupled run just carries an explicit "off".
+            "radiation": {
+                "do_radiation":         int(self.ck_table_path is not None),
+                "ck_table_file":        (os.path.abspath(self.ck_table_path)
+                                         if self.ck_table_path else ""),
+                "teff":                 self.teff,
+                "rad_mode":             RAD_MODES[self.rad_mode],
+                "rad_accel":            self.rad_accel,
+                "rad_dT_max":           self.rad_dT_max,
+                "rad_dT_tol":           self.rad_dT_tol,
+                "rad_dtau_tol":         self.rad_dtau_tol,
+                "rad_gap_max":          self.rad_gap_max,
+                "adiabat":              ADIABAT_CODES[self.adiabat],
+                "adiabat_file":         (os.path.abspath(TABLE_FILE)
+                                         if self.adiabat == ADIABAT_TABLE
+                                         else ""),
+                "cloud_rad":            int(self.cloud_rad),
+                }
             }
         nml = f90nml.Namelist(nml)
         nml.write(os.path.join(path, "inputs", "input.nml"), force=True)
@@ -1582,6 +1793,17 @@ class Carma:
         if self._citation.get("picaso", False):
             cites += ("Spectra were generated using picaso "
             "(Batalha et al. 2019).  ")
+
+        if self._citation.get("adiabat_table", False):
+            cites += ("The deep atmosphere was placed on the tabulated "
+            "hydrogen/helium adiabatic gradient of Saumon et al. 1995, "
+            "computed by D. Saumon.  ")
+
+        if self._citation.get("radiation", False):
+            cites += ("Radiative-convective coupling used the two-stream "
+            "solver of Toon et al. 1989 with the Sonora correlated-k opacities "
+            "(Marley et al. 2021, Freedman et al. 2014) and the deep adiabat "
+            "of Parmentier et al. 2015.  ")
     
         print(cites)
 
