@@ -295,7 +295,7 @@ gas_dict = {
         "TiO2": {
         "wtmol_dif": WTMOL_TIO2,
         "gcomp": I_GCOMP_TIO2,
-        "hill_formula": "O2Ti1"
+        "hill_formula": ["O2Ti1", "O1Ti1", "Ti"]
     },
         "Al": {
         "wtmol_dif": WTMOL_AL,

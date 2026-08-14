@@ -191,9 +191,16 @@ def find_cloud_base(carma: "Carma", group: "Union[str, Group]", lon_idxs=None) -
   carma._citation["fastchem"] = True
 
   if isinstance(group, str):
-    group = carma.groups[group]
+    if group in carma.groups:
+      group = carma.groups[group]
+    else:
+      matches = [g for g in carma.groups.values() if g.material == group]
+      if not matches:
+        raise KeyError(f"No group with name or material '{group}' found")
+      group = matches[0]
 
   s = group.gas.hill_formula
+  species_list = s if isinstance(s, list) else [s]
 
   P = carma.P_centers
   T = carma.T_centers
@@ -206,17 +213,17 @@ def find_cloud_base(carma: "Carma", group: "Union[str, Group]", lon_idxs=None) -
   # print(s)
 
 # TODO make T, P ordering consistent
-  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), group) 
-  abund = get_fastchem_abundances(T, P, [s], metallicity)[0, :]
+  sat_vp = saturation_vapor_pressure(P, T, np.log10(metallicity), group)
+  abund = np.sum(get_fastchem_abundances(T, P, species_list, metallicity), axis=0)
 
   i = 1
-  while(sat_vp[i]/P[i] > abund[i]): 
+  while(sat_vp[i]/P[i] > abund[i]):
     i += 1
     # print(f"{i:2d}\t{sat_vp[i]/P[i]:.2e}\t{abund[i]:.2e}\t{T[i]:.0f}\t{P[i]:.2e}\t{sat_vp[i]:2e}")
-    if (i == len(P)): 
+    if (i == len(P)):
       print(f"{group.name} does not condense")
       return P[i-1], T[i-1]
-  
+
   P_lo, P_hi = P[i-1], P[i]
   T_hi, T_lo = T[i-1], T[i]
 
@@ -229,14 +236,14 @@ def find_cloud_base(carma: "Carma", group: "Union[str, Group]", lon_idxs=None) -
   def _diff(T):
 
     sat_vp = saturation_vapor_pressure(p_t(T),
-                                       T, 
-                                       np.log10(metallicity), 
+                                       T,
+                                       np.log10(metallicity),
                                        group) / p_t(T)
-    
-    abund = get_fastchem_abundances(np.array([T]), 
-                                    np.array([p_t(T)]), 
-                                    [s], 
-                                    metallicity)[0, 0]
+
+    abund = np.sum(get_fastchem_abundances(np.array([T]),
+                                           np.array([p_t(T)]),
+                                           species_list,
+                                           metallicity)[:, 0])
 
     return abund - sat_vp
   
