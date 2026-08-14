@@ -244,7 +244,7 @@ def find_cloud_base(carma: "Carma", group: "Union[str, Group]", lon_idxs=None) -
   root = scipy.optimize.root_scalar(_diff, bracket=(T_lo, T_hi)).root
   return p_t(root), root
 
-def populate_abundances_at_cloud_base(carma: "Carma", lon_idxs: None) -> None:
+def populate_abundances_at_cloud_base(carma: "Carma", lon_idxs=None) -> None:
   """Set the number mixing ratios below the cloud base.  Uses the equilibrium
   concentration at the cloud base to determine what the mixing ratio should be
 
@@ -278,16 +278,18 @@ def populate_abundances_at_cloud_base(carma: "Carma", lon_idxs: None) -> None:
 
       fast_chem_gas = group.gas.hill_formula
 
-      if fast_chem_gas == -1: 
+      if fast_chem_gas == -1:
         raise ValueError("{g} is not currently supported by "
                           "the carmapy fastchem interface")
 
       metallicity = 10 ** carma.log_metallicity
 
-      nmr_dict[gas] = get_fastchem_abundances(np.array([T_int]), 
-                                            np.array([P_int]), 
-                                            [fast_chem_gas], 
-                                            metallicity)[0]
+      species_list = fast_chem_gas if isinstance(fast_chem_gas, list) else [fast_chem_gas]
+      abunds = get_fastchem_abundances(np.array([T_int]),
+                                       np.array([P_int]),
+                                       species_list,
+                                       metallicity)
+      nmr_dict[gas] = np.sum(abunds, axis=0)
       P_dict[gas] = P_int 
   
   
