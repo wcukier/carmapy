@@ -28,7 +28,7 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 RT_SRC = REPO_ROOT / "src" / "CARMA" / "source" / "base"
 MODULES = ["carma_precision_mod", "carma_enums_mod", "carma_planck",
            "carma_ckopacity", "carma_cloudopt", "carma_rtsolve",
-           "carma_linalg", "carma_rce"]
+           "carma_swsolve", "carma_linalg", "carma_rayleigh", "carma_rce"]
 
 # Must match carmapy.radiation._CK_MAGIC / _CK_VERSION.
 CK_MAGIC = 0x43524D41434B3031
@@ -153,7 +153,7 @@ PROBE_RUN = textwrap.dedent("""\
       type(rce_type) :: rce
       integer :: nz, nbin, ngroup, nband, nelem, igridv, mode, gap_max
       integer :: nstep, istep, iz, rc
-      real(kind=f) :: teff, cp_cgs, grav_cgs, wtmol
+      real(kind=f) :: t_int, cp_cgs, grav_cgs, wtmol
       real(kind=f) :: accel, dt_max, dt_tol, dtau_tol, dtime
       character(len=256) :: ck_path
       real(kind=f), allocatable :: p(:), pl(:), t(:), zc(:), zl(:)
@@ -167,7 +167,7 @@ PROBE_RUN = textwrap.dedent("""\
 
       read(31,'(a)') ck_path
       read(31,*) nz, nbin, ngroup, nband, nelem, igridv, mode, gap_max, nstep
-      read(31,*) teff, cp_cgs, grav_cgs, wtmol
+      read(31,*) t_int, cp_cgs, grav_cgs, wtmol
       read(31,*) accel, dt_max, dt_tol, dtau_tol, dtime
 
       allocate(p(nz), pl(nz+1), t(nz), zc(nz), zl(nz+1))
@@ -192,7 +192,8 @@ PROBE_RUN = textwrap.dedent("""\
 
       rc = 0
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
-                    teff, cp_cgs, grav_cgs, wtmol, &
+                    t_int, 0._f, 0._f, 0.5_f, 0._f, &
+                    cp_cgs, grav_cgs, wtmol, &
                     I_ADIABAT_PARMENTIER, "", &
                     mode, accel, dt_max, dt_tol, dtau_tol, gap_max, rc)
       if (rc < 0) stop "    *** FAILED rce_init ***"
@@ -224,7 +225,7 @@ PROBE_JAC = textwrap.dedent("""\
       implicit none
       type(rce_type) :: rce
       integer :: nz, nbin, ngroup, nband, igridv, iz, k, rc
-      real(kind=f) :: teff, cp_cgs, grav_cgs, wtmol, dmass
+      real(kind=f) :: t_int, cp_cgs, grav_cgs, wtmol, dmass
       character(len=256) :: ck_path
       real(kind=f), allocatable :: p(:), pl(:), t(:), zl(:), dt_in(:), tp(:)
       real(kind=f), allocatable :: radius(:,:)
@@ -236,7 +237,7 @@ PROBE_JAC = textwrap.dedent("""\
 
       read(31,'(a)') ck_path
       read(31,*) nz, nbin, ngroup, nband, igridv
-      read(31,*) teff, cp_cgs, grav_cgs, wtmol
+      read(31,*) t_int, cp_cgs, grav_cgs, wtmol
 
       allocate(p(nz), pl(nz+1), t(nz), zl(nz+1), dt_in(nz), tp(nz))
       allocate(radius(nbin, ngroup))
@@ -257,7 +258,8 @@ PROBE_JAC = textwrap.dedent("""\
 
       rc = 0
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
-                    teff, cp_cgs, grav_cgs, wtmol, &
+                    t_int, 0._f, 0._f, 0.5_f, 0._f, &
+                    cp_cgs, grav_cgs, wtmol, &
                     I_ADIABAT_PARMENTIER, "", &
                     0, 1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
       if (rc < 0) stop 'rce_init failed'
@@ -573,7 +575,7 @@ def _adiabat(p, t0, p0):
     return PARMENTIER_A * k / (1 + PARMENTIER_B * k)
 
 
-def _relax(probe, kappa_ln=-57.0, teff=1000.0, nstep=16000, accel=20.0,
+def _relax(probe, kappa_ln=-57.0, t_int=1000.0, nstep=16000, accel=20.0,
            dt_max=5.0, gap_max=1, nz=40, grav_cgs=31600.0,
            wtmol=2.3, cp_cgs=1.3e8, dtime=250.0, isothermal=False):
     """Relax a clear grey column and return its final state.
@@ -596,7 +598,7 @@ def _relax(probe, kappa_ln=-57.0, teff=1000.0, nstep=16000, accel=20.0,
     with open(probe / "run_case.txt", "w") as f:
         f.write("grey.ck\n")
         f.write(f"{nz} 1 1 {nband} 1 {I_CART} 0 {gap_max} {nstep}\n")
-        f.write(f"{teff!r} {cp_cgs!r} {grav_cgs!r} {wtmol!r}\n")
+        f.write(f"{t_int!r} {cp_cgs!r} {grav_cgs!r} {wtmol!r}\n")
         f.write(f"{accel!r} {dt_max!r} 1.0 0.02 {dtime!r}\n")
         for arr in (p, pl, t, zl, zc):
             f.write(_fmt(arr))

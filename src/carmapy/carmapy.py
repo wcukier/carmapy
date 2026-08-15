@@ -170,7 +170,11 @@ class Carma:
         # NWAVE follows from it. None means an ordinary fixed-T run.
         self.ck_table_path: str         = None
         self.cloud_rad:     bool        = True
-        self.teff:          float       = 0.
+        self.t_int:         float       = 0.
+        self.t_irr:         float       = 0.
+        self.t_star:        float       = 0.
+        self.mu0:           float       = 0.5
+        self.w_surf:        float       = 0.
         self.rad_mode:      str         = "equilibrium"
         self.rad_accel:     float       = 1.
         self.rad_dT_max:    float       = 0.5
@@ -1203,8 +1207,12 @@ class Carma:
             gas.boundary["bot_flux"] = bot_flux
 
     def set_radiation(self,
-                      teff: float,
+                      t_int: float,
                       ck_table_path: str,
+                      t_irr: float = 0.0,
+                      t_star: float = 0.0,
+                      mu0: float = 0.5,
+                      w_surf: float = 0.0,
                       mode: str = "equilibrium",
                       cloud_rad: bool = True,
                       accel: float | None = None,
@@ -1220,9 +1228,9 @@ class Carma:
         mixes away whatever superadiabatic gradients that leaves, against the
         adiabat selected by ``self.adiabat``.  The internal flux enters as the
         net flux through the base of the column, so equilibrium is the state in
-        which the emergent flux matches ``sigma * teff**4``.  Intended for
-        isolated brown dwarfs, where there is no irradiation and ``teff`` is
-        the internal temperature.
+        which the emergent flux matches ``sigma * t_int**4``.  Intended for
+        isolated brown dwarfs, where there is no irradiation, so the internal
+        temperature is also the effective one.
 
         The convective zones are an output, not an input: they are located
         every step and there may be more than one, since a cloud deck can drive
@@ -1236,12 +1244,52 @@ class Carma:
 
         Parameters
         ----------
-        teff : float
-            Effective temperature [K].  For an unirradiated object this is
-            identically the internal temperature.
+        t_int : float
+            Internal temperature [K] -- the temperature corresponding to the
+            heat flux escaping from the interior, imposed as the net flux
+            through the base of the column.  For an unirradiated object it is
+            also the effective temperature, but the two are distinct
+            quantities and this is the internal one.
         ck_table_path : str
             Path to a correlated-k opacity table exported by
             ``carmapy.radiation.export_ck_table``.
+        t_irr : float, optional
+            Irradiation temperature [K].  The incident flux *normal to the
+            beam* is ``sigma * t_irr**4``; the flux entering the top of the
+            atmosphere is ``mu0`` times that.  Zero, the default, means an
+            isolated object and switches the shortwave off entirely.
+        t_star : float, optional
+            Temperature of the blackbody the incident spectrum is *shaped*
+            like [K].  It sets only the colour of the beam, never its
+            magnitude, so a hot primary at large separation is expressed as a
+            high ``t_star`` with a low ``t_irr``.  Zero, the default, shapes
+            the beam like ``t_irr`` itself.
+        mu0 : float, optional
+            Cosine of the incidence angle, in (0, 1].  This is also where
+            redistribution is expressed: 0.5, the default, is a dayside
+            average and 0.25 is full redistribution.
+        w_surf : float, optional
+            Surface albedo, in [0, 1).  Zero, the default, is correct for a
+            gas giant or brown dwarf, which has no surface.
+
+        Notes
+        -----
+        ``t_int`` is an **input**; the equilibrium and effective temperatures
+        are **outputs**, because the Bond albedo that connects them is what the
+        clouds determine::
+
+            sigma * T_eq**4  =  mu0 * sigma * t_irr**4 * (1 - A)
+            sigma * T_eff**4 =  emergent longwave
+
+        Both are reported by ``results``.  Note ``T_eq`` does not equal
+        ``t_irr`` even at zero albedo -- the geometry factor ``mu0`` remains.
+        ``T_eff**4 == t_int**4 + T_eq**4`` is what equilibrium *makes* true, so
+        the difference between the two sides measures how far a run still has
+        to go.
+
+        Composition is fixed at solar H/He.  The Rayleigh cross-section, the
+        adiabat table and the correlated-k table all assume it, so a
+        higher-metallicity atmosphere needs all three changed together.
         mode : str, optional
             ``"equilibrium"`` multiplies the heating rate by ``accel`` to reach
             radiative-convective equilibrium in a tractable number of steps;
@@ -1279,8 +1327,20 @@ class Carma:
         if mode not in RAD_MODES:
             raise ValueError(f"mode must be one of {list(RAD_MODES)}, got {mode!r}")
 
-        if teff <= 0:
-            raise ValueError("teff must be positive")
+        if t_int <= 0:
+            raise ValueError("t_int must be positive")
+
+        if t_irr < 0:
+            raise ValueError("t_irr must be non-negative (0 = isolated object)")
+
+        if t_star < 0:
+            raise ValueError("t_star must be non-negative (0 = shape like t_irr)")
+
+        if not 0 < mu0 <= 1:
+            raise ValueError("mu0 is a cosine and must be in (0, 1]")
+
+        if not 0 <= w_surf < 1:
+            raise ValueError("w_surf is an albedo and must be in [0, 1)")
 
         if not os.path.exists(ck_table_path):
             raise FileNotFoundError(f"ck table not found: {ck_table_path}")
@@ -1295,7 +1355,11 @@ class Carma:
         if rad_gap_max < 1:
             raise ValueError("rad_gap_max must be at least 1")
 
-        self.teff = teff
+        self.t_int = t_int
+        self.t_irr = t_irr
+        self.t_star = t_star
+        self.mu0 = mu0
+        self.w_surf = w_surf
         self.ck_table_path = ck_table_path
         self.rad_mode = mode
         self.cloud_rad = cloud_rad
@@ -1489,7 +1553,11 @@ class Carma:
                 "do_radiation":         int(self.ck_table_path is not None),
                 "ck_table_file":        (os.path.abspath(self.ck_table_path)
                                          if self.ck_table_path else ""),
-                "teff":                 self.teff,
+                "t_int":                self.t_int,
+                "t_irr":                self.t_irr,
+                "t_star":               self.t_star,
+                "rad_mu0":              self.mu0,
+                "rad_w_surf":           self.w_surf,
                 "rad_mode":             RAD_MODES[self.rad_mode],
                 "rad_accel":            self.rad_accel,
                 "rad_dT_max":           self.rad_dT_max,

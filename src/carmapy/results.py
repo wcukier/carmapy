@@ -130,7 +130,7 @@ class Results:
 
     F_TOA : np.ndarray
     """ Emergent flux at the top of the atmosphere [W/m²] (NT).  Converges to
-    ``sigma * teff**4``.  None if the run was not radiatively coupled. """
+    ``sigma * t_int**4``.  None if the run was not radiatively coupled. """
 
     convective : np.ndarray
     """ Which layers the convective adjustment left neutrally stable, at each
@@ -487,7 +487,11 @@ class Results:
         self.conv_resid = None
         self.P_levels_rad = None
         self.rad_interval = None
-        self.teff      = None
+        self.t_int     = None
+        self.t_irr     = 0.0
+        self.mu0       = 0.5
+        self.absorbed_sw = None
+        self.reflected_sw = None
 
         file_path = os.path.join(path, f"temperature_{path_end}.txt")
         if not os.path.exists(file_path):
@@ -498,7 +502,13 @@ class Results:
             if not header:
                 return
             nz_file, _, iskip = (int(x) for x in header[:3])
-            self.teff  = float(header[3])
+            self.t_int = float(header[3])
+            # Absent from output written before the shortwave existed, so
+            # defaulted rather than indexed -- an older run reads back as the
+            # isolated object it was.
+            if len(header) >= 6:
+                self.t_irr = float(header[4])
+                self.mu0   = float(header[5])
 
             if nz_file != NZ:
                 raise ValueError("temperature output inconsistent with carma run")
@@ -511,6 +521,8 @@ class Results:
             nzone     = np.zeros(n_tstep, dtype=int)
             conv_resid = np.zeros(n_tstep)
             nsolve    = np.zeros(n_tstep)
+            absorbed_sw = np.zeros(n_tstep)
+            reflected_sw = np.zeros(n_tstep)
 
             # A run killed mid-output leaves a partial record; nt counts only
             # the records that read back whole.
@@ -520,8 +532,11 @@ class Results:
                 if len(scalars) < 5:
                     break
                 _, F_TOA[it], nsolve[it], zones, conv_resid[it] = (
-                    float(x) for x in scalars)
+                    float(x) for x in scalars[:5])
                 nzone[it] = int(zones)
+                if len(scalars) >= 7:
+                    absorbed_sw[it] = float(scalars[5])
+                    reflected_sw[it] = float(scalars[6])
 
                 lines = [f.readline() for _ in range(2 * NZ + 1)]
                 if not lines[-1]:
@@ -560,6 +575,57 @@ class Results:
             self.rad_interval = np.where(nsolve[:nt] > 0,
                                          iskip / np.maximum(nsolve[:nt], 1),
                                          np.inf)
+
+        self.absorbed_sw = absorbed_sw[:nt]
+        self.reflected_sw = reflected_sw[:nt]
+
+    @property
+    def bond_albedo(self) -> np.ndarray:
+        """Fraction of the incident beam reflected back to space (NT).
+
+        Zero for an unirradiated run, where nothing is incident.  This is an
+        *output* of the run: it is what the cloud and Rayleigh scattering
+        produced, which is why the equilibrium temperature below cannot be an
+        input.
+        """
+        incident = self.mu0 * 5.670374419e-8 * self.t_irr ** 4
+        if self.reflected_sw is None or incident <= 0:
+            return np.zeros_like(self.F_TOA)
+        return self.reflected_sw / incident
+
+    @property
+    def T_eq(self) -> np.ndarray:
+        """Equilibrium temperature (NT) [K], from the *absorbed* shortwave.
+
+        ``sigma * T_eq**4 == absorbed_sw``.  Note this is not ``t_irr`` even at
+        zero albedo: the geometry factor ``mu0`` remains, so
+        ``T_eq**4 == mu0 * (1 - A) * t_irr**4``.
+        """
+        if self.absorbed_sw is None:
+            return np.zeros_like(self.F_TOA)
+        return (np.maximum(self.absorbed_sw, 0.0) / 5.670374419e-8) ** 0.25
+
+    @property
+    def T_eff(self) -> np.ndarray:
+        """Effective temperature (NT) [K], from the emergent *thermal* flux.
+
+        ``sigma * T_eff**4 == F_TOA + absorbed_sw``, the longwave the column
+        actually radiates to space.  ``F_TOA`` is a net flux carrying the beam
+        with it, so adding back what the column absorbed leaves the thermal
+        emission alone; reflected starlight is in neither, having cancelled
+        against the incident beam it never became.
+
+        In equilibrium the column radiates away the starlight it absorbed plus
+        its own internal heat, which is ``T_eff**4 == t_int**4 + T_eq**4`` --
+        the relation the run converges *to* rather than one imposed on it.  A
+        column still out of balance emits more or less than that, and the gap
+        is what the flux ratio reports.  For an isolated object this is the
+        emergent flux itself, approaching ``t_int``.
+        """
+        emitted = self.F_TOA
+        if self.absorbed_sw is not None:
+            emitted = emitted + self.absorbed_sw
+        return (np.maximum(emitted, 0.0) / 5.670374419e-8) ** 0.25
 
     def convective_zones(self, it: int = -1) -> list[tuple[float, float]]:
         """The convective zones at one output, bottom-up.
@@ -659,7 +725,7 @@ class Results:
 
         Draws a sample of profiles from the first output to the last with the
         final convective zones shaded, the emergent flux relative to
-        ``sigma * Teff**4`` -- the quantity equilibrium drives to 1 -- and where
+        ``sigma * t_int**4`` -- the quantity equilibrium drives to 1 -- and where
         the convective zones sat over the run, which is how a cloud deck
         reshaping the profile shows itself.
 
@@ -700,11 +766,11 @@ class Results:
         ax.set_ylabel("Pressure [bar]")
         ax.legend(fontsize="small")
 
-        sigma_teff4 = 5.670374419e-8 * self.teff ** 4          # W/m^2
-        ax2.plot(self.ts, self.F_TOA / sigma_teff4, color=petroff10[0])
+        sigma_tint4 = 5.670374419e-8 * self.t_int ** 4          # W/m^2
+        ax2.plot(self.ts, self.F_TOA / sigma_tint4, color=petroff10[0])
         ax2.axhline(1, color="k", ls=":", lw=1)
         ax2.set_xlabel("Time [s]")
-        ax2.set_ylabel(r"$F_{\rm TOA} / \sigma T_{\rm eff}^4$")
+        ax2.set_ylabel(r"$F_{\rm TOA} / \sigma T_{\rm int}^4$")
 
         ax3.pcolormesh(self.ts[:nt], self.P * 1e-6,
                        self.convective.astype(float),

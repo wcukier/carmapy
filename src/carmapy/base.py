@@ -100,7 +100,14 @@ def load_carma(path: str, restart: int =0) -> Carma:
 
     if rad.get("do_radiation", 0):
         carma.ck_table_path = rad["ck_table_file"]
-        carma.teff = rad["teff"]
+        carma.t_int = rad["t_int"]
+        # Defaulted rather than indexed: an input.nml written before the
+        # shortwave existed has no irradiation keys, and reloading such a run
+        # should give back the isolated object it was.
+        carma.t_irr = rad.get("t_irr", 0.0)
+        carma.t_star = rad.get("t_star", 0.0)
+        carma.mu0 = rad.get("rad_mu0", 0.5)
+        carma.w_surf = rad.get("rad_w_surf", 0.0)
         carma.rad_mode = _int2rad_mode[rad["rad_mode"]]
         carma.rad_accel = rad["rad_accel"]
         carma.rad_dT_max = rad["rad_dt_max"]

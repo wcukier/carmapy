@@ -19,7 +19,7 @@ from .test_rce import write_grey_ck
 
 pytestmark = pytest.mark.integration
 
-TEFF = 1000.0
+T_INT = 1000.0
 
 
 @pytest.fixture(scope="module")
@@ -47,7 +47,7 @@ def coupled_carma(tmp_path, example_levels, ck_table):
     c.add_kzz(kzz)
     c.calculate_z(mu)
     populate_abundances_at_cloud_base(c)
-    c.set_radiation(teff=TEFF, ck_table_path=ck_table,
+    c.set_radiation(t_int=T_INT, ck_table_path=ck_table,
                     accel=20.0, dT_max=5.0)
     return c
 
@@ -60,7 +60,7 @@ def test_set_radiation_forces_t_evolves(coupled_carma):
 
 def test_set_radiation_rejects_accel_in_physical_mode(coupled_carma, ck_table):
     with pytest.raises(ValueError, match="only meaningful in equilibrium"):
-        coupled_carma.set_radiation(teff=TEFF, ck_table_path=ck_table,
+        coupled_carma.set_radiation(t_int=T_INT, ck_table_path=ck_table,
                                     mode="physical", accel=20.0)
 
 
@@ -77,7 +77,7 @@ def test_namelist_has_no_radiative_convective_boundary(coupled_carma):
     nml = f90nml.read(os.path.join(coupled_carma.name, "inputs", "input.nml"))
 
     assert nml["radiation"]["do_radiation"] == 1
-    assert nml["radiation"]["teff"] == pytest.approx(TEFF)
+    assert nml["radiation"]["t_int"] == pytest.approx(T_INT)
     assert "p_rcb" not in nml["radiation"]
 
 
@@ -88,7 +88,7 @@ def test_radiation_survives_load_carma(coupled_carma):
     coupled_carma.run(suppress_output=True)
     reloaded = load_carma(coupled_carma.name, restart=1)
 
-    assert reloaded.teff == pytest.approx(TEFF)
+    assert reloaded.t_int == pytest.approx(T_INT)
     assert not hasattr(reloaded, "p_rcb")
     assert reloaded.rad_mode == "equilibrium"
     assert reloaded.rad_accel == pytest.approx(20.0)
@@ -109,7 +109,7 @@ def test_temperature_output_parses(coupled_carma):
     assert r.dTdt.shape == (coupled_carma.NZ, nt)
     assert r.flux_net.shape == (coupled_carma.NZ + 1, nt)
     assert r.F_TOA.shape == (nt,)
-    assert r.teff == pytest.approx(TEFF)
+    assert r.t_int == pytest.approx(T_INT)
     assert r.convective.shape == (coupled_carma.NZ, nt)
     assert r.convective.dtype == bool
     assert r.nzone.shape == (nt,)

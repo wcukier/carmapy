@@ -253,7 +253,8 @@ subroutine test_day()
   ! branched on here, so this only records which case the run was.
   integer             :: cloud_rad
   character(len=256)  :: ck_table_file
-  real(kind=f)        :: teff, rad_accel, rad_dT_max
+  real(kind=f)        :: t_int, rad_accel, rad_dT_max
+  real(kind=f)        :: t_irr, t_star, rad_mu0, rad_w_surf
   real(kind=f)        :: rad_dT_tol, rad_dtau_tol
   ! Which adiabat the convective interior follows: 0 = Parmentier fit,
   ! 1 = the tabulated H/He gradient read from adiabat_file.
@@ -261,7 +262,8 @@ subroutine test_day()
   character(len=256)  :: adiabat_file
   integer             :: nsolve_last   !! rce%nsolve as of the previous output
 
-  namelist / radiation / do_radiation, ck_table_file, teff, &
+  namelist / radiation / do_radiation, ck_table_file, t_int, &
+         t_irr, t_star, rad_mu0, rad_w_surf, &
          rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
          rad_gap_max, adiabat, adiabat_file, cloud_rad
 
@@ -318,7 +320,11 @@ subroutine test_day()
 
   do_radiation  = 0        ! 0 = fixed T,P -- the whole radiation group is inert
   ck_table_file = ""
-  teff          = 0._f
+  t_int         = 0._f
+  t_irr         = 0._f      ! 0 = isolated object, no incident beam
+  t_star        = 0._f      ! 0 = shape the beam like t_irr itself
+  rad_mu0       = 0.5_f     ! dayside average
+  rad_w_surf    = 0._f      ! gas giant: no surface to reflect
   rad_mode      = I_RCE_EQUILIBRIUM
   rad_accel     = 1._f
   rad_dT_max    = 0.5_f
@@ -857,7 +863,8 @@ subroutine test_day()
     end if
 
     call rce_init(rce, NZ, NBIN, NGROUP, NWAVE, igridv, trim(ck_table_file), &
-                  teff, CP, grav_set, wtmol_air_set, &
+                  t_int, t_irr, t_star, rad_mu0, rad_w_surf, &
+                  CP, grav_set, wtmol_air_set, &
                   adiabat, trim(adiabat_file), &
                   rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
                   rad_gap_max, rc)
@@ -867,11 +874,12 @@ subroutine test_day()
     ! keep their format and a fixed-T run produces no extra file at all.
     open(unit=lunrad, file = radpre // filename(1:len_trim(filename)) // filesuffix, &
          status="unknown", position=file_pos)
-    write(lunrad,'(3i10,e25.15)') NZ, nstep / iskip, iskip, teff
+    write(lunrad,'(3i10,3e25.15)') NZ, nstep / iskip, iskip, t_int, &
+                                   t_irr, rad_mu0
     nsolve_last = 0
 
-    write(*,*) "Radiative coupling on: Teff =", teff, &
-               " K; cloud opacity =", cloud_rad
+    write(*,*) "Radiative coupling on: T_int =", t_int, &
+               " K; T_irr =", t_irr, " K; cloud opacity =", cloud_rad
   end if
 
 
@@ -1161,11 +1169,12 @@ subroutine test_day()
       ! The radiative column: layer temperatures, heating rates and which
       ! layers convection left neutrally stable, then the level net fluxes the
       ! heating was differenced from. F_net at the top is the emergent flux,
-      ! which is what sigma*Teff^4 is checked against.
+      ! which is what sigma*t_int^4 is checked against.
       if (do_radiation .eq. 1) then
-        write(lunrad,'(5e25.15)') (istep)*dtime, rce%fnet(NZP1), &
+        write(lunrad,'(7e25.15)') (istep)*dtime, rce%fnet(NZP1), &
                                   real(rce%nsolve - nsolve_last, f), &
-                                  real(rce%nzone, f), rce%conv_resid
+                                  real(rce%nzone, f), rce%conv_resid, &
+                                  rce%absorbed_sw, rce%reflected_sw
         nsolve_last = rce%nsolve
 
         do i = 1, NZ
