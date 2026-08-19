@@ -115,6 +115,10 @@ def load_carma(path: str, restart: int =0) -> Carma:
         carma.rad_dtau_tol = rad["rad_dtau_tol"]
         carma.rad_gap_max = rad["rad_gap_max"]
         carma.cloud_rad = bool(rad["cloud_rad"])
+        # Defaulted for the same reason as the irradiation keys above: a run
+        # written before Kzz followed the profile held it fixed.
+        carma.self_consistent_kzz = bool(rad.get("kzz_mode", 0))
+        carma.kzz_mixl_scale = rad.get("kzz_mixl_scale", 1.0)
 
     io = nml["io_files"]
 

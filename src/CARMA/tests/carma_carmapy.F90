@@ -260,12 +260,18 @@ subroutine test_day()
   ! 1 = the tabulated H/He gradient read from adiabat_file.
   integer             :: adiabat
   character(len=256)  :: adiabat_file
+  ! Whether the eddy diffusion profile follows the evolving temperature
+  ! profile: 0 = hold the levels_file values, 1 = mixing length theory.
+  integer             :: kzz_mode
+  ! Multiplier on the mixing length. 1 is the parameterisation as PICASO
+  ! has it; Kzz goes as L^(4/3), so this moves it by its 4/3 power.
+  real(kind=f)        :: kzz_mixl_scale
   integer             :: nsolve_last   !! rce%nsolve as of the previous output
 
   namelist / radiation / do_radiation, ck_table_file, t_int, &
          t_irr, t_star, rad_mu0, rad_w_surf, &
          rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
-         rad_gap_max, adiabat, adiabat_file, cloud_rad
+         rad_gap_max, adiabat, adiabat_file, kzz_mode, kzz_mixl_scale, cloud_rad
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
@@ -333,6 +339,8 @@ subroutine test_day()
   rad_gap_max   = 100
   adiabat       = 0
   adiabat_file  = ""
+  kzz_mode      = I_KZZ_STATIC
+  kzz_mixl_scale = 1._f
   cloud_rad     = 1
 
   open(unit=10, file=nml_file, status='old')
@@ -865,7 +873,7 @@ subroutine test_day()
     call rce_init(rce, NZ, NBIN, NGROUP, NWAVE, igridv, trim(ck_table_file), &
                   t_int, t_irr, t_star, rad_mu0, rad_w_surf, &
                   CP, grav_set, wtmol_air_set, &
-                  adiabat, trim(adiabat_file), &
+                  adiabat, trim(adiabat_file), kzz_mode, kzz_mixl_scale, &
                   rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
                   rad_gap_max, rc)
     if (rc < 0) stop "    *** FAILED rce_init ***"
@@ -994,6 +1002,13 @@ subroutine test_day()
       call rce_update(rce, dtime, p(:), pl(:), t(:), zc(:), zl(:), &
                       NELEM, numden, elem2group, elem_is_number, &
                       grp_r, grp_qext, grp_ssa, grp_asym)
+
+      ! Mix with the eddy diffusion the new profile implies rather than the
+      ! one the run started from. ekz is handed to CARMASTATE_Create below, so
+      ! this is the whole of the coupling back into the microphysics.
+      if (kzz_mode .eq. I_KZZ_MIXING_LENGTH) then
+        ekz(:) = rce%kzz(:)
+      end if
     end if
 
     ! To do: change gas input rate; add gaussian distribution to size of CNs being added; change nucleation rate with
@@ -1183,7 +1198,7 @@ subroutine test_day()
         end do
 
         do i = 1, NZP1
-          write(lunrad,'(i5,2e25.15)') i, pl(i) * 10._f, rce%fnet(i)
+          write(lunrad,'(i5,3e25.15)') i, pl(i) * 10._f, rce%fnet(i), ekz(i)
         end do
       end if
 

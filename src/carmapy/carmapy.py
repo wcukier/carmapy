@@ -182,6 +182,12 @@ class Carma:
         self.rad_dtau_tol:  float       = 0.02
         self.rad_gap_max:   int         = 100
 
+        # Whether the eddy diffusion profile follows the evolving temperature
+        # profile. Only read by a radiatively coupled run; a fixed-T run has
+        # nothing for Kzz to follow. See carmapy.kzz.
+        self.self_consistent_kzz: bool  = True
+        self.kzz_mixl_scale: float      = 1.0
+
         # Which adiabat sets the temperature below the convective boundary,
         # and the deep extension built by extend_atmosphere. See
         # carmapy.adiabat.
@@ -1215,6 +1221,8 @@ class Carma:
                       w_surf: float = 0.0,
                       mode: str = "equilibrium",
                       cloud_rad: bool = True,
+                      self_consistent_kzz: bool = True,
+                      kzz_mixl_scale: float = 1.0,
                       accel: float | None = None,
                       rad_gap_max: int = 100,
                       rad_dT_tol: float = 1.0,
@@ -1241,6 +1249,14 @@ class Carma:
         heating rate it produces is applied on every microphysical timestep, so
         the profile evolves continuously.  ``rad_gap_max=1`` forces a solve
         every step.
+
+        The eddy diffusion profile follows the temperature profile by default.
+        ``add_kzz`` then supplies only what the run *starts* from: once the
+        first radiative solve lands, Kzz is recomputed from mixing length
+        theory on the same cadence and the supplied profile is not used again.
+        Set ``self_consistent_kzz=False`` to hold it for the whole run.  See
+        ``carmapy.kzz.mixing_length_kzz``, which is the same calculation and
+        can be run outside a simulation.
 
         Parameters
         ----------
@@ -1299,6 +1315,23 @@ class Carma:
             If False the clouds are still simulated in full but contribute no
             opacity.  Running the same case with it True and False isolates
             what the cloud radiative feedback changed.  By default True
+        self_consistent_kzz : bool, optional
+            Recompute the eddy diffusion profile from mixing length theory on
+            every radiative solve, so the mixing follows the convective heat
+            flux and the lapse rate as they evolve.  If False the profile
+            passed to ``add_kzz`` is held for the whole run, which leaves a
+            column whose radiative-convective boundary has moved mixing with
+            the eddy diffusion of the atmosphere it started from.
+            By default True
+        kzz_mixl_scale : float, optional
+            Multiplier on the mixing length used by ``self_consistent_kzz``.
+            The mixing length is otherwise diagnosed entirely from the profile
+            and cannot exceed a scale height, so this is the one free parameter
+            in the scheme, and the handle for asking how sensitive the clouds
+            are to the strength of the mixing.  Kzz goes as the 4/3 power of
+            the mixing length, so 2 here is a factor 2.52 in Kzz, not 2.
+            Ignored when ``self_consistent_kzz`` is False.  By default 1, which
+            is the parameterisation as PICASO has it.
         accel : float, optional
             Factor decoupling the radiative clock from the microphysical one.
             Only meaningful in ``"equilibrium"`` mode.  Defaults to 1 (no
@@ -1355,6 +1388,10 @@ class Carma:
         if rad_gap_max < 1:
             raise ValueError("rad_gap_max must be at least 1")
 
+        if kzz_mixl_scale <= 0:
+            raise ValueError("kzz_mixl_scale must be positive, got "
+                             f"{kzz_mixl_scale}")
+
         self.t_int = t_int
         self.t_irr = t_irr
         self.t_star = t_star
@@ -1363,6 +1400,8 @@ class Carma:
         self.ck_table_path = ck_table_path
         self.rad_mode = mode
         self.cloud_rad = cloud_rad
+        self.self_consistent_kzz = self_consistent_kzz
+        self.kzz_mixl_scale = kzz_mixl_scale
         self.rad_accel = accel
         self.rad_gap_max = rad_gap_max
         self.rad_dT_tol = rad_dT_tol
@@ -1372,6 +1411,8 @@ class Carma:
         self.t_evolves = True
 
         self._citation["radiation"] = True
+        if self_consistent_kzz:
+            self._citation["kzz_mixing_length"] = True
 
 
     def _write_optics(self, path, suppress_output=False) -> int:
@@ -1564,6 +1605,8 @@ class Carma:
                 "rad_dT_tol":           self.rad_dT_tol,
                 "rad_dtau_tol":         self.rad_dtau_tol,
                 "rad_gap_max":          self.rad_gap_max,
+                "kzz_mode":             int(self.self_consistent_kzz),
+                "kzz_mixl_scale":       self.kzz_mixl_scale,
                 "adiabat":              ADIABAT_CODES[self.adiabat],
                 "adiabat_file":         (os.path.abspath(TABLE_FILE)
                                          if self.adiabat == ADIABAT_TABLE
@@ -1872,7 +1915,13 @@ class Carma:
             "solver of Toon et al. 1989 with the Sonora correlated-k opacities "
             "(Marley et al. 2021, Freedman et al. 2014) and the deep adiabat "
             "of Parmentier et al. 2015.  ")
-    
+
+        if self._citation.get("kzz_mixing_length", False):
+            cites += ("Eddy diffusion was computed from mixing length theory "
+            "following Ackerman & Marley 2001, as implemented in picaso "
+            "(Mukherjee et al. 2023).  ")
+
+
         print(cites)
 
         return cites

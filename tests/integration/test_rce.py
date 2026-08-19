@@ -145,6 +145,52 @@ PROBE_ADIABAT = textwrap.dedent("""\
     end program rce_adiabat_probe
 """)
 
+PROBE_KZZ = textwrap.dedent("""\
+    program rce_kzz_probe
+      use carma_precision_mod
+      use carma_rce
+      implicit none
+      type(rce_type) :: rce
+      integer :: nz, i, rc, adiabat
+      real(kind=f) :: grav_cgs, rescale
+      real(kind=f), allocatable :: p(:), pl(:), t(:), fnet(:), kzz(:)
+      character(len=256) :: table_path
+
+      open(unit=31, file='kzz_case.txt', status='old', action='read')
+      open(unit=32, file='kzz_out.txt', status='replace')
+
+      read(31,'(A)') table_path
+      read(31,*) nz, adiabat, rce%t_int, rce%wtmol, grav_cgs, rce%kzz_mixl_scale
+
+      ! rce%grav is SI; the namelist and the Python reference are both cgs.
+      rce%grav    = grav_cgs * 1.e-2_f
+      rce%nz      = nz
+      rce%adiabat = adiabat
+      rce%sw_on   = .false.
+
+      if (adiabat == I_ADIABAT_TABLE) then
+        rc = 0
+        call rce_load_adiabat(trim(table_path), rce, rc)
+        if (rc < 0) stop "    *** FAILED rce_load_adiabat ***"
+      end if
+
+      allocate(p(nz), pl(nz+1), t(nz), fnet(nz+1), kzz(nz+1))
+      read(31,*) (p(i), i = 1, nz)
+      read(31,*) (pl(i), i = 1, nz+1)
+      read(31,*) (t(i), i = 1, nz)
+      read(31,*) (fnet(i), i = 1, nz+1)
+
+      call rce_kzz(rce, p, pl, t, fnet, kzz, rescale)
+
+      write(32,'(1e26.17)') (kzz(i), i = 1, nz+1)
+      write(32,'(1e26.17)') rescale
+
+      close(31)
+      close(32)
+      call rce_destroy(rce)
+    end program rce_kzz_probe
+""")
+
 PROBE_RUN = textwrap.dedent("""\
     program rce_run
       use carma_precision_mod
@@ -194,7 +240,7 @@ PROBE_RUN = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, 0._f, 0._f, 0.5_f, 0._f, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", &
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
                     mode, accel, dt_max, dt_tol, dtau_tol, gap_max, rc)
       if (rc < 0) stop "    *** FAILED rce_init ***"
 
@@ -260,7 +306,7 @@ PROBE_JAC = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, 0._f, 0._f, 0.5_f, 0._f, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", &
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
                     0, 1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
       if (rc < 0) stop 'rce_init failed'
 
@@ -335,6 +381,15 @@ def adiabat_probe(tmp_path_factory):
         pytest.skip("gfortran not available")
     return _build(tmp_path_factory.mktemp("rce_adiabat"), "rce_adiabat_probe",
                   PROBE_ADIABAT)
+
+
+@pytest.fixture(scope="module")
+def kzz_probe(tmp_path_factory):
+    import shutil
+    if shutil.which("gfortran") is None:
+        pytest.skip("gfortran not available")
+    return _build(tmp_path_factory.mktemp("rce_kzz"), "rce_kzz_probe",
+                  PROBE_KZZ)
 
 
 @pytest.fixture(scope="module")
@@ -485,6 +540,171 @@ def test_tabulated_adiabat_matches_python(adiabat_probe):
     # caps how far either scheme's order of accuracy carries.
     ref_temp = tabulated_adiabat(pres_pa * 10.0, t0, p0_pa * 10.0)
     np.testing.assert_allclose(got_temp, ref_temp, rtol=1e-5)
+
+
+# --------------------------------------------------------------------------
+# eddy diffusion
+# --------------------------------------------------------------------------
+
+def _kzz_case(nz=40, t_int=1200.0, wt_mol=2.2, grav=1e5, f_frac=None):
+    """A column for the Kzz probe: pressures [Pa], temperatures, net flux.
+
+    The profile is a Parmentier adiabat, and the net flux ramps from nothing at
+    the base to the whole internal flux at the top, so the column has a
+    convective interior under a radiative upper atmosphere -- both branches of
+    the mixing length floor get exercised.
+    """
+    from carmapy.adiabat import parmentier_adiabat
+
+    SIGMA = 0.56687e-4
+
+    # Bottom to top, and stopping at 0.01 bar so the tabulated adiabat is
+    # evaluated inside its own grid rather than against its clamped edge.
+    pl_pa = np.geomspace(3e7, 1e3, nz + 1)[::-1]
+    p_pa = np.sqrt(pl_pa[1:] * pl_pa[:-1])
+    t = parmentier_adiabat(p_pa * 10.0, 2600.0, 3e8)
+
+    if f_frac is None:
+        # W/m^2: fnet is SI on both sides of the port.
+        f_frac = np.linspace(0.0, 1.0, nz + 1) ** 2
+    fnet = f_frac * SIGMA * t_int**4 * 1e-3
+
+    return dict(nz=nz, t_int=t_int, wt_mol=wt_mol, grav=grav,
+                pl_pa=pl_pa, p_pa=p_pa, t=t, fnet=fnet)
+
+
+def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0):
+    """Run the Fortran probe on ``case``, returning ``(kzz, rescale)``."""
+    from carmapy.adiabat import ADIABAT_CODES, TABLE_FILE
+
+    with open(probe / "kzz_case.txt", "w") as f:
+        f.write(f"{TABLE_FILE}\n")
+        f.write(f"{case['nz']} {ADIABAT_CODES[adiabat]} "
+                f"{float(case['t_int'])!r} {float(case['wt_mol'])!r} "
+                f"{float(case['grav'])!r} {float(mixl_scale)!r}\n")
+        f.write(_fmt(case["p_pa"]))
+        f.write(_fmt(case["pl_pa"]))
+        f.write(_fmt(case["t"]))
+        f.write(_fmt(case["fnet"]))
+
+    subprocess.run(["./rce_kzz_probe"], cwd=probe, check=True)
+    tokens = (probe / "kzz_out.txt").read_text().split()
+
+    got = np.array([float(x) for x in tokens[:case["nz"] + 1]])
+    return got, float(tokens[case["nz"] + 1])
+
+
+def _kzz_reference(case, adiabat, mixl_scale=1.0):
+    """``carmapy.kzz`` on the same column. Pa -> barye at the boundary."""
+    from carmapy.kzz import mixing_length_kzz
+
+    return mixing_length_kzz(case["p_pa"] * 10.0, case["t"],
+                             case["pl_pa"] * 10.0, case["fnet"],
+                             t_int=case["t_int"], wt_mol=case["wt_mol"],
+                             surface_grav=case["grav"], adiabat=adiabat,
+                             mixl_scale=mixl_scale, return_rescale=True)
+
+
+@pytest.mark.parametrize("adiabat", ["parmentier", "table"])
+@pytest.mark.parametrize("mixl_scale", [1.0, 0.4, 2.5])
+def test_kzz_matches_python(kzz_probe, adiabat, mixl_scale):
+    """``rce_kzz`` against ``carmapy.kzz.mixing_length_kzz``.
+
+    A pure port check: both sides evaluate the same closed-form expression on
+    the same column, so the only differences allowed are the ones arithmetic
+    ordering makes. Run against both adiabats because the lapse ratio is where
+    the two models enter, and a gradient wired to the wrong one would only
+    misplace the mixing length by a factor of order unity -- big enough to
+    matter, small enough to look plausible.
+
+    The mixing length scale is swept alongside, above and below 1, because the
+    two sides have to agree on *where* it is applied and not merely that it
+    exists: multiplying before the 0.1*H floor rather than after it gives the
+    same answer wherever the floor is slack and a different one everywhere it
+    binds, which is exactly the stable upper atmosphere.
+    """
+    case = _kzz_case()
+
+    got, got_rescale = _run_kzz_probe(kzz_probe, case, adiabat, mixl_scale)
+    ref, ref_rescale = _kzz_reference(case, adiabat, mixl_scale)
+
+    np.testing.assert_allclose(got, ref, rtol=1e-11)
+    assert got_rescale == pytest.approx(ref_rescale, rel=1e-12)
+
+
+def test_kzz_mixl_scale_is_a_four_thirds_power(kzz_probe):
+    """Scaling the mixing length by ``f`` scales Kzz by ``f**(4/3)``.
+
+    Kzz goes as ``H*(l/H)**(4/3)`` and nothing else in the expression touches
+    ``l``, so the response is exact rather than approximate. Worth pinning
+    because the 4/3 is the whole reason the knob needs documenting: a user
+    reaching for "twice the mixing" wants 1.68, not 2.
+    """
+    case = _kzz_case()
+
+    base, _ = _run_kzz_probe(kzz_probe, case, "parmentier", 1.0)
+    for f in (0.25, 0.5, 2.0, 3.0):
+        scaled, _ = _run_kzz_probe(kzz_probe, case, "parmentier", f)
+        np.testing.assert_allclose(scaled / base, f ** (4 / 3), rtol=1e-9)
+
+
+def test_kzz_mixl_scale_must_be_positive():
+    """A non-positive scale would put zero or a negative into a 4/3 power."""
+    from carmapy.kzz import mixing_length_kzz
+
+    case = _kzz_case()
+    for bad in (0.0, -1.0):
+        with pytest.raises(ValueError, match="must be positive"):
+            mixing_length_kzz(case["p_pa"] * 10.0, case["t"],
+                              case["pl_pa"] * 10.0, case["fnet"],
+                              t_int=case["t_int"], wt_mol=case["wt_mol"],
+                              surface_grav=case["grav"], mixl_scale=bad)
+
+
+def test_kzz_floors_a_radiative_column(kzz_probe):
+    """A column carrying its whole flux radiatively sits on the flux floor.
+
+    With ``fnet`` already equal to the internal flux everywhere there is no
+    convective flux left to drive mixing, so ``chf`` collapses onto
+    ``sigma*(0.05*Teff)^4``. What is being checked is that the result is a
+    small positive number rather than a NaN: the cube root in the mixing
+    length velocity is what makes the floor load-bearing rather than cosmetic.
+    """
+    case = _kzz_case(f_frac=np.ones(41))
+
+    got, _ = _run_kzz_probe(kzz_probe, case, "parmentier")
+    ref, _ = _kzz_reference(case, "parmentier")
+
+    assert np.all(np.isfinite(got))
+    assert np.all(got > 0.0)
+    np.testing.assert_allclose(got, ref, rtol=1e-11)
+
+    # Floored at 0.05^4 of the flux, and the velocity goes as its cube root, so
+    # the column sits well below the convective case.
+    #
+    # The bottom level is excluded, and equal between the two by construction:
+    # the deepest layer is *defined* to carry the whole flux convectively, so
+    # no amount of radiative transport above it changes what it mixes with.
+    convective, _ = _run_kzz_probe(kzz_probe, _kzz_case(), "parmentier")
+    assert got[0] == pytest.approx(convective[0])
+    assert np.all(got[1:-5] < convective[1:-5])
+
+
+def test_kzz_rises_with_internal_flux(kzz_probe):
+    """Kzz goes as the cube root of the convective flux.
+
+    Doubling the internal flux at fixed profile multiplies ``chf`` by four and
+    Kzz by ``4**(1/3)`` -- everything else in the expression depends only on
+    the temperature profile, which is held. A sharper statement than a
+    monotonicity check, and it pins the exponent.
+    """
+    lo = _kzz_case(t_int=1200.0)
+    hi = _kzz_case(t_int=1200.0 * np.sqrt(2.0))   # sigma*T^4 doubles twice over
+
+    got_lo, _ = _run_kzz_probe(kzz_probe, lo, "parmentier")
+    got_hi, _ = _run_kzz_probe(kzz_probe, hi, "parmentier")
+
+    np.testing.assert_allclose(got_hi / got_lo, 4.0 ** (1 / 3), rtol=1e-6)
 
 
 def test_level_temps_and_regrid(units_probe):

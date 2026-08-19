@@ -132,6 +132,13 @@ class Results:
     """ Emergent flux at the top of the atmosphere [W/m²] (NT).  Converges to
     ``sigma * t_int**4``.  None if the run was not radiatively coupled. """
 
+    kzz_history : np.ndarray
+    """ Eddy diffusion at the cell levels [cm²/s] (NZ+1, NT) -- what the
+    microphysics actually mixed with at each output.  Equal to ``add_kzz``'s
+    profile throughout unless ``set_radiation(self_consistent_kzz=True)``, in
+    which case it follows the evolving profile; see ``carmapy.kzz``.  None if
+    the run was not radiatively coupled. """
+
     convective : np.ndarray
     """ Which layers the convective adjustment left neutrally stable, at each
     output (NZ, NT), bool.  There may be more than one contiguous zone; see
@@ -481,6 +488,7 @@ class Results:
         self.T_history = None
         self.dTdt      = None
         self.flux_net  = None
+        self.kzz_history = None
         self.F_TOA     = None
         self.convective = None
         self.nzone     = None
@@ -517,6 +525,10 @@ class Results:
             dTdt      = np.zeros((NZ, n_tstep))
             convective = np.zeros((NZ, n_tstep), dtype=bool)
             flux_net  = np.zeros((NZ + 1, n_tstep))
+            kzz       = np.zeros((NZ + 1, n_tstep))
+            # Absent from output written before Kzz followed the profile, in
+            # which case the level block is three columns wide instead of four.
+            has_kzz   = False
             F_TOA     = np.zeros(n_tstep)
             nzone     = np.zeros(n_tstep, dtype=int)
             conv_resid = np.zeros(n_tstep)
@@ -546,7 +558,10 @@ class Results:
                     break
 
                 levels = np.fromstring(' '.join(lines[NZ:]), sep=' ')
-                if levels.size != 3 * (NZ + 1):
+                if levels.size % (NZ + 1) != 0:
+                    break
+                ncol = levels.size // (NZ + 1)
+                if ncol not in (3, 4):
                     break
 
                 block = block.reshape(NZ, 5)
@@ -554,8 +569,11 @@ class Results:
                 T_history[:, it] = block[:, 2]
                 dTdt[:, it]      = block[:, 3]
 
-                levels = levels.reshape(NZ + 1, 3)
+                levels = levels.reshape(NZ + 1, ncol)
                 flux_net[:, it]  = levels[:, 2]
+                if ncol == 4:
+                    kzz[:, it] = levels[:, 3]
+                    has_kzz = True
                 # Fixed for the run; the levels the convective zones are
                 # bounded by, which nothing else on Results carries.
                 self.P_levels_rad = levels[:, 1]
@@ -564,6 +582,7 @@ class Results:
         self.T_history = T_history[:, :nt]
         self.dTdt      = dTdt[:, :nt]
         self.flux_net  = flux_net[:, :nt]
+        self.kzz_history = kzz[:, :nt] if has_kzz else None
         self.F_TOA     = F_TOA[:nt]
         self.convective = convective[:, :nt]
         self.nzone     = nzone[:nt]

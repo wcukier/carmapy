@@ -193,6 +193,114 @@ def test_cadence_is_reported(coupled_carma):
     assert np.all(r.rad_interval <= coupled_carma.rad_gap_max)
 
 
+def test_kzz_follows_the_profile(coupled_carma):
+    """The eddy diffusion the microphysics mixes with must be the recomputed
+    one, not the profile ``add_kzz`` supplied.
+
+    This is the whole coupling in one assertion: ``rce_kzz`` produces a profile,
+    the driver copies it into ``ekz``, and ``ekz`` is what the output records.
+    A break anywhere along that chain leaves the input profile in the file.
+    """
+    from carmapy.results import Results
+
+    coupled_carma.run(suppress_output=True)
+    r = Results(coupled_carma)
+
+    nt = r.T_history.shape[1]
+    assert r.kzz_history is not None
+    assert r.kzz_history.shape == (coupled_carma.NZ + 1, nt)
+    assert np.all(np.isfinite(r.kzz_history))
+    assert np.all(r.kzz_history > 0)
+
+    assert not np.allclose(r.kzz_history[:, -1], coupled_carma.kzz_levels)
+
+    # And it keeps moving with the profile rather than being computed once.
+    assert not np.allclose(r.kzz_history[:, 0], r.kzz_history[:, -1])
+
+
+def test_static_kzz_holds_the_input_profile(tmp_path, example_levels, ck_table):
+    """``self_consistent_kzz=False`` must leave the supplied profile alone.
+
+    The A/B against ``test_kzz_follows_the_profile``: the same coupled run with
+    the recomputation off has to reproduce ``add_kzz``'s profile exactly at
+    every output, which is what makes the difference in that test attributable
+    to the recomputation rather than to the run having moved.
+    """
+    from carmapy.carmapy import Carma
+    from carmapy.chemistry import populate_abundances_at_cloud_base
+    from carmapy.results import Results
+
+    P, T, kzz, mu = example_levels
+    c = Carma(str(tmp_path / "static_kzz"))
+    c.set_physical_params(surface_grav=31600, wt_mol=float(np.mean(mu)))
+    c.set_atmospheric_parameters_from_defaults("Pure H2")
+    c.set_stepping(dt=250, output_gap=5, n_tstep=20)
+    c.add_gas("TiO2")
+    c.add_hom_group("TiO2", 1e-8)
+    c.add_P(P)
+    c.add_T(T)
+    c.add_kzz(kzz)
+    c.calculate_z(mu)
+    populate_abundances_at_cloud_base(c)
+    c.set_radiation(t_int=T_INT, ck_table_path=ck_table, accel=20.0,
+                    dT_max=5.0, self_consistent_kzz=False)
+    c.run(suppress_output=True)
+
+    r = Results(c)
+    for it in range(r.kzz_history.shape[1]):
+        np.testing.assert_allclose(r.kzz_history[:, it], c.kzz_levels,
+                                   rtol=1e-12)
+
+
+def test_self_consistent_kzz_survives_load_carma(coupled_carma):
+    from carmapy.base import load_carma
+
+    coupled_carma.run(suppress_output=True)
+    reloaded = load_carma(coupled_carma.name, restart=1)
+    assert reloaded.self_consistent_kzz is True
+    assert reloaded.kzz_mixl_scale == pytest.approx(1.0)
+
+
+def test_kzz_mixl_scale_reaches_the_fortran(tmp_path, example_levels, ck_table):
+    """The mixing length scale must move the Kzz the run actually mixes with.
+
+    Two otherwise identical coupled runs differing only in ``kzz_mixl_scale``.
+    Kzz goes as the 4/3 power of the mixing length and nothing else in the
+    expression touches it, so at the *first* output -- before the two columns
+    have had time to diverge -- the ratio must be exactly ``f**(4/3)``. Later
+    outputs drift apart, which is the point of the knob but not a fixed number
+    to assert on.
+    """
+    from carmapy.base import load_carma
+    from carmapy.carmapy import Carma
+    from carmapy.chemistry import populate_abundances_at_cloud_base
+    from carmapy.results import Results
+
+    P, T, kzz, mu = example_levels
+    f = 2.0
+
+    def run(scale, tag):
+        c = Carma(str(tmp_path / tag))
+        c.set_physical_params(surface_grav=31600, wt_mol=float(np.mean(mu)))
+        c.set_atmospheric_parameters_from_defaults("Pure H2")
+        c.set_stepping(dt=250, output_gap=5, n_tstep=10)
+        c.add_gas("TiO2")
+        c.add_hom_group("TiO2", 1e-8)
+        c.add_P(P); c.add_T(T); c.add_kzz(kzz); c.calculate_z(mu)
+        populate_abundances_at_cloud_base(c)
+        c.set_radiation(t_int=T_INT, ck_table_path=ck_table, accel=20.0,
+                        dT_max=5.0, kzz_mixl_scale=scale)
+        c.run(suppress_output=True)
+        return Results(c)
+
+    base = run(1.0, "mixl_1")
+    scaled = run(f, "mixl_2")
+
+    np.testing.assert_allclose(scaled.kzz_history[:, 0] / base.kzz_history[:, 0],
+                               f ** (4 / 3), rtol=1e-9)
+    assert load_carma(str(tmp_path / "mixl_2")).kzz_mixl_scale == pytest.approx(f)
+
+
 def test_final_profiles_track_the_coupled_run(coupled_carma):
     """The PICASO writers must not be handed the input profile and the grid
     calculate_z built from it -- the Fortran moved both."""
