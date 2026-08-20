@@ -78,7 +78,8 @@ PROBE_SW = textwrap.dedent("""\
                      * log(pl(iz) / pl(iz+1))
       end do
 
-      call rce_fluxes(rce, p, pl, t, radius, qext, ssa, asym, fnet, tnum, tden)
+      call rce_optics_prep(rce, radius, qext, ssa, asym)
+      call rce_fluxes(rce, p, pl, t, fnet, tnum, tden)
 
       write(32,'(4e26.17)') rce%absorbed_sw, rce%reflected_sw, &
                             sum(rce%f0), fnet(nz+1)

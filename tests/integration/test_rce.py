@@ -315,10 +315,12 @@ PROBE_JAC = textwrap.dedent("""\
       end do
       rce%numden_grp(:,:,:) = 0._f
 
-      call rce_solve(rce, p, pl, t, radius, qext, ssa, asym)
+      call rce_optics_prep(rce, radius, qext, ssa, asym)
+
+      call rce_solve(rce, p, pl, t)
       h0(:) = rce%dtdt(:)
 
-      call rce_jacobian(rce, p, pl, t, radius, qext, ssa, asym)
+      call rce_jacobian(rce, p, pl, t)
 
       ! The Jacobian's own prediction for a finite step, J*dT ...
       do iz = 1, nz
@@ -330,7 +332,7 @@ PROBE_JAC = textwrap.dedent("""\
 
       ! ... against what the solver actually does for that same step.
       tp(:) = t(:) + dt_in(:)
-      call rce_fluxes(rce, p, pl, tp, radius, qext, ssa, asym, f1, tn, td)
+      call rce_fluxes(rce, p, pl, tp, f1, tn, td)
       f1(1) = rce%fnet(1)
       do iz = 1, nz
         dmass  = (pl(iz) - pl(iz+1)) / (grav_cgs * 1.e-2_f)

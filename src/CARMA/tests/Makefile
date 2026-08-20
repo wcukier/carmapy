@@ -13,5 +13,8 @@ atmosphere_mod.o : atmosphere_mod.F90
 carma_testutils.o : carma_testutils.F90
 	$(FORTRAN) $(FFLAGS) -c $<
 
-carma_carmapy.o : carma_carmapy.F90 atmosphere_mod.mod carma_mod.mod carma_planet_mod.mod carma_condensate_mod.mod carma_constants_mod.mod carma_precision_mod.mod 
+carma_carmapy.o : carma_carmapy.F90 atmosphere_mod.mod carma_mod.mod carma_planet_mod.mod \
+	carma_condensate_mod.mod carma_constants_mod.mod carma_precision_mod.mod \
+	carma_enums_mod.mod carma_types_mod.mod carmaelement_mod.mod carmagroup_mod.mod \
+	carmastate_mod.mod carmagas_mod.mod carmasolute_mod.mod carma_rce.mod 
 	$(FORTRAN) $(FFLAGS) -c $<
