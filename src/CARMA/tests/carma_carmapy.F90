@@ -321,7 +321,7 @@ subroutine test_day()
   write(*,*) ""
 
   ! Defaults for namelist params that may be missing from older input.nml files.
-  t_evolves = 0   ! 0 = T,P fixed across the run -> setupgkern caches its outputs
+  t_evolves = 0   ! 0 = T,P fixed across the run -> fixed initialization, setupgkern caches its outputs
   optics_file = ""  ! only read when NWAVE > 0, i.e. radiatively coupled runs
 
   do_radiation  = 0        ! 0 = fixed T,P -- the whole radiation group is inert
@@ -753,7 +753,11 @@ subroutine test_day()
   ! Setup the CARMA processes to exercise
   write(*,*) "Initialize CARMA ..."
 
-  call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, do_fixedinit=.TRUE., do_grow=.TRUE., &
+  ! do_fixedinit initializes the fall velocities, diffusion coefficients and
+  ! growth kernels once from the reference atmosphere. That is only valid while
+  ! T and P are fixed, so a T-evolving run pays for per-step initialization.
+  call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, &
+                        do_fixedinit=(t_evolves .eq. 0), do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
                         do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=10, &
                         itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc, &

@@ -133,7 +133,12 @@ class Carma:
     """ 1 if and only if a restarted run should add to existing files (default 0)"""
 
     t_evolves: bool
-    """ True if T/P change between timesteps (e.g. radiative coupling). Default False. """
+    """ True if T/P change between timesteps (e.g. radiative coupling). Default False.
+
+    When False, CARMA initializes fall velocities, diffusion coefficients and
+    growth kernels once from the reference atmosphere and reuses them for the
+    whole run.  True recomputes them every step, at a cost in runtime.
+    """
 
     groups: dict[str, "Group"]
     """ Dictionary of group objects indexed by group name used in the sim """
@@ -1353,9 +1358,10 @@ class Carma:
 
         Notes
         -----
-        Enabling radiation sets ``t_evolves`` to True.  Without it
-        ``setupgkern`` caches its growth kernels from step 1 and serves them
-        for the whole run, which would leave the coupling silently inert.
+        Enabling radiation sets ``t_evolves`` to True.  Without it CARMA
+        initializes fall velocities, diffusion coefficients and growth kernels
+        once from the reference atmosphere and serves them for the whole run,
+        which would leave the coupling silently inert.
         """
         if mode not in RAD_MODES:
             raise ValueError(f"mode must be one of {list(RAD_MODES)}, got {mode!r}")
