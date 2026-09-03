@@ -136,7 +136,7 @@ class Results:
     """ Eddy diffusion at the cell levels [cm²/s] (NZ+1, NT) -- what the
     microphysics actually mixed with at each output.  Equal to ``add_kzz``'s
     profile throughout unless ``set_radiation(self_consistent_kzz=True)``, in
-    which case it follows the evolving profile; see ``carmapy.kzz``.  None if
+    which case it follows the evolving profile; see ``rce_kzz``.  None if
     the run was not radiatively coupled. """
 
     convective : np.ndarray

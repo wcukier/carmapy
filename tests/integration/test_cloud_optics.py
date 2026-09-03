@@ -5,9 +5,9 @@ checked against a numpy transcription of that function's sums rather than
 against a tolerance pulled from thin air -- both compute the same quantity from
 the same inputs, so agreement should be at round-off.
 
-Unlike ``test_radiation_port.py`` these need neither pyharp nor torch: the whole
-point of Phase 2 is that the run path has no such dependency.  ``gfortran`` is
-still required for the solver test; the file-format test is pure Python.
+Unlike ``test_radiation_port.py`` these need neither pyharp nor torch -- the
+cloud-optics path carries no such dependency.  ``gfortran`` is still required
+for the solver test; the file-format test is pure Python.
 """
 import subprocess
 import textwrap

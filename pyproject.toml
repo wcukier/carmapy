@@ -28,6 +28,10 @@ dependencies = [
     "scipy",
     "pyfastchem",
     "f90nml",
+    # NOTE: PyMieScatt is unmaintained and calls scipy.integrate.trapz, which
+    # scipy removed in 1.14. carmapy.mie restores the name before importing it
+    # (see _import_pymiescatt). Deliberately unpinned -- the shim is expected
+    # to outlive any version bound we could pick here.
     "PyMieScatt"
 ]
 readme = "README.md"

@@ -160,7 +160,7 @@ PROBE_KZZ = textwrap.dedent("""\
       open(unit=32, file='kzz_out.txt', status='replace')
 
       read(31,'(A)') table_path
-      read(31,*) nz, adiabat, rce%t_int, rce%wtmol, grav_cgs, rce%kzz_mixl_scale
+      read(31,*) nz, adiabat, rce%t_int, rce%wtmol, grav_cgs, rce%kzz_mixl_scale, rce%kzz_lapse_smooth
 
       ! rce%grav is SI; the namelist and the Python reference are both cgs.
       rce%grav    = grav_cgs * 1.e-2_f
@@ -197,7 +197,7 @@ PROBE_RUN = textwrap.dedent("""\
       use carma_rce
       implicit none
       type(rce_type) :: rce
-      integer :: nz, nbin, ngroup, nband, nelem, igridv, mode, gap_max
+      integer :: nz, nbin, ngroup, nband, nelem, igridv, gap_max
       integer :: nstep, istep, iz, rc
       real(kind=f) :: t_int, cp_cgs, grav_cgs, wtmol
       real(kind=f) :: accel, dt_max, dt_tol, dtau_tol, dtime
@@ -212,7 +212,7 @@ PROBE_RUN = textwrap.dedent("""\
       open(unit=32, file='run_out.txt', status='replace')
 
       read(31,'(a)') ck_path
-      read(31,*) nz, nbin, ngroup, nband, nelem, igridv, mode, gap_max, nstep
+      read(31,*) nz, nbin, ngroup, nband, nelem, igridv, gap_max, nstep
       read(31,*) t_int, cp_cgs, grav_cgs, wtmol
       read(31,*) accel, dt_max, dt_tol, dtau_tol, dtime
 
@@ -240,8 +240,8 @@ PROBE_RUN = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, 0._f, 0._f, 0.5_f, 0._f, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
-                    mode, accel, dt_max, dt_tol, dtau_tol, gap_max, rc)
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, 0, &
+                    accel, dt_max, dt_tol, dtau_tol, gap_max, rc)
       if (rc < 0) stop "    *** FAILED rce_init ***"
 
       do istep = 1, nstep
@@ -306,8 +306,8 @@ PROBE_JAC = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, 0._f, 0._f, 0.5_f, 0._f, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
-                    0, 1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, 0, &
+                    1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
       if (rc < 0) stop 'rce_init failed'
 
       do iz = 1, nz
@@ -575,7 +575,7 @@ def _kzz_case(nz=40, t_int=1200.0, wt_mol=2.2, grav=1e5, f_frac=None):
                 pl_pa=pl_pa, p_pa=p_pa, t=t, fnet=fnet)
 
 
-def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0):
+def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0, lapse_smooth=0):
     """Run the Fortran probe on ``case``, returning ``(kzz, rescale)``."""
     from carmapy.adiabat import ADIABAT_CODES, TABLE_FILE
 
@@ -583,7 +583,8 @@ def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0):
         f.write(f"{TABLE_FILE}\n")
         f.write(f"{case['nz']} {ADIABAT_CODES[adiabat]} "
                 f"{float(case['t_int'])!r} {float(case['wt_mol'])!r} "
-                f"{float(case['grav'])!r} {float(mixl_scale)!r}\n")
+                f"{float(case['grav'])!r} {float(mixl_scale)!r} "
+                f"{int(lapse_smooth)}\n")
         f.write(_fmt(case["p_pa"]))
         f.write(_fmt(case["pl_pa"]))
         f.write(_fmt(case["t"]))
@@ -596,21 +597,23 @@ def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0):
     return got, float(tokens[case["nz"] + 1])
 
 
-def _kzz_reference(case, adiabat, mixl_scale=1.0):
-    """``carmapy.kzz`` on the same column. Pa -> barye at the boundary."""
-    from carmapy.kzz import mixing_length_kzz
+def _kzz_reference(case, adiabat, mixl_scale=1.0, lapse_smooth=0):
+    """The reference implementation on the same column. Pa -> barye at the boundary."""
+    from tests.reference.kzz import mixing_length_kzz
 
     return mixing_length_kzz(case["p_pa"] * 10.0, case["t"],
                              case["pl_pa"] * 10.0, case["fnet"],
                              t_int=case["t_int"], wt_mol=case["wt_mol"],
                              surface_grav=case["grav"], adiabat=adiabat,
-                             mixl_scale=mixl_scale, return_rescale=True)
+                             mixl_scale=mixl_scale, lapse_smooth=lapse_smooth,
+                             return_rescale=True)
 
 
 @pytest.mark.parametrize("adiabat", ["parmentier", "table"])
 @pytest.mark.parametrize("mixl_scale", [1.0, 0.4, 2.5])
-def test_kzz_matches_python(kzz_probe, adiabat, mixl_scale):
-    """``rce_kzz`` against ``carmapy.kzz.mixing_length_kzz``.
+@pytest.mark.parametrize("lapse_smooth", [0, 3])
+def test_kzz_matches_python(kzz_probe, adiabat, mixl_scale, lapse_smooth):
+    """``rce_kzz`` against ``tests.reference.kzz.mixing_length_kzz``.
 
     A pure port check: both sides evaluate the same closed-form expression on
     the same column, so the only differences allowed are the ones arithmetic
@@ -627,8 +630,9 @@ def test_kzz_matches_python(kzz_probe, adiabat, mixl_scale):
     """
     case = _kzz_case()
 
-    got, got_rescale = _run_kzz_probe(kzz_probe, case, adiabat, mixl_scale)
-    ref, ref_rescale = _kzz_reference(case, adiabat, mixl_scale)
+    got, got_rescale = _run_kzz_probe(kzz_probe, case, adiabat, mixl_scale,
+                                      lapse_smooth)
+    ref, ref_rescale = _kzz_reference(case, adiabat, mixl_scale, lapse_smooth)
 
     np.testing.assert_allclose(got, ref, rtol=1e-11)
     assert got_rescale == pytest.approx(ref_rescale, rel=1e-12)
@@ -650,9 +654,105 @@ def test_kzz_mixl_scale_is_a_four_thirds_power(kzz_probe):
         np.testing.assert_allclose(scaled / base, f ** (4 / 3), rtol=1e-9)
 
 
+def test_lapse_smoothing_reduces_roughness(kzz_probe):
+    """Smoothing the lapse rate must take scatter out of Kzz.
+
+    The column is built with layer-to-layer structure in *temperature*, which
+    is where the real noise lives: the lapse rate is a finite difference of the
+    profile, so a wobble of a few kelvin between neighbours becomes a large
+    wobble in ``dlnT/dlnP`` and, through the mixing length, in Kzz.
+
+    Roughness is the mean absolute level-to-level step in log10 Kzz, which is
+    what "spiky" means for a quantity spanning orders of magnitude.
+
+    Averaged over several noise realisations rather than asserted on one. For
+    any single realisation the improvement is not monotonic in the window
+    width: widening it moves individual layers across the clips downstream,
+    which can add a level-to-level step as easily as remove one. The effect is
+    a reliable fraction, not a reliable ordering.
+    """
+    base = _kzz_case()
+
+    ratios = []
+    for seed in (4, 5, 6, 7, 11):
+        case = dict(base)
+        rng = np.random.default_rng(seed)
+        case["t"] = base["t"] * (1.0 + 0.004 * rng.standard_normal(base["nz"]))
+
+        rough = []
+        for w in (0, 8):
+            kz, _ = _run_kzz_probe(kzz_probe, case, "parmentier", 1.0, w)
+            rough.append(float(np.abs(np.diff(np.log10(kz))).mean()))
+
+        assert rough[1] < rough[0], (seed, rough)
+        ratios.append(rough[1] / rough[0])
+
+    assert np.mean(ratios) < 0.9, ratios
+
+
+def test_lapse_smoothing_cannot_beat_the_clips():
+    """Why the knob helps but cannot finish the job: the clips are downstream.
+
+    ``min(1, .)`` and ``max(0.1, .)`` are applied after the smoothing, so a
+    layer that crosses one of them puts a kink into the mixing length however
+    smooth the lapse rate feeding it was. Widening the window moves layers off
+    the clip -- most of them, on this column -- but never empties it, which is
+    why the roughness above improves by a fraction rather than vanishing.
+    """
+    from tests.reference.kzz import _grad_ad, _lapse_rate, smooth_profile
+
+    case = _kzz_case()
+    rng = np.random.default_rng(5)
+    t = case["t"] * (1.0 + 0.004 * rng.standard_normal(case["nz"]))
+    p = case["p_pa"] * 10.0
+    grad = _grad_ad(t, p, "parmentier")
+
+    clipped = []
+    for w in (0, 4, 16):
+        lapse = smooth_profile(_lapse_rate(t, p), w) / grad
+        clipped.append(int((lapse >= 1.0).sum()))
+
+    assert clipped[0] > 0, "column does not reach the clip; test says nothing"
+    assert clipped[-1] < clipped[0], clipped
+    assert clipped[-1] > 0, clipped
+
+
+def test_smooth_profile_properties():
+    """The three properties the running mean is relied on for.
+
+    Endpoints exact, so the one-sided end derivatives of the lapse rate come
+    back unchanged. Linear profiles untouched, which is what makes this a
+    smoother rather than a filter with a bias -- a symmetric window reproduces
+    a straight line exactly, so a real gradient survives it. And noise about a
+    level suppressed without moving the level.
+
+    Note it is deliberately *not* asserted that the sum is conserved: a running
+    mean over a convex profile raises it, which is a property of the operator
+    and not a defect.
+    """
+    from tests.reference.kzz import smooth_profile
+
+    ramp = 3.0 + 0.5 * np.arange(40)
+    for w in (1, 4, 9):
+        np.testing.assert_allclose(smooth_profile(ramp, w), ramp, rtol=1e-13)
+
+    rng = np.random.default_rng(1)
+    noisy = 1e6 + 1e5 * rng.standard_normal(200)
+    for w in (1, 3, 10):
+        out = smooth_profile(noisy, w)
+        assert out[0] == noisy[0]
+        assert out[-1] == noisy[-1]
+        assert out.std() < noisy.std()
+        assert out.mean() == pytest.approx(noisy.mean(), rel=0.01)
+
+    np.testing.assert_array_equal(smooth_profile(noisy, 0), noisy)
+    with pytest.raises(ValueError, match="non-negative"):
+        smooth_profile(noisy, -1)
+
+
 def test_kzz_mixl_scale_must_be_positive():
     """A non-positive scale would put zero or a negative into a 4/3 power."""
-    from carmapy.kzz import mixing_length_kzz
+    from tests.reference.kzz import mixing_length_kzz
 
     case = _kzz_case()
     for bad in (0.0, -1.0):
@@ -819,7 +919,7 @@ def _relax(probe, kappa_ln=-57.0, t_int=1000.0, nstep=16000, accel=20.0,
 
     with open(probe / "run_case.txt", "w") as f:
         f.write("grey.ck\n")
-        f.write(f"{nz} 1 1 {nband} 1 {I_CART} 0 {gap_max} {nstep}\n")
+        f.write(f"{nz} 1 1 {nband} 1 {I_CART} {gap_max} {nstep}\n")
         f.write(f"{t_int!r} {cp_cgs!r} {grav_cgs!r} {wtmol!r}\n")
         f.write(f"{accel!r} {dt_max!r} 1.0 0.02 {dtime!r}\n")
         for arr in (p, pl, t, zl, zc):

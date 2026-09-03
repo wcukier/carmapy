@@ -9,8 +9,7 @@ number-fraction weighted sum.
 
 The mixture case matters more than it looks. The only composition shipped is
 solar H/He, so a single-species bug would be invisible in every production run
-while still being wrong the moment anyone supplies a different mixture -- which
-is exactly what Phase 8 is for.
+while still being wrong the moment anyone supplies a different mixture.
 """
 import shutil
 import subprocess

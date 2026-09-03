@@ -9,12 +9,14 @@ port bug.
 Skipped unless both ``gfortran`` and ``pyharp`` are available -- ``pyharp`` is
 an optional extra (``pip install carmapy[radiation]``).
 
-Note on the gas-giant bottom boundary: pyHARP releases before the
-``hard_surface=false`` branch existed treat that flag as a no-op and always use
-the terrestrial surface. Where the installed pyHARP is such a release, these
-tests compare on ``hard_surface=true``, which both implement identically. The
-gas-giant branch is what a brown dwarf actually needs, and is covered instead
-by the energy-conservation check (net upward flux at the base == sigma*Teff^4).
+Note on the gas-giant bottom boundary: older pyHARP releases shadowed the
+``hard_surface`` parameter in their longwave dispatch and always took the
+terrestrial branch, since fixed upstream. ``_pyharp_supports_gas_giant``
+detects which build is installed; against an affected one these tests compare
+on ``hard_surface=true``, which every release implements identically. The
+gas-giant branch is what a brown dwarf actually needs, and is covered there
+instead by the energy-conservation check (net upward flux at the base ==
+sigma*Teff^4).
 """
 import math
 import shutil

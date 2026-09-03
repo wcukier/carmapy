@@ -23,8 +23,6 @@ from typing import Union
 
 SRC = os.path.dirname(os.path.dirname(__file__))
 
-_int2rad_mode = {v: k for k, v in RAD_MODES.items()}
-
 _int2adiabat = {v: k for k, v in ADIABAT_CODES.items()}
 
 _int2bc = {
@@ -108,7 +106,6 @@ def load_carma(path: str, restart: int =0) -> Carma:
         carma.t_star = rad.get("t_star", 0.0)
         carma.mu0 = rad.get("rad_mu0", 0.5)
         carma.w_surf = rad.get("rad_w_surf", 0.0)
-        carma.rad_mode = _int2rad_mode[rad["rad_mode"]]
         carma.rad_accel = rad["rad_accel"]
         carma.rad_dT_max = rad["rad_dt_max"]
         carma.rad_dT_tol = rad["rad_dt_tol"]
@@ -119,6 +116,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
         # written before Kzz followed the profile held it fixed.
         carma.self_consistent_kzz = bool(rad.get("kzz_mode", 0))
         carma.kzz_mixl_scale = rad.get("kzz_mixl_scale", 1.0)
+        carma.kzz_lapse_smooth = rad.get("kzz_lapse_smooth", 0)
 
     io = nml["io_files"]
 

@@ -58,12 +58,6 @@ def test_set_radiation_forces_t_evolves(coupled_carma):
     assert coupled_carma.t_evolves is True
 
 
-def test_set_radiation_rejects_accel_in_physical_mode(coupled_carma, ck_table):
-    with pytest.raises(ValueError, match="only meaningful in equilibrium"):
-        coupled_carma.set_radiation(t_int=T_INT, ck_table_path=ck_table,
-                                    mode="physical", accel=20.0)
-
-
 def test_namelist_has_no_radiative_convective_boundary(coupled_carma):
     """The boundary is diagnosed, not configured, so nothing may carry it in.
 
@@ -90,11 +84,20 @@ def test_radiation_survives_load_carma(coupled_carma):
 
     assert reloaded.t_int == pytest.approx(T_INT)
     assert not hasattr(reloaded, "p_rcb")
-    assert reloaded.rad_mode == "equilibrium"
     assert reloaded.rad_accel == pytest.approx(20.0)
     assert reloaded.cloud_rad is True
     assert reloaded.t_evolves is True
     assert os.path.exists(reloaded.ck_table_path)
+
+    # Every knob the Fortran is configured by, not just the headline ones: a
+    # restart that quietly reverted one of these to its default would produce
+    # a plausible run at the wrong settings.
+    assert reloaded.self_consistent_kzz == coupled_carma.self_consistent_kzz
+    assert reloaded.kzz_mixl_scale == pytest.approx(
+        coupled_carma.kzz_mixl_scale)
+    assert reloaded.kzz_lapse_smooth == coupled_carma.kzz_lapse_smooth
+    assert reloaded.adiabat == coupled_carma.adiabat
+    assert reloaded.rad_gap_max == coupled_carma.rad_gap_max
 
 
 def test_temperature_output_parses(coupled_carma):

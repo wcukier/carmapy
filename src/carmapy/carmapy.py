@@ -38,9 +38,6 @@ def _bc2int(bc):
             return BC_INTS[i]
     raise ValueError(f"{bc} not found")
 
-# Matches I_RCE_EQUILIBRIUM / I_RCE_PHYSICAL in carma_rce.F90.
-RAD_MODES = {"equilibrium": 0, "physical": 1}
-
 
 
 class Carma:
@@ -180,7 +177,6 @@ class Carma:
         self.t_star:        float       = 0.
         self.mu0:           float       = 0.5
         self.w_surf:        float       = 0.
-        self.rad_mode:      str         = "equilibrium"
         self.rad_accel:     float       = 1.
         self.rad_dT_max:    float       = 0.5
         self.rad_dT_tol:    float       = 1.
@@ -189,9 +185,10 @@ class Carma:
 
         # Whether the eddy diffusion profile follows the evolving temperature
         # profile. Only read by a radiatively coupled run; a fixed-T run has
-        # nothing for Kzz to follow. See carmapy.kzz.
+        # nothing for Kzz to follow. See rce_kzz in carma_rce.F90.
         self.self_consistent_kzz: bool  = True
         self.kzz_mixl_scale: float      = 1.0
+        self.kzz_lapse_smooth: int      = 0
 
         # Which adiabat sets the temperature below the convective boundary,
         # and the deep extension built by extend_atmosphere. See
@@ -1224,10 +1221,10 @@ class Carma:
                       t_star: float = 0.0,
                       mu0: float = 0.5,
                       w_surf: float = 0.0,
-                      mode: str = "equilibrium",
                       cloud_rad: bool = True,
                       self_consistent_kzz: bool = True,
                       kzz_mixl_scale: float = 1.0,
+                      kzz_lapse_smooth: int = 0,
                       accel: float | None = None,
                       rad_gap_max: int = 100,
                       rad_dT_tol: float = 1.0,
@@ -1259,9 +1256,11 @@ class Carma:
         ``add_kzz`` then supplies only what the run *starts* from: once the
         first radiative solve lands, Kzz is recomputed from mixing length
         theory on the same cadence and the supplied profile is not used again.
-        Set ``self_consistent_kzz=False`` to hold it for the whole run.  See
-        ``carmapy.kzz.mixing_length_kzz``, which is the same calculation and
-        can be run outside a simulation.
+        Set ``self_consistent_kzz=False`` to hold it for the whole run.  The
+        parameterisation is PICASO's: the mixing length velocity is set by the
+        convective heat flux and the mixing length by how close each layer's
+        lapse rate sits to the adiabatic one.  See ``rce_kzz`` in
+        ``carma_rce.F90``.
 
         Parameters
         ----------
@@ -1311,11 +1310,6 @@ class Carma:
         Composition is fixed at solar H/He.  The Rayleigh cross-section, the
         adiabat table and the correlated-k table all assume it, so a
         higher-metallicity atmosphere needs all three changed together.
-        mode : str, optional
-            ``"equilibrium"`` multiplies the heating rate by ``accel`` to reach
-            radiative-convective equilibrium in a tractable number of steps;
-            ``"physical"`` honours the true time history.  Spin up in the
-            first, produce science in the second.  By default "equilibrium"
         cloud_rad : bool, optional
             If False the clouds are still simulated in full but contribute no
             opacity.  Running the same case with it True and False isolates
@@ -1337,10 +1331,20 @@ class Carma:
             the mixing length, so 2 here is a factor 2.52 in Kzz, not 2.
             Ignored when ``self_consistent_kzz`` is False.  By default 1, which
             is the parameterisation as PICASO has it.
+        kzz_lapse_smooth : int, optional
+            Half-width, in layers, of a centred running mean applied to the
+            lapse rate that sets the mixing length, which is what dominates the
+            spikiness of Kzz on a real column.  Expect a wide window to be
+            needed, and diminishing returns from it: much of the residual comes
+            from layers crossing the clips downstream and is not reachable by
+            smoothing the input.  0 reproduces PICASO, which smooths nothing.
+            Ignored when ``self_consistent_kzz`` is False.  By default 0.
         accel : float, optional
-            Factor decoupling the radiative clock from the microphysical one.
-            Only meaningful in ``"equilibrium"`` mode.  Defaults to 1 (no
-            acceleration).
+            Factor decoupling the radiative clock from the microphysical one,
+            to reach radiative-convective equilibrium in a tractable number of
+            steps.  Spin up with it raised, produce science at 1, where the two
+            clocks stay together and the time history is physical.  Defaults
+            to 1.
         rad_gap_max : int, optional
             Hard ceiling on the number of timesteps between full solves,
             by default 100
@@ -1363,9 +1367,6 @@ class Carma:
         once from the reference atmosphere and serves them for the whole run,
         which would leave the coupling silently inert.
         """
-        if mode not in RAD_MODES:
-            raise ValueError(f"mode must be one of {list(RAD_MODES)}, got {mode!r}")
-
         if t_int <= 0:
             raise ValueError("t_int must be positive")
 
@@ -1386,10 +1387,6 @@ class Carma:
 
         if accel is None:
             accel = 1.0
-        elif mode == "physical" and accel != 1.0:
-            raise ValueError(
-                "accel is only meaningful in equilibrium mode; physical mode "
-                "keeps the radiative and microphysical clocks together")
 
         if rad_gap_max < 1:
             raise ValueError("rad_gap_max must be at least 1")
@@ -1398,16 +1395,20 @@ class Carma:
             raise ValueError("kzz_mixl_scale must be positive, got "
                              f"{kzz_mixl_scale}")
 
+        if kzz_lapse_smooth < 0:
+            raise ValueError("kzz_lapse_smooth must be non-negative, got "
+                             f"{kzz_lapse_smooth}")
+
         self.t_int = t_int
         self.t_irr = t_irr
         self.t_star = t_star
         self.mu0 = mu0
         self.w_surf = w_surf
         self.ck_table_path = ck_table_path
-        self.rad_mode = mode
         self.cloud_rad = cloud_rad
         self.self_consistent_kzz = self_consistent_kzz
         self.kzz_mixl_scale = kzz_mixl_scale
+        self.kzz_lapse_smooth = kzz_lapse_smooth
         self.rad_accel = accel
         self.rad_gap_max = rad_gap_max
         self.rad_dT_tol = rad_dT_tol
@@ -1605,7 +1606,6 @@ class Carma:
                 "t_star":               self.t_star,
                 "rad_mu0":              self.mu0,
                 "rad_w_surf":           self.w_surf,
-                "rad_mode":             RAD_MODES[self.rad_mode],
                 "rad_accel":            self.rad_accel,
                 "rad_dT_max":           self.rad_dT_max,
                 "rad_dT_tol":           self.rad_dT_tol,
@@ -1613,6 +1613,7 @@ class Carma:
                 "rad_gap_max":          self.rad_gap_max,
                 "kzz_mode":             int(self.self_consistent_kzz),
                 "kzz_mixl_scale":       self.kzz_mixl_scale,
+                "kzz_lapse_smooth":     self.kzz_lapse_smooth,
                 "adiabat":              ADIABAT_CODES[self.adiabat],
                 "adiabat_file":         (os.path.abspath(TABLE_FILE)
                                          if self.adiabat == ADIABAT_TABLE

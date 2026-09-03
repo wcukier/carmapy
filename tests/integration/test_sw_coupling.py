@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from test_rce import (MODULES, RT_SRC, SIGMA_SB, _build, _fmt, write_grey_ck)
+from .test_rce import (MODULES, RT_SRC, SIGMA_SB, _build, _fmt, write_grey_ck)
 
 pytestmark = pytest.mark.integration
 
@@ -67,8 +67,8 @@ PROBE_SW = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, t_irr, t_star, mu0, w_surf, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
-                    0, 1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, 0, &
+                    1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
       if (rc < 0) stop '    *** FAILED rce_init ***'
 
       ! No clouds, and a hydrostatic thickness consistent with the profile.

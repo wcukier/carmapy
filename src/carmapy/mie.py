@@ -1,15 +1,29 @@
 import numpy as np
 import os
 
-import scipy.integrate as _integrate
 
-# PyMieScatt does `from scipy.integrate import trapz`, which scipy 1.14 removed
-# in favour of the identically-behaved `trapezoid`. Without this alias importing
-# PyMieScatt raises, taking this whole module with it.
-if not hasattr(_integrate, "trapz"):
-    _integrate.trapz = _integrate.trapezoid
+def _import_pymiescatt():
+    """Import PyMieScatt, restoring the scipy alias it needs first.
 
-import PyMieScatt as ps
+    PyMieScatt does ``from scipy.integrate import trapz``, which scipy 1.14
+    removed in favour of the identically-behaved ``trapezoid``, so on a modern
+    scipy the import raises and takes this module with it.
+
+    Restoring the name mutates ``scipy.integrate`` for the whole process, which
+    is why it is done here, immediately around the one import that needs it,
+    rather than as a side effect of importing ``carmapy``.
+    """
+    import scipy.integrate
+
+    if not hasattr(scipy.integrate, "trapz"):
+        scipy.integrate.trapz = scipy.integrate.trapezoid
+
+    import PyMieScatt
+
+    return PyMieScatt
+
+
+ps = _import_pymiescatt()
 
 from scipy.interpolate import interp1d
 from .constants import group_dict

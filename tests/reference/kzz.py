@@ -1,16 +1,17 @@
-"""Eddy diffusion from mixing length theory.
+"""Eddy diffusion from mixing length theory -- the reference implementation.
 
-The Python counterpart of ``rce_kzz`` in ``carma_rce.F90``, which is what a
-radiatively coupled run actually mixes with.  Both are ports of PICASO's
-``get_kzz`` (``picaso/climate.py``), so a CARMA column and a PICASO column with
-the same profile mix the same way.
+Test-only.  ``rce_kzz`` in ``carma_rce.F90`` is what a radiatively coupled run
+actually mixes with; this is the independent Python transcription it is checked
+against, so a port bug has to be made twice to go unnoticed.
 
-Two uses:
+Both are ports of PICASO's ``get_kzz`` (``picaso/climate.py``), which is the
+other end of the chain: ``test_rce.py`` pins the Fortran to this module, and
+``test_kzz_picaso.py`` pins this module to PICASO.  Neither link alone would
+support the claim that a CARMA column and a PICASO column with the same profile
+mix the same way.
 
-- the reference the Fortran port is tested against, in the same relationship
-  ``adiabat.py`` has to ``rce_adiabat``;
-- recomputing Kzz outside a run, from a finished :class:`~carmapy.results.Results`
-  or from a profile assembled by hand, to feed the next run's ``add_kzz``.
+``adiabat`` is imported from the real package rather than duplicated here, so
+the port check exercises the production adiabat rather than a second copy.
 
 Everything here is cgs, matching ``add_kzz`` and the ``kzz_levels`` column of
 ``levels.txt``: pressure in barye, Kzz in cm^2/s.  The one exception is
@@ -21,10 +22,11 @@ in and the unit ``Results.flux_net`` reads back.
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .adiabat import ADIABAT_PARMENTIER, ADIABAT_TABLE, grad_ad
-from .constants import PARMENTIER_A_COEFF, PARMENTIER_B_COEFF
+from carmapy.adiabat import ADIABAT_PARMENTIER, ADIABAT_TABLE, grad_ad
+from carmapy.constants import PARMENTIER_A_COEFF, PARMENTIER_B_COEFF
 
-__all__ = ["mixing_length_kzz", "mixing_length_kzz_layers"]
+__all__ = ["mixing_length_kzz", "mixing_length_kzz_layers",
+           "smooth_profile"]
 
 #: Scale factor on the mixing length velocity.
 KZZ_SCALEF = 1.0 / 3.0
@@ -96,6 +98,45 @@ def _lapse_rate(T, P):
     return dtdp
 
 
+def smooth_profile(values: ArrayLike, half_width: int) -> np.ndarray:
+    """Centred running mean with a symmetrically shrinking window.
+
+    Used on the lapse rate before the mixing length is formed from it; see
+    ``rce_kzz`` in ``carma_rce.F90`` for why that is the term worth smoothing.
+
+    The window shrinks symmetrically towards each end, so both endpoints come
+    back exactly and a symmetric window reproduces a straight line unchanged --
+    a genuine smoother rather than a filter with a bias, so a real gradient in
+    the profile survives it.
+
+    Parameters
+    ----------
+    values : ArrayLike
+        The profile to smooth, bottom to top
+    half_width : int
+        Layers either side.  0 returns the input unchanged.
+
+    Returns
+    -------
+    np.ndarray
+        The smoothed profile, same shape and units as the input.
+    """
+    values = np.asarray(values, dtype=float)
+
+    if half_width < 0:
+        raise ValueError(f"half_width must be non-negative, got {half_width}")
+    if half_width == 0 or values.size <= 2:
+        return values.copy()
+
+    out = np.empty_like(values)
+    n = values.size
+    for i in range(n):
+        k = min(half_width, i, n - 1 - i)
+        out[i] = values[i - k:i + k + 1].mean()
+
+    return out
+
+
 def mixing_length_kzz(P_centers: ArrayLike,
                       T_centers: ArrayLike,
                       P_levels: ArrayLike,
@@ -105,6 +146,7 @@ def mixing_length_kzz(P_centers: ArrayLike,
                       surface_grav: float,
                       adiabat: str = ADIABAT_PARMENTIER,
                       mixl_scale: float = 1.0,
+                      lapse_smooth: int = 0,
                       return_rescale: bool = False):
     """Eddy diffusion implied by a radiative-convective profile.
 
@@ -158,6 +200,10 @@ def mixing_length_kzz(P_centers: ArrayLike,
         sensitive its clouds are to the mixing.  Note Kzz goes as ``l**(4/3)``,
         so a scale of ``f`` moves Kzz by ``f**(4/3)``, not by ``f``.
         Must be positive.  By default 1, which is PICASO's own value.
+    lapse_smooth : int, optional
+        Half-width, in layers, of a centred running mean applied to the lapse
+        rate ``dlnT/dlnP`` that sets the mixing length.  See
+        :func:`smooth_profile`.  0 reproduces PICASO.  By default 0.
     return_rescale : bool, optional
         Also return the factor the convective flux had to be scaled by at the
         base of the column, ``sigma*t_int**4 / F_TOA``.  One means the column
@@ -186,7 +232,7 @@ def mixing_length_kzz(P_centers: ArrayLike,
     kz_lay, rescale = mixing_length_kzz_layers(
         P_centers, T_centers, P_levels, fnet_levels,
         t_int=t_int, wt_mol=wt_mol, surface_grav=surface_grav,
-        adiabat=adiabat, mixl_scale=mixl_scale)
+        adiabat=adiabat, mixl_scale=mixl_scale, lapse_smooth=lapse_smooth)
 
     # Linear in (ln Kzz, ln P), held at the end layers' values on the two
     # boundary levels.  Kzz spans orders of magnitude, so extrapolating off the
@@ -212,7 +258,8 @@ def mixing_length_kzz_layers(P_centers: ArrayLike,
                              wt_mol: float,
                              surface_grav: float,
                              adiabat: str = ADIABAT_PARMENTIER,
-                             mixl_scale: float = 1.0):
+                             mixl_scale: float = 1.0,
+                             lapse_smooth: int = 0):
     """The mixing length Kzz on the *layers*, before it is put onto levels.
 
     Where the parameterisation is actually evaluated;
@@ -234,6 +281,9 @@ def mixing_length_kzz_layers(P_centers: ArrayLike,
 
     if mixl_scale <= 0:
         raise ValueError(f"mixl_scale must be positive, got {mixl_scale}")
+    if lapse_smooth < 0:
+        raise ValueError(
+            f"lapse_smooth must be non-negative, got {lapse_smooth}")
 
     nz = p.size
     if t.size != nz:
@@ -274,7 +324,10 @@ def mixing_length_kzz_layers(P_centers: ArrayLike,
     chf = np.maximum(chf * rescale, flx_min)
 
     # ---- mixing length ----------------------------------------------------
-    lapse = np.minimum(1.0, _lapse_rate(t, p) / _grad_ad(t, p, adiabat))
+    # Smoothed before the division rather than after, since grad_ad is smooth
+    # and contributes no noise of its own.
+    dtdp = smooth_profile(_lapse_rate(t, p), lapse_smooth)
+    lapse = np.minimum(1.0, dtdp / _grad_ad(t, p, adiabat))
 
     scale_h = r_atmos * t / surface_grav
     # The scale multiplies the mixing length after the floor, so it applies

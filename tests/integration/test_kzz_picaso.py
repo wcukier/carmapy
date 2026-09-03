@@ -1,7 +1,7 @@
-"""Check ``carmapy.kzz`` against the PICASO routine it is a port of.
+"""Check ``tests.reference.kzz`` against the PICASO routine it is a port of.
 
-``tests/integration/test_rce.py`` pins the Fortran to ``carmapy.kzz``; this
-pins ``carmapy.kzz`` to ``picaso.climate.get_kzz``.  Only the two together
+``tests/integration/test_rce.py`` pins the Fortran to the reference module;
+this pins the reference module to ``picaso.climate.get_kzz``.  Only the two together
 support the claim that a CARMA column and a PICASO column with the same profile
 mix the same way -- the first alone would be satisfied by two identical
 mistakes.
@@ -154,7 +154,7 @@ def test_kzz_matches_picaso(picaso_get_kzz):
     direction -- the index order is reversed between the two, and getting that
     backwards leaves a profile that still looks entirely plausible.
     """
-    from carmapy.kzz import _lapse_rate, mixing_length_kzz_layers
+    from tests.reference.kzz import _lapse_rate, mixing_length_kzz_layers
 
     case = _column()
 

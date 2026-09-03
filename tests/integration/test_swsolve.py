@@ -1,10 +1,11 @@
 """``carma_swsolve``'s Toon-McKay89 shortwave, against pyHARP and against analysis.
 
-The longwave port could only ever be checked on the terrestrial bottom
-boundary, because pyHARP's dispatch has a bug that makes ``hard_surface``
-a no-op (see ``claude/RADIATION_PORT_STATUS.md``). The shortwave dispatch reads
-``data[1..4]`` against exactly four iterator inputs and is correct, so this port
-*can* be checked end to end -- and is, here.
+Against older pyHARP releases the longwave port could only be checked on the
+terrestrial bottom boundary, because their longwave dispatch shadowed the
+``hard_surface`` parameter and always took the terrestrial branch (since fixed
+upstream; ``test_radiation_port`` detects which build is installed). The
+shortwave dispatch was never affected, so this port can be checked end to end
+against any release -- and is, here.
 
 One real limitation. pyHARP expands ``umu0`` to ``{nwave, ncol, nlyr+1, 1}``,
 the same value at every level, so it only ever exercises the uniform-mu branch.

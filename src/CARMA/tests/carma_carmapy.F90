@@ -248,9 +248,13 @@ subroutine test_day()
   ! Radiative-convective coupling. Absent from input.nml unless the run was
   ! configured with Carma.set_radiation(), and inert when do_radiation is 0.
   type(rce_type)      :: rce
-  integer             :: do_radiation, rad_mode, rad_gap_max, ios_rad
-  ! Set in Python; the clouds' opacity is zeroed in optics_file rather than
-  ! branched on here, so this only records which case the run was.
+  integer             :: do_radiation, rad_gap_max, ios_rad, ios_scan, ic_scan
+  logical             :: has_rad_group
+  character(len=256)  :: rad_line
+  ! Diagnostic label and round-trip field, not a control. The clouds' opacity
+  ! is zeroed in optics_file on the Python side rather than branched on here,
+  ! so nothing below reads this; it records which case the run was, and
+  ! load_carma reads it back to restore Carma.cloud_rad.
   integer             :: cloud_rad
   character(len=256)  :: ck_table_file
   real(kind=f)        :: t_int, rad_accel, rad_dT_max
@@ -266,12 +270,15 @@ subroutine test_day()
   ! Multiplier on the mixing length. 1 is the parameterisation as PICASO
   ! has it; Kzz goes as L^(4/3), so this moves it by its 4/3 power.
   real(kind=f)        :: kzz_mixl_scale
+  ! Half-width in layers of the smoothing applied to the lapse rate that sets
+  ! the mixing length. 0 = off, which is PICASO's behaviour.
+  integer             :: kzz_lapse_smooth
   integer             :: nsolve_last   !! rce%nsolve as of the previous output
 
   namelist / radiation / do_radiation, ck_table_file, t_int, &
          t_irr, t_star, rad_mu0, rad_w_surf, &
-         rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
-         rad_gap_max, adiabat, adiabat_file, kzz_mode, kzz_mixl_scale, cloud_rad
+         rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
+         rad_gap_max, adiabat, adiabat_file, kzz_mode, kzz_mixl_scale, kzz_lapse_smooth, cloud_rad
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
@@ -331,7 +338,6 @@ subroutine test_day()
   t_star        = 0._f      ! 0 = shape the beam like t_irr itself
   rad_mu0       = 0.5_f     ! dayside average
   rad_w_surf    = 0._f      ! gas giant: no surface to reflect
-  rad_mode      = I_RCE_EQUILIBRIUM
   rad_accel     = 1._f
   rad_dT_max    = 0.5_f
   rad_dT_tol    = 1._f
@@ -341,6 +347,7 @@ subroutine test_day()
   adiabat_file  = ""
   kzz_mode      = I_KZZ_STATIC
   kzz_mixl_scale = 1._f
+  kzz_lapse_smooth = 0
   cloud_rad     = 1
 
   open(unit=10, file=nml_file, status='old')
@@ -351,6 +358,38 @@ subroutine test_day()
     ! leaves the defaults above and the run behaves exactly as before.
     read(10, nml=radiation, iostat=ios_rad)
   close(10)
+
+  ! A group that is absent is fine. A group that is present but fails to parse
+  ! is not: the read stops at the offending name, so the entries before it are
+  ! assigned and everything after it silently keeps its default. That would run
+  ! a radiatively coupled case at settings nobody asked for, which is far worse
+  ! than stopping. An obsolete or misspelled key is the usual cause.
+  if (ios_rad /= 0) then
+    has_rad_group = .false.
+    open(unit=10, file=nml_file, status='old')
+    do
+      read(10, '(A)', iostat=ios_scan) rad_line
+      if (ios_scan /= 0) exit
+      rad_line = adjustl(rad_line)
+      if (rad_line(1:1) == '&') then
+        do ic_scan = 1, len_trim(rad_line)
+          if (rad_line(ic_scan:ic_scan) >= 'A' .and. &
+              rad_line(ic_scan:ic_scan) <= 'Z') then
+            rad_line(ic_scan:ic_scan) = &
+              achar(iachar(rad_line(ic_scan:ic_scan)) + 32)
+          end if
+        end do
+        if (trim(rad_line) == '&radiation') has_rad_group = .true.
+      end if
+    end do
+    close(10)
+
+    if (has_rad_group) then
+      write(*,*) "*** input.nml has a &radiation group that could not be read;"
+      write(*,*) "*** iostat =", ios_rad, "- likely an obsolete or misspelled key."
+      stop 1
+    end if
+  end if
 
   NZP1 = NZ + 1
 
@@ -877,8 +916,8 @@ subroutine test_day()
     call rce_init(rce, NZ, NBIN, NGROUP, NWAVE, igridv, trim(ck_table_file), &
                   t_int, t_irr, t_star, rad_mu0, rad_w_surf, &
                   CP, grav_set, wtmol_air_set, &
-                  adiabat, trim(adiabat_file), kzz_mode, kzz_mixl_scale, &
-                  rad_mode, rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
+                  adiabat, trim(adiabat_file), kzz_mode, kzz_mixl_scale, kzz_lapse_smooth, &
+                  rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
                   rad_gap_max, rc)
     if (rc < 0) stop "    *** FAILED rce_init ***"
 
