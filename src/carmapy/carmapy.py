@@ -449,8 +449,8 @@ class Carma:
                                 f"\nYour data was {len(wind_centers)} long.")
         else:
             self.NZ = len(wind_centers)
-        
-        self.wind_centers = wind_centers
+
+        self.winds = np.asarray(wind_centers, dtype=float)
 
     
     def add_het_group(self, 
@@ -875,7 +875,7 @@ class Carma:
                         H = (k_B * np.mean(T_new[i, :])
                             / (self.wt_mol * PROTON_MASS * self.surface_grav))
                         
-                kzz_new[i] = self.kzz_levels[0] * (H/H0)**(1/3)
+                kzz_new[i] = self.kzz_levels[0] * (H/H0)**(-1/3)
         
         elif method == "isothermal":
             for i in range(n-1, -1, -1):
