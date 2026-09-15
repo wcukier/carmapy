@@ -20,6 +20,8 @@ subroutine test_day()
   use carmagas_mod
   use carmasolute_mod
   use carma_mod
+  use output_ascii_mod
+  use output_binary_mod
 
   implicit none
 
@@ -41,6 +43,7 @@ subroutine test_day()
   integer   :: igridv
   integer   :: idocoag
   logical   :: do_coag
+  integer   :: ioutput_format  ! 0 = ASCII (default), 1 = binary/HDF5
 
   real(kind=f)   :: dtime 
   real(kind=f), parameter   :: deltax = 100._f
@@ -208,6 +211,7 @@ subroutine test_day()
   character(len=4)	:: filesuffix = '.txt'
   character(len=4)	:: filesuffix_restart = '.dat'
   character(len=100)	:: filename_restart
+  character(len=100)  :: bin_filename
   character(len=100)	:: filename
   character(len=100)  :: nml_file = "inputs/input.nml"
   character(len=100)  :: gas_input_file
@@ -244,7 +248,7 @@ subroutine test_day()
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
          NCOAG, IS_2D, t_evolves, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
-         ibbnd_gc
+         ibbnd_gc, ioutput_format
 
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
   integer :: is_type3, stofact
@@ -259,6 +263,7 @@ subroutine test_day()
   ! engine still owns them per-gas. These arrays buffer the group properties so
   ! they can be translated onto the corresponding gas (the gas grown by each
   ! group's "Volatile" element) when the gases are created below.
+  real(kind=f), allocatable :: r_all(:,:)  ! (NBIN, NGROUP) — all group radii for binary output
   real(kind=f), allocatable :: grp_wtmol(:), grp_rho_cond(:), grp_surften_0(:), grp_coldia(:)
   real(kind=f), allocatable :: grp_vp_offset(:), grp_vp_tcoeff(:), grp_surften_slope(:)
   real(kind=f), allocatable :: grp_vp_metcoeff(:), grp_vp_logpcoeff(:), grp_lat_heat_e(:)
@@ -279,13 +284,16 @@ subroutine test_day()
   write(*,*) ""
 
   ! Defaults for namelist params that may be missing from older input.nml files.
-  t_evolves = 0   ! 0 = T,P fixed across the run -> setupgkern caches its outputs
+  t_evolves = 0        ! 0 = T,P fixed across the run -> setupgkern caches its outputs
+  ioutput_format = 0   ! 0 = ASCII (backward-compatible), 1 = binary/HDF5
 
   open(unit=10, file=nml_file, status='old')
     read(10, nml=input_params)
     read(10, nml=io_files)
     read(10, nml=physical_params)
   close(10)
+
+  bin_filename = trim(filename) // '_step.bin'
 
   NZP1 = NZ + 1
 
@@ -297,6 +305,7 @@ subroutine test_day()
   allocate(tempr(NZ), pre(NZ), prel(NZP1), alt(NZ), altl(NZP1), wtmol_air(NZ), grav(NZ), ekz(NZP1), ekzl(NZP1), wtmol_gas(NGAS))
   allocate(temp_equator(NZ, NLONGITUDE), p_equator_center(NZ), p_equator_level(NZP1), velocity(NLONGITUDE), longitudes(NLONGITUDE))
   allocate(elem2group(NELEM))
+  allocate(r_all(NBIN, NGROUP))
   allocate(grp_wtmol(NGROUP), grp_rho_cond(NGROUP), grp_surften_0(NGROUP), grp_coldia(NGROUP))
   allocate(grp_vp_offset(NGROUP), grp_vp_tcoeff(NGROUP), grp_surften_slope(NGROUP))
   allocate(grp_vp_metcoeff(NGROUP), grp_vp_logpcoeff(NGROUP), grp_lat_heat_e(NGROUP))
@@ -398,10 +407,12 @@ subroutine test_day()
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  ! Open the output text file
-  open(unit=lun,file =  filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-  open(unit=lunf,file =  flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-  open(unit=lunrates,file =  rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+  ! Open the output text files (ASCII mode only)
+  if (ioutput_format .eq. 0) then
+    open(unit=lun,file =  filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+    open(unit=lunf,file =  flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+    open(unit=lunrates,file =  rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+  end if
 
   ! Allocate the arrays that we need for the model
   allocate(xc(NZ), dx(NZ), yc(NZ), dy(NZ), &
@@ -711,27 +722,33 @@ subroutine test_day()
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-! Write output for the test
+! Write ASCII output header (ASCII mode only)
 
-  write(lun,'(7i10)') NZ, NGROUP, NELEM, NBIN, NGAS, nstep + 1, iskip
+  if (ioutput_format .eq. 0) &
+    write(lun,'(7i10)') NZ, NGROUP, NELEM, NBIN, NGAS, nstep + 1, iskip
 
   do igroup = 1, NGROUP
     call CARMAGROUP_Get(carma, igroup, rc, r=r, rlow=rlow, rup=rup, dr=dr, rmass=rmass(:,igroup))
     if (rc < 0) stop "    *** FAILED CARMAGROUP_Get ***"
 
-    do ibin = 1, NBIN
-      write(lun,'(2i4,5e15.5)') igroup, ibin, r(ibin) * 1e4_f, rmass(ibin,igroup), dr(ibin) * 1e4_f, rlow(ibin) * 1e4_f, rup(ibin) * 1e4_f
-    
-    end do
+    r_all(:, igroup) = r(:)
+
+    if (ioutput_format .eq. 0) then
+      do ibin = 1, NBIN
+        write(lun,'(2i4,5e15.5)') igroup, ibin, r(ibin) * 1e4_f, rmass(ibin,igroup), dr(ibin) * 1e4_f, rlow(ibin) * 1e4_f, rup(ibin) * 1e4_f
+      end do
+    end if
   end do
 
   
 
 
 
-  do i = 1, NZ
-    write(lun,'(i3,5e15.5)') i, zc(i), zl(i+1)-zl(i), p(i) * 10._f, t(i), ekz(i)
-  end do
+  if (ioutput_format .eq. 0) then
+    do i = 1, NZ
+      write(lun,'(i3,5e15.5)') i, zc(i), zl(i+1)-zl(i), p(i) * 10._f, t(i), ekz(i)
+    end do
+  end if
 
 
   write(*,*) ""
@@ -762,37 +779,37 @@ subroutine test_day()
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  do ielem = 1, NELEM-1
-    call CARMAELEMENT_Get(carma, ielem, rc, igroup=igroup, name=name)
+  if (ioutput_format .eq. 0) then
+    do ielem = 1, NELEM-1
+      call CARMAELEMENT_Get(carma, ielem, rc, igroup=igroup, name=name)
+      if (rc < 0) stop "    *** FAILED CARMA_ELEMENT_Get ***"
+      write(lun,'(A35)', advance="no") name
+    end do
+
+    call CARMAELEMENT_Get(carma, NELEM, rc, igroup=igroup, name=name)
     if (rc < 0) stop "    *** FAILED CARMA_ELEMENT_Get ***"
-    write(lun,'(A35)', advance="no") name
-  end do
+    write(lun,'(A35)') name
 
-  call CARMAELEMENT_Get(carma, NELEM, rc, igroup=igroup, name=name)
-  if (rc < 0) stop "    *** FAILED CARMA_ELEMENT_Get ***"
-  write(lun,'(A35)') name
+    write(lun,'(i1)') 0
+    write(lunf,'(i1)') 0
+    do j = 1, NBIN
+      do i = 1, NZ
+        write(lun, '(i3,i4)', advance="no") j, i
 
+        do ielem = 1, NELEM
+          write(lun, '(e11.3)', advance="no") real(mmr(i,ielem,j) * rho_atm_cgs(i) / rmass(j,elem2group(ielem)))
+        end do
 
-  write(lun,'(i1)') 0
-  write(lunf,'(i1)') 0
-  do j = 1, NBIN
-   do i = 1, NZ
-    write(lun, '(i3,i4)', advance="no") j, i
+        do igas = 1, NGAS
+          write(lun, '(2e11.3)', advance="no") &
+            real(mmr_gas(i,igas) * 1.0e6_f / (wtmol_gas(igas) / wtmol_air(i))), &
+            0._f
+        end do
 
-    do ielem = 1, NELEM
-      write(lun, '(e11.3)', advance="no") real(mmr(i,ielem,j) * rho_atm_cgs(i) / rmass(j,elem2group(ielem)))
+        write(lun, '(f8.0)') 0.0
+      end do
     end do
-
-    do igas = 1, NGAS
-      write(lun, '(2e11.3)', advance="no") &
-        real(mmr_gas(i,igas) * 1.0e6_f / (wtmol_gas(igas) / wtmol_air(i))), &
-        0._f
-    end do
-
-    write(lun, '(f8.0)') 0.0
-      
-    end do
-  enddo
+  end if
 
   binmultiple = int(NBIN / 10._f)
 
@@ -827,9 +844,11 @@ subroutine test_day()
   do istep = 1, nstep
 
     open(unit=lunres,file= filename_restart(1:len_trim(filename_restart)) // filesuffix_restart,form='unformatted',status="unknown")
-    open(unit=lunp,file =  temp // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-    open(unit=lunfp,file =  temp // flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-    open(unit=lunratesp,file =  temp // rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+    if (ioutput_format .eq. 0) then
+      open(unit=lunp,file =  temp // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+      open(unit=lunfp,file =  temp // flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+      open(unit=lunratesp,file =  temp // rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+    end if
 
     ! Calculate the model time.
     time = (istep - 1) * dtime
@@ -959,70 +978,22 @@ subroutine test_day()
 
 
 
-      write(*,*) 'Recorded'
-      if (IS_2D .eq. 1) then
-        write(lun,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunf,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunfp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunrates,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
-        write(lunratesp,'(5e25.5)') (istep)*dtime, current_distance, rotation_counter, current_step, current_step/NLONGITUDE * 360
+      if (ioutput_format .eq. 1) then
+        call write_binary_output(bin_filename, &
+          NZ, NGROUP, NELEM, NBIN, NGAS, NLONGITUDE, istep, IS_2D, dtime, &
+          current_distance, rotation_counter, current_step, &
+          r_all, rmass, numden, mmr_gas, svpliq, zsubsteps, &
+          rhompe, rnucpe, growpe, evappe, rnuclg, growlg, evaplg, corefrac, &
+          pflux, gflux)
       else
-        write(lun,'(f25.5)') (istep)*dtime !TODO -- change to just istep?
-        write(lunp,'(f25.5)') (istep)*dtime
-        write(lunf,'(f25.5)') (istep)*dtime
-        write(lunfp,'(f25.5)') (istep)*dtime
-        write(lunrates,'(f25.5)') (istep)*dtime
-        write(lunratesp,'(f25.5)') (istep)*dtime
+        call write_ascii_output(lun, lunp, lunf, lunfp, lunrates, lunratesp, &
+          NZ, NELEM, NBIN, NGAS, NGROUP, istep, IS_2D, NLONGITUDE, dtime, &
+          current_distance, rotation_counter, current_step, &
+          numden, mmr_gas, svpliq, zsubsteps, wtmol_gas, wtmol_air, &
+          rhompe, rnucpe, growpe, evappe, rnuclg, growlg, evaplg, corefrac)
       end if
 
-      do j = 1, NBIN
-        do i = 1, NZ
-
-          write(lun, '(i3,i4)', advance="no") j, i
-          write(lunp, '(i3,i4)', advance="no") j, i
-
-          do ielem = 1, NELEM
-            write(lun, '(e11.3)', advance="no") real(numden(i, ielem, j))
-            write(lunp, '(e11.3)', advance="no") real(numden(i, ielem, j))
-          end do
-
-          do igas = 1, NGAS
-            write(lun, '(2e25.15)', advance="no") &
-            real(mmr_gas(i,igas) * 1.0e6_f / (wtmol_gas(igas) / wtmol_air(i))), &
-            real(svpliq(i,igas) * 1.0e6_f)
-            write(lunp, '(2e11.3)', advance="no") &
-            real(mmr_gas(i,igas) * 1.0e6_f / (wtmol_gas(igas) / wtmol_air(i))), &
-            real(svpliq(i,igas) * 1.0e6_f)
-          end do
-
-          write(lun, '(f8.0)') zsubsteps(i)
-          write(lunp, '(f8.0)') zsubsteps(i)
-
-          do ielem = 1, NELEM
-            write(lunrates, '(3i4,7e13.3e3)') j, &
-                              i, &
-                              ielem, &
-                              rhompe(i, j, ielem), &
-                              rnucpe(i, j, ielem), &
-                              growpe(i, j, ielem), &
-                              evappe(i, j, ielem)
-          enddo
-          do igroup = 1, NGROUP
-            write(lunrates, '(3i4,7e13.3e3)') j, &
-                              i, &
-                              igroup, &
-                              rnuclg(i, j, igroup), &
-                              growlg(i, j, igroup), &
-                              evaplg(i, j, igroup), &
-                              corefrac(i, j, igroup)
-          enddo
-
-
-
-
-        end do
-      end do
+      write(*,*) 'Recorded'
 
     !endif
 
@@ -1040,9 +1011,11 @@ subroutine test_day()
     !endif
     endif
 
-    close(unit=lunp)
-    close(unit=lunfp)
-    close(unit=lunratesp)
+    if (ioutput_format .eq. 0) then
+      close(unit=lunp)
+      close(unit=lunfp)
+      close(unit=lunratesp)
+    end if
     close(unit=lunres)
 
   end do   ! time loop
@@ -1051,10 +1024,12 @@ subroutine test_day()
   call CARMASTATE_Destroy(cstate, rc)
   if (rc < 0) stop "    *** FAILED CARMASTATE_Destroy ***"
 
-  ! Close the output file
-  close(unit=lun)
-  close(unit=lunf)
-  close(unit=lunrates)
+  ! Close the output files (ASCII mode only)
+  if (ioutput_format .eq. 0) then
+    close(unit=lun)
+    close(unit=lunf)
+    close(unit=lunrates)
+  end if
   if (idiag .eq. 1) then
     close(unit=lundiagn)
   end if

@@ -165,8 +165,8 @@ include ../../tests/Makefile
 
 
 
-carmapy.exe : $(CARMA_OBJ) carma_carmapy.o carma_testutils.o atmosphere_mod.o
-	$(FORTRAN) $(LDFLAGS) -o carmapy.exe carma_carmapy.o carma_testutils.o atmosphere_mod.o $(CARMA_OBJ)
+carmapy.exe : $(CARMA_OBJ) carma_carmapy.o carma_testutils.o atmosphere_mod.o output.o output_binary.o
+	$(FORTRAN) $(LDFLAGS) -o carmapy.exe carma_carmapy.o carma_testutils.o atmosphere_mod.o output.o output_binary.o $(CARMA_OBJ)
 
 
 # Compile everything.

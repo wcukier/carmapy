@@ -208,6 +208,7 @@ RHO_MNS = 4.0		# MnS
 RHO_CR = 7.15		# Cr
 RHO_FE = 7.87		# Fe
 RHO_MG2SIO4 = 3.21		# Mg2SiO4
+RHO_MGSIO3 = 3.2		# MgSiO3
 RHO_TIO2 = 4.25		# TiO2
 RHO_AL2O3 = 3.99		# Al2O3
 RHO_CO = 1.0288		# CO, Bierhals J; Ullmann's Encyclopedia of Industrial Chemistry.
@@ -501,7 +502,7 @@ group_dict = {
         "stofact": 2,
         "gas_phase": "Al"
     },
-        "SiO": { # need better sourcing for these constants
+        "SiO": { 
         "cond_rho": 2.13,
         "rtn": I_VAPRTN_USER,
         "vp_offset": 32.52 / np.log(10)  - 6,
@@ -515,6 +516,25 @@ group_dict = {
         "surften_0": 500, 
         "surften_slope": 0,
         "coldia": 4.04e-8,
+        "is_typeIII": False,
+        "lat_heat_e": -1,
+        "stofact": 1,
+        "gas_phase": "SiO"
+    },
+    "MgSiO3": {
+        "cond_rho": RHO_MGSIO3,
+        "rtn": I_VAPRTN_USER,
+        "vp_offset": 13.43,
+        "vp_tcoeff":  28665.0 ,
+        "vp_metcoeff": 1,
+        "vp_logpcoeff": 0,
+        "wtmol": 100.3887,
+        "mucos_dict": {"TiO2": 0.995},
+        "opacity_files": "MgSiO3_complex.txt",
+        "rho_cond": RHO_MGSIO3,
+        "surften_0": 400, 
+        "surften_slope": 0,
+        "coldia": 4.65e-8,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,

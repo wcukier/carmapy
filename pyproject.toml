@@ -28,7 +28,8 @@ dependencies = [
     "scipy",
     "pyfastchem",
     "f90nml",
-    "PyMieScatt"
+    "PyMieScatt",
+    "h5py"
 ]
 readme = "README.md"
 
