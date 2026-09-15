@@ -319,7 +319,7 @@ class Results:
                 "r_mass": self.rmass[:, i]
             }
         if self.carma.is_2d: #TODO: pre nanmean() these.  Maybe have a window for a set number of timesteps
-            _, counts = np.unique(step, return_counts=True)
+            _, counts = np.unique(step[:n_tstep], return_counts=True)
             self.gases_2d = {}
 
             for i in range(1, len(self.gas_names)):
@@ -487,12 +487,14 @@ class Results:
         plt.close()
         fig, ax = plt.subplots()
         ax.set_prop_cycle(mpl.cycler(color=petroff10))
+        n_steps = self.gas_abund.shape[-1]
+        burn_in = min(burn_in, max(0, n_steps - 1))
         j = 0
         for i, gas in enumerate(list(self.gas_names)): #TODO get this from header file
             if i not in skip_gases:
-                xs = np.arange(burn_in, 
+                xs = np.arange(burn_in,
                                len(self.gas_abund[-1, i, :])) * self.dt_timestep
-                
+
                 min_abund = np.min(self.gas_abund[-1, i, burn_in:])
                 max_abund = np.max(self.gas_abund[-1, i, burn_in:])
                 d_abund = max_abund - min_abund + 1e-100

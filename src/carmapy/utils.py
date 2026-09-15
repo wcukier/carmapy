@@ -5,6 +5,7 @@ import os
 import pickle
 import dill
 from types import SimpleNamespace
+from carmapy.constants import gas_dict
 
 # petroff 10 color cycle
 petroff10 = ["#3f90da", "#ffa90e", "#bd1f01", "#94a4a2", "#832db6",
@@ -98,8 +99,6 @@ def fake_carma(path, is_2d=False, nlongitude=1):
         log_metallicity=0.0,
     )
 
-
-
 def plot_condensation_curves(self, ax=None, skip_gases=None, lon_idxs=None, **kwargs):
     """Plots condensation curves for each gas species in the CARMA model
     overlaid on the model's P-T profile.
@@ -108,7 +107,7 @@ def plot_condensation_curves(self, ax=None, skip_gases=None, lon_idxs=None, **kw
     which the gas partial pressure equals its saturation vapour pressure
     (i.e. saturation ratio = 1).  The curve is computed analytically from
     the vapour-pressure coefficients stored in ``constants.gas_dict`` using
-    the INITIAL atmosphere gas mixing ratio from the simulation.  Species whose
+    the deep-atmosphere gas mixing ratio from the simulation.  Species whose
     vapour-pressure formula does not have a temperature coefficient (e.g. H2O,
     which uses a custom Fortran routine) are plotted using the saturation
     vapour pressures stored directly in ``results.sat_vp``.
@@ -120,6 +119,9 @@ def plot_condensation_curves(self, ax=None, skip_gases=None, lon_idxs=None, **kw
     skip_gases : list[int], optional
         List of gas indices to exclude.  Defaults to ``[]`` (plot all
         species).
+    lon_idxs : list[int], optional
+        Longitude indices to average over for the reference P-T profile.
+        Defaults to ``None`` (average all longitudes).
     **kwargs
         Extra keyword arguments forwarded to ``ax.plot`` for the P-T
         profile line only.
@@ -129,9 +131,6 @@ def plot_condensation_curves(self, ax=None, skip_gases=None, lon_idxs=None, **kw
     fig : matplotlib.figure.Figure
     ax : matplotlib.axes.Axes
     """
-    
-    print(lon_idxs)
-    
     if skip_gases is None:
         skip_gases = []
 
@@ -144,60 +143,56 @@ def plot_condensation_curves(self, ax=None, skip_gases=None, lon_idxs=None, **kw
 
     P = self.P_centers      # [barye], shape (NZ,)
     T = self.T_centers      # [K], shape (NZ,) or (NZ, NLONG)
-
     log_met = getattr(self, "log_metallicity", 0.0)
 
     if T.ndim > 1:
-        
-        #lons = np.arange(len(lon_idxs))
-        #lons = lons[lon_idxs]
+        cmap = plt.get_cmap("viridis")
         for i in range(T.shape[1]):
-            #if lon_idxs is None or i in lons:
             print("Plotting longitude index", i)
-            ax.plot(T[:, i], P / 1e6, color="black", lw=0.5, alpha=0.5, **kwargs)
-            #else:
-            #   ax.plot(T[:, i], P / 1e6, color="orange", lw=0.5, alpha=0.5, **kwargs, zorder=-99)
+            color = cmap(i / max(T.shape[1] - 1, 1))
+            ax.plot(T[:, i], P / 1e6, color=color, lw=0.5, alpha=0.5, **kwargs)
         if lon_idxs is None:
-            T = np.mean(T, axis=1)  # DOMINIC: use average, which I prefer
+            T = np.mean(T, axis=1)
         else:
-            T = np.mean(T[:, lon_idxs], axis = 1)  # DOMINIC: use average, which I prefer
-        ax.plot(T, P / 1e6, color="black", label="Average", **kwargs, lw=3)
+            T = np.mean(T[:, lon_idxs], axis=1)
+        ax.scatter(T, P / 1e6, color="black", label="Average", **kwargs, s=3)#, lw=3)
     else:
-        # P-T profile plotted in black so the colour cycle is free for species
         ax.plot(T, P / 1e6, color="black", lw=2, label="P-T profile", **kwargs)
 
     # Pressure grid for computing smooth condensation curves
     P_curve = np.logspace(np.log10(P.min()), np.log10(P.max()), 300)
 
-    for i, gas_name in enumerate(self.gases.keys()):
-        if gas_name in skip_gases:
+    seen_materials = set()
+    for group_obj in self.groups.values():
+        material = group_obj.material
+        if material in seen_materials:
             continue
+        seen_materials.add(material)
 
-        # get the properties of the gas
-        gas_obj = self.gases[gas_name]
+        gas_obj = group_obj.gas
+        if material in skip_gases or gas_obj.name in skip_gases:
+            continue
 
         # Deep abundance: max over altitude gives uninhibited mixing ratio
         x_gas = np.max(gas_obj.nmr)
 
         if x_gas <= 0:
             continue
-        
-        tcoeff = gas_obj.vp_tcoeff
+
+        tcoeff = group_obj.vp_tcoeff
+
         if tcoeff == 0:
             # No analytic inversion available (e.g. H2O Murphy 2005).
-            # Use stored sat_vp at each model level: the condensation
-            # pressure for a given T is sat_vp / x_gas.
-            order = np.argsort(T)
-            P_cond = gas_obj.sat_vp / x_gas  # barye
-            ax.plot(T[order], P_cond[order] / 1e6, label=gas_name)
+            # Cannot plot without sat_vp from simulation results; skip.
+            continue
         else:
-            offset    = gas_obj.vp_offset
-            metcoeff  = gas_obj.vp_metcoeff
-            logpcoeff = gas_obj.vp_logpcoeff
+            offset    = group_obj.vp_offset
+            metcoeff  = group_obj.vp_metcoeff
+            logpcoeff = group_obj.vp_logpcoeff
 
             # Condensation condition: sat_vp(T, P) = x_gas * P
             #   1e6 * 10^(offset - tcoeff/T - metcoeff*log_met
-            #              - logpcoeff*log10(P*1e-6))
+            #              - logpcoeff*log10(P*1e-6)) = x_gas * P
             # Solving for T:
             #   T = tcoeff / (6 + offset - metcoeff*log_met
             #                 - logpcoeff*log10(P*1e-6)
@@ -212,14 +207,13 @@ def plot_condensation_curves(self, ax=None, skip_gases=None, lon_idxs=None, **kw
             with np.errstate(invalid="ignore", divide="ignore"):
                 T_cond = np.where(denom > 0, tcoeff / denom, np.nan)
 
-            ax.plot(T_cond, P_curve / 1e6, label=gas_name)
+            ax.plot(T_cond, P_curve / 1e6, label=material)
 
     ax.set_yscale("log")
     ax.invert_yaxis()
     ax.set_xlabel("Temperature [K]")
     ax.set_ylabel("Pressure [bar]")
     ax.legend(bbox_to_anchor=(1.0, 1.0), loc="upper left")
-    plt.title(self.name)
     fig.tight_layout()
 
     return fig, ax

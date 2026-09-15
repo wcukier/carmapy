@@ -773,11 +773,12 @@ class Carma:
 
 
     def extend_atmosphere(self, max_P: float, #TODO: See if can do non-iteratively b/c now calculating z later
-                          wt_mol=None, 
-                          method="adiabatic") -> None:
+                          wt_mol=None,
+                          method="adiabatic",
+                          **kwargs) -> None:
         """Extends the atmospheric structure to deeper pressures.  Modifies the
         pressure, temperature, and eddy diffusion levels and requires
-        that they have previously been set.  If ``max_P`` is less than the 
+        that they have previously been set.  If ``max_P`` is less than the
         current maximum pressure, this method does nothing
 
         Parameters
@@ -785,17 +786,28 @@ class Carma:
         max_P : float
             The pressure to which the atmosphere is extended
         wt_mol : ArrayLike, optional
-            The mean molecular weight of the atmosphere.  If an array, each 
-            entry corresponds to one altitude level. Defaults to the mean 
+            The mean molecular weight of the atmosphere.  If an array, each
+            entry corresponds to one altitude level. Defaults to the mean
             molecular weight stored in the carma object
         method : string, optional
-            The method to extend the atmosphere.  Options are "adiabatic"
-            and "isothermal"
+            The method to extend the atmosphere.  Options are "adiabatic",
+            "isothermal", and "converge_adiabatic".
+
+            "converge_adiabatic" is like "adiabatic" but in 2D mode smoothly
+            blends the Parmentier anchor temperature from the per-longitude
+            value at ``P_converge_start`` to the longitude-mean at
+            ``P_converge_full`` (both kwargs, default to the top and bottom
+            of the extended region respectively).  This makes all longitudes
+            converge to the same interior adiabat at depth.  Physically
+            motivated by the hot Jupiter deep interior being convective: below
+            the radiative-convective boundary (RCB) the intrinsic heat flux
+            (F_int = sigma * T_int^4) sets a single, longitude-independent
+            adiabat, so GCM day-night contrast must vanish at depth.
 
         Notes
         -------
-        Atmosphere is extended adiabatically using the fit from Parmentier et 
-        al. (2015) [1]_ to the equation of state described in Saumon (1995) 
+        Atmosphere is extended adiabatically using the fit from Parmentier et
+        al. (2015) [1]_ to the equation of state described in Saumon (1995)
         [2]_.  k_zz is assumed to be proportional to the cube root of the scale
         height
 
@@ -880,16 +892,53 @@ class Carma:
         elif method == "isothermal":
             for i in range(n-1, -1, -1):
                 P_new[i] = self.P_levels[0] * ratio ** (n - i)
-                
+
                 if not self.is_2d:
                     T_new[i] = self.T_levels[0]
                 else:
                     for j in range(self.NLONGITUDE):
                         T_new[i, j] = self.T_levels[0, j]
-                        
-                kzz_new[i] = self.kzz_levels[0] 
 
+                kzz_new[i] = self.kzz_levels[0]
 
+        elif method == "converge_adiabatic":
+            # Same as "adiabatic" in 1D.  In 2D, the Parmentier anchor
+            # temperature blends smoothly from the per-longitude value
+            # (at P_converge_start) to the longitude-mean (at P_converge_full),
+            # so the deep extension converges to the single interior adiabat
+            # set by the planet's intrinsic heat flux (F = sigma * T_int^4).
+            # Both pressures must lie within the extended region (>= P_levels[0]).
+            P_converge_start = kwargs.get("P_converge_start", self.P_levels[0])
+            P_converge_full  = kwargs.get("P_converge_full",
+                                          self.P_levels[0] * ratio ** n)
+            T_mean = (np.mean(self.T_levels[0, :]) if self.is_2d
+                      else self.T_levels[0])
+
+            for i in range(n-1, -1, -1):
+                P_new[i] = self.P_levels[0] * ratio ** (n - i)
+
+                if self.is_2d:
+                    # Blend fraction: 0 at P_converge_start, 1 at P_converge_full
+                    if P_new[i] <= P_converge_start:
+                        f_blend = 0.0
+                    elif P_new[i] >= P_converge_full:
+                        f_blend = 1.0
+                    else:
+                        f_blend = (np.log(P_new[i] / P_converge_start)
+                                   / np.log(P_converge_full / P_converge_start))
+
+                    T_anchors = ((1.0 - f_blend) * self.T_levels[0, :]
+                                 + f_blend * T_mean)
+                    for j in range(self.NLONGITUDE):
+                        T_new[i, j] = new_T(P_new[i], T_anchors[j],
+                                            self.P_levels[0])
+                    H = (k_B * np.mean(T_new[i, :])
+                         / (self.wt_mol * PROTON_MASS * self.surface_grav))
+                else:
+                    T_new[i] = new_T(P_new[i], T_mean, self.P_levels[0])
+                    H = k_B * T_new[i] / (self.wt_mol * PROTON_MASS * self.surface_grav)
+
+                kzz_new[i] = self.kzz_levels[0] * (H / H0) ** (1 / 3)
 
         # z_new -= z_new[0]
 
