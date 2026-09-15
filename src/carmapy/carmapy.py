@@ -37,6 +37,183 @@ def _bc2int(bc):
     raise ValueError(f"{bc} not found")
 
 
+# ---------------------------------------------------------------------------
+# HDF5 binary output helpers
+# ---------------------------------------------------------------------------
+
+def _read_binary_step(bin_path):
+    """Read one per-step binary file written by output_binary_mod."""
+    import numpy as np
+    with open(bin_path, 'rb') as fh:
+        raw = fh.read()
+
+    offset = 0
+    hdr = np.frombuffer(raw, dtype=np.int32, count=8, offset=offset)
+    NZ, NGROUP, NELEM, NBIN, NGAS, istep, IS_2D, NZP1 = hdr.tolist()
+    offset += 8 * 4
+
+    time = float(np.frombuffer(raw, dtype=np.float64, count=1, offset=offset)[0])
+    offset += 8
+
+    def _read_f64(n, shape, order='F'):
+        nonlocal offset
+        arr = np.frombuffer(raw, dtype=np.float64, count=n, offset=offset).reshape(shape, order=order)
+        offset += n * 8
+        return arr
+
+    r      = _read_f64(NBIN * NGROUP,        (NBIN, NGROUP))
+    rmass  = _read_f64(NBIN * NGROUP,        (NBIN, NGROUP))
+    numden = _read_f64(NZ * NELEM * NBIN,    (NZ, NELEM, NBIN))
+    mmr_gas  = _read_f64(NZ * NGAS,          (NZ, NGAS))
+    svpliq   = _read_f64(NZ * NGAS,          (NZ, NGAS))
+    zsubsteps = _read_f64(NZ,                (NZ,))
+
+    sz_e = NZ * NBIN * NELEM
+    rhompe = _read_f64(sz_e, (NZ, NBIN, NELEM))
+    rnucpe = _read_f64(sz_e, (NZ, NBIN, NELEM))
+    growpe = _read_f64(sz_e, (NZ, NBIN, NELEM))
+    evappe = _read_f64(sz_e, (NZ, NBIN, NELEM))
+
+    sz_g = NZ * NBIN * NGROUP
+    rnuclg   = _read_f64(sz_g, (NZ, NBIN, NGROUP))
+    growlg   = _read_f64(sz_g, (NZ, NBIN, NGROUP))
+    evaplg   = _read_f64(sz_g, (NZ, NBIN, NGROUP))
+    corefrac = _read_f64(sz_g, (NZ, NBIN, NGROUP))
+
+    extras = np.frombuffer(raw, dtype=np.float64, count=4, offset=offset)
+    current_distance, rotation_counter, current_step, lon_frac = extras.tolist()
+    offset += 4 * 8
+
+    pflux = _read_f64(NZP1 * NBIN * NELEM, (NZP1, NBIN, NELEM))
+    gflux = _read_f64(NZP1 * NGAS,         (NZP1, NGAS))
+
+    return {
+        'NZ': NZ, 'NGROUP': NGROUP, 'NELEM': NELEM, 'NBIN': NBIN, 'NGAS': NGAS,
+        'NZP1': NZP1, 'istep': istep, 'IS_2D': IS_2D, 'time': time,
+        'r': r, 'rmass': rmass,
+        'numden': numden, 'mmr_gas': mmr_gas, 'svpliq': svpliq,
+        'zsubsteps': zsubsteps,
+        'rhompe': rhompe, 'rnucpe': rnucpe, 'growpe': growpe, 'evappe': evappe,
+        'rnuclg': rnuclg, 'growlg': growlg, 'evaplg': evaplg, 'corefrac': corefrac,
+        'current_distance': current_distance, 'current_step': current_step,
+        'pflux': pflux, 'gflux': gflux,
+    }
+
+
+def _hdf5_create(hdf5_path, carma, step):
+    """Create HDF5 file with metadata and resizable datasets, write first step."""
+    import h5py
+    import numpy as np
+
+    NZ, NGROUP, NELEM = step['NZ'], step['NGROUP'], step['NELEM']
+    NBIN, NGAS, IS_2D = step['NBIN'], step['NGAS'], step['IS_2D']
+    NZP1 = step['NZP1']
+
+    T = carma.T_centers
+    if T.ndim > 1:
+        T = T[:, 0]
+
+    with h5py.File(hdf5_path, 'w') as f:
+        hdr = f.create_group('header')
+        for k, v in [('NZ', NZ), ('NGROUP', NGROUP), ('NELEM', NELEM),
+                     ('NBIN', NBIN), ('NGAS', NGAS),
+                     ('iskip', carma.output_gap), ('nstep', carma.n_tstep),
+                     ('IS_2D', IS_2D)]:
+            hdr.attrs[k] = v
+        hdr.create_dataset('r',     data=step['r'])
+        hdr.create_dataset('rmass', data=step['rmass'])
+        hdr.create_dataset('P',     data=carma.P_centers)
+        hdr.create_dataset('Z',     data=carma.z_centers)
+        hdr.create_dataset('T',     data=T)
+        hdr.create_dataset('kzz',   data=carma.kzz_levels[:NZ])
+        hdr.create_dataset('group_names',
+                           data=np.array(list(carma.groups.keys()), dtype=h5py.string_dtype()))
+        hdr.create_dataset('gas_names',
+                           data=np.array(list(carma.gases.keys()),  dtype=h5py.string_dtype()))
+
+        kw = dict(dtype='float64', compression='gzip', compression_opts=4, shuffle=True)
+        data = f.create_group('data')
+        data.create_dataset('time',
+                            shape=(0,), maxshape=(None,), chunks=(1,), **kw)
+        data.create_dataset('numden',
+                            shape=(NZ, NELEM, NBIN, 0),
+                            maxshape=(NZ, NELEM, NBIN, None),
+                            chunks=(NZ, NELEM, NBIN, 1), **kw)
+        data.create_dataset('mmr_gas',
+                            shape=(NZ, NGAS, 0), maxshape=(NZ, NGAS, None),
+                            chunks=(NZ, NGAS, 1), **kw)
+        data.create_dataset('svpliq',
+                            shape=(NZ, NGAS, 0), maxshape=(NZ, NGAS, None),
+                            chunks=(NZ, NGAS, 1), **kw)
+        data.create_dataset('zsubsteps',
+                            shape=(NZ, 0), maxshape=(NZ, None),
+                            chunks=(NZ, 1), **kw)
+        if IS_2D:
+            data.create_dataset('current_distance',
+                                shape=(0,), maxshape=(None,), chunks=(1,), **kw)
+            data.create_dataset('current_step',
+                                shape=(0,), maxshape=(None,), chunks=(1,), **kw)
+
+        rates = f.create_group('rates')
+        for name in ('rhompe', 'rnucpe', 'growpe', 'evappe'):
+            rates.create_dataset(name,
+                                 shape=(NZ, NBIN, NELEM, 0),
+                                 maxshape=(NZ, NBIN, NELEM, None),
+                                 chunks=(NZ, NBIN, NELEM, 1), **kw)
+        for name in ('rnuclg', 'growlg', 'evaplg', 'corefrac'):
+            rates.create_dataset(name,
+                                 shape=(NZ, NBIN, NGROUP, 0),
+                                 maxshape=(NZ, NBIN, NGROUP, None),
+                                 chunks=(NZ, NBIN, NGROUP, 1), **kw)
+        rates.create_dataset('pflux',
+                             shape=(NZP1, NBIN, NELEM, 0),
+                             maxshape=(NZP1, NBIN, NELEM, None),
+                             chunks=(NZP1, NBIN, NELEM, 1), **kw)
+        rates.create_dataset('gflux',
+                             shape=(NZP1, NGAS, 0),
+                             maxshape=(NZP1, NGAS, None),
+                             chunks=(NZP1, NGAS, 1), **kw)
+
+    _hdf5_append(hdf5_path, step)
+
+
+def _hdf5_append(hdf5_path, step):
+    """Append one timestep from a binary step dict to the HDF5 file."""
+    import h5py
+
+    IS_2D = step['IS_2D']
+
+    with h5py.File(hdf5_path, 'a') as f:
+        data  = f['data']
+        rates = f['rates']
+
+        t_ds = data['time']
+        it = t_ds.shape[0]
+        t_ds.resize(it + 1, axis=0)
+        t_ds[it] = step['time']
+
+        for name in ('numden', 'mmr_gas', 'svpliq', 'zsubsteps'):
+            ds = data[name]
+            n = ds.shape[-1]
+            ds.resize(n + 1, axis=ds.ndim - 1)
+            ds[..., n] = step[name]
+
+        for name in ('rhompe', 'rnucpe', 'growpe', 'evappe',
+                     'rnuclg', 'growlg', 'evaplg', 'corefrac',
+                     'pflux', 'gflux'):
+            ds = rates[name]
+            n = ds.shape[-1]
+            ds.resize(n + 1, axis=ds.ndim - 1)
+            ds[..., n] = step[name]
+
+        if IS_2D and 'current_distance' in data:
+            for name, val in (('current_distance', step['current_distance']),
+                              ('current_step',     step['current_step'])):
+                ds = data[name]
+                n = ds.shape[0]
+                ds.resize(n + 1, axis=0)
+                ds[n] = val
+
 
 class Carma:
     """
@@ -1176,7 +1353,8 @@ class Carma:
     def run(self,
             suppress_output=False,
             nthreads=1,
-            omp_schedule=None) -> None:
+            omp_schedule=None,
+            output_format='ASCII') -> None:
         """Runs the CARMA Simulation.
 
         Creates a directory at the path described by the name of the simulation
@@ -1195,12 +1373,20 @@ class Carma:
             Number of OpenMP threads to use, by default 1
 
         omp_schedule : str, optional
-            OpenMP loop schedule passed through as OMP_SCHEDULE environment 
-            variable (e.g. "guided" or "dynamic"). If set, overrides an externally set 
-            OMP_SCHEDULE; if neither is set, defaults to "guided". By default 
+            OpenMP loop schedule passed through as OMP_SCHEDULE environment
+            variable (e.g. "guided" or "dynamic"). If set, overrides an externally set
+            OMP_SCHEDULE; if neither is set, defaults to "guided". By default
             None
 
+        output_format : str, optional
+            Output format for the CARMA simulation.  Either 'ASCII' (default,
+            backward-compatible .txt files) or 'hdf5' (binary intermediate
+            converted on-the-fly to a compressed HDF5 file).  By default 'ASCII'
+
         """
+        if output_format not in ('ASCII', 'hdf5'):
+            raise ValueError(f"output_format must be 'ASCII' or 'hdf5', got {output_format!r}")
+
         if self.is_2d and self.velocity_avg < 0:
             raise RuntimeError("For 2D carma, velocity_avg must be specified")
         
@@ -1289,8 +1475,9 @@ class Carma:
                 "itbnd_pc":             _bc2int(self.top_bound_type_cloud),
                 "ibbnd_pc":             _bc2int(self.bot_bound_type_cloud),
                 "itbnd_gc":             _bc2int(self.top_bound_type_gas),
-                "ibbnd_gc":             _bc2int(self.bot_bound_type_gas)
-                }        
+                "ibbnd_gc":             _bc2int(self.bot_bound_type_gas),
+                "ioutput_format":       0 if output_format == 'ASCII' else 1,
+                }
             }
         nml = f90nml.Namelist(nml)
         nml.write(os.path.join(path, "inputs", "input.nml"), force=True)
@@ -1528,11 +1715,23 @@ class Carma:
                     shell=False,
                     env=_env,
                     stdout=subprocess.PIPE)
-                
+
+                if output_format == 'hdf5':
+                    hdf5_path = f"{path_end}.hdf5"
+                    bin_path  = f"{path_end}_step.bin"
+                    _hdf5_initialized = False
+
                 while p.poll() is None:
                     l = p.stdout.readline() #blocks until it receives a newline.
-                    if not suppress_output: print(l.decode('UTF-8'))
-                # When the subprocess ends there might be unconsumed output 
+                    if not suppress_output: print(l.decode('UTF-8'), end='')
+                    if output_format == 'hdf5' and b'Recorded' in l:
+                        step = _read_binary_step(bin_path)
+                        if not _hdf5_initialized:
+                            _hdf5_create(hdf5_path, self, step)
+                            _hdf5_initialized = True
+                        else:
+                            _hdf5_append(hdf5_path, step)
+                # When the subprocess ends there might be unconsumed output
                 # that still needs to be processed.
                 if not suppress_output: print(p.stdout.read().decode('UTF-8'))
             except Exception as e:

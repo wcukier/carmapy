@@ -143,6 +143,12 @@ class Results:
     def __init__(self, carma: "Carma", read_diag=False) -> None:
         path = carma.name
         path_end = os.path.basename(path)
+
+        hdf5_path = os.path.join(path, f"{path_end}.hdf5")
+        if os.path.exists(hdf5_path):
+            self._init_from_hdf5(hdf5_path, carma, read_diag)
+            return
+
         file_path = os.path.join(path, f"{path_end}.txt")
 
         f = open(file_path)
@@ -432,6 +438,141 @@ class Results:
             self.clouds[key]["evap_gain_rate"] = evap_gain_rates[:, :, e, :]
         
         f.close()
+
+    def _init_from_hdf5(self, hdf5_path, carma, read_diag):
+        """Populate Results attributes from an HDF5 file produced by output_format='hdf5'."""
+        import h5py
+
+        path = carma.name
+
+        with h5py.File(hdf5_path, 'r') as f:
+            hdr   = f['header']
+            data  = f['data']
+            rates = f['rates']
+
+            NZ     = int(hdr.attrs['NZ'])
+            NGROUP = int(hdr.attrs['NGROUP'])
+            NELEM  = int(hdr.attrs['NELEM'])
+            NBIN   = int(hdr.attrs['NBIN'])
+            NGAS   = int(hdr.attrs['NGAS'])
+            IS_2D  = int(hdr.attrs['IS_2D'])
+
+            r     = hdr['r'][:]      # (NBIN, NGROUP)
+            rmass = hdr['rmass'][:]  # (NBIN, NGROUP)
+            P     = hdr['P'][:]
+            Z     = hdr['Z'][:]
+            T     = hdr['T'][:]
+
+            ts     = data['time'][:]         # (NT,)
+            numden = data['numden'][:]        # (NZ, NELEM, NBIN, NT)
+            mmr_gas = data['mmr_gas'][:]     # (NZ, NGAS, NT)
+            svpliq  = data['svpliq'][:]      # (NZ, NGAS, NT)
+
+            if IS_2D and 'current_step' in data:
+                step_arr = data['current_step'][:].astype(int)
+            else:
+                step_arr = None
+
+            # rates (loaded only if read_diag)
+            if read_diag:
+                rhompe   = rates['rhompe'][:]   # (NZ, NBIN, NELEM, NT)
+                rnucpe   = rates['rnucpe'][:]
+                growpe   = rates['growpe'][:]
+                evappe   = rates['evappe'][:]
+                rnuclg   = rates['rnuclg'][:]   # (NZ, NBIN, NGROUP, NT)
+                growlg   = rates['growlg'][:]
+                evaplg   = rates['evaplg'][:]
+                corefrac = rates['corefrac'][:]
+                pflux    = rates['pflux'][:]     # (NZP1, NBIN, NELEM, NT)
+                gflux    = rates['gflux'][:]     # (NZP1, NGAS, NT)
+
+        NT = ts.shape[0]
+
+        # Convert numden from (NZ, NELEM, NBIN, NT) to (NZ, NGROUP, NBIN, NT)
+        numden_groups = np.zeros((NZ, NGROUP, NBIN, NT))
+        for i, key in enumerate(carma.groups.keys()):
+            group = carma.groups[key]
+            g = group.igroup - 1
+            e = (group.mantle.ielem - 1) if group.mantle else (group.core.ielem - 1)
+            numden_groups[:, g, :, :] = numden[:, e, :, :]
+
+        self.carma       = carma
+        self.rmass       = rmass
+        self.r           = r
+        self.numden      = numden_groups
+        self.gas_abund   = mmr_gas
+        self.sat_vp      = svpliq
+        self.ts          = ts
+        self.P           = P
+        self.Z           = Z
+        self.T           = T
+        self.group_names = list(carma.groups.keys())
+        self.gas_names   = list(carma.gases.keys())
+        self.dt_timestep = carma.dt * carma.output_gap
+        self.path        = path
+
+        self.gases = {}
+        for i in range(1, len(self.gas_names)):
+            self.gases[self.gas_names[i]] = self.gas_abund[:, i, :]
+
+        self.clouds = {}
+        for i in range(len(self.group_names)):
+            self.clouds[self.group_names[i]] = {
+                'numden': self.numden[:, i, :, :],
+                'r':      self.r[:, i] * MICRON_TO_CM,
+                'r_mass': self.rmass[:, i],
+            }
+
+        if IS_2D and step_arr is not None:
+            _, counts = np.unique(step_arr, return_counts=True)
+            self.gases_2d = {}
+            for i in range(1, len(self.gas_names)):
+                self.gases_2d[self.gas_names[i]] = (
+                    np.zeros((NZ, carma.NLONGITUDE, np.max(counts))) * np.nan)
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                for it in range(NT):
+                    self.gases_2d[self.gas_names[i]][
+                        :, step_arr[it], index[step_arr[it]]] = mmr_gas[:, i, it]
+                    index[step_arr[it]] += 1
+                self.gases_2d[self.gas_names[i]] = np.nanmean(
+                    self.gases_2d[self.gas_names[i]], axis=2)
+
+            for i in range(len(self.group_names)):
+                nd2d = np.zeros((NZ, NBIN, carma.NLONGITUDE, np.max(counts))) * np.nan
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                for it in range(NT):
+                    nd2d[:, :, step_arr[it], index[step_arr[it]]] = (
+                        numden_groups[:, i, :, it])
+                    index[step_arr[it]] += 1
+                self.clouds[self.group_names[i]]['numden_2d'] = np.nanmean(nd2d, axis=3)
+
+            def longitude_map(arr):
+                index = np.zeros(carma.NLONGITUDE, dtype=int)
+                temp  = np.zeros((NZ, NBIN, carma.NLONGITUDE, np.max(counts))) * np.nan
+                for it in range(NT):
+                    temp[:, :, step_arr[it], index[step_arr[it]]] = arr[:, :, it]
+                    index[step_arr[it]] += 1
+                return np.nanmean(temp, axis=3)
+            self.longitude_map = longitude_map
+
+        if not read_diag:
+            return
+
+        self.pflux = pflux  # (NZP1, NBIN, NELEM, NT) — particle vertical flux [cm^-2 s^-1]
+        self.gflux = gflux  # (NZP1, NGAS, NT)         — gas vertical flux [g cm^-2 s^-1]
+
+        for i, key in enumerate(carma.groups.keys()):
+            group = carma.groups[key]
+            self.clouds[key]['nuc_loss_rate']  = rnuclg[:, :, i, :] / carma.dt
+            self.clouds[key]['grow_loss_rate'] = growlg[:, :, i, :] / carma.dt
+            self.clouds[key]['evap_loss_rate'] = evaplg[:, :, i, :] / carma.dt
+            self.clouds[key]['coremass_frac']  = corefrac[:, :, i, :]
+
+            e = (group.mantle.ielem - 1) if group.mantle else (group.core.ielem - 1)
+            self.clouds[key]['nuc_gain_rate']  = (rhompe[:, :, e, :] + rnucpe[:, :, e, :]) / carma.dt
+            self.clouds[key]['grow_gain_rate'] = growpe[:, :, e, :] / carma.dt
+            self.clouds[key]['evap_gain_rate'] = evappe[:, :, e, :] / carma.dt
+            self.clouds[key]['pflux']          = pflux[:, :, e, :]
 
     def plot_toa_gas(self, skip_gases = [0], burn_in = 20, **kwargs):
         """Plots the gas abundances at the top of the atmosphere.  Useful for 
