@@ -994,6 +994,8 @@ subroutine test_day()
       end if
 
       write(*,*) 'Recorded'
+      flush(6)
+      read(5,*)
 
     !endif
 
