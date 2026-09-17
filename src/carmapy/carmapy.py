@@ -1714,7 +1714,8 @@ class Carma:
                     "./carmapy.exe",
                     shell=False,
                     env=_env,
-                    stdout=subprocess.PIPE)
+                    stdout=subprocess.PIPE,
+                    stdin=subprocess.PIPE)
 
                 if output_format == 'hdf5':
                     hdf5_path = f"{path_end}.hdf5"
@@ -1731,6 +1732,8 @@ class Carma:
                             _hdf5_initialized = True
                         else:
                             _hdf5_append(hdf5_path, step)
+                        p.stdin.write(b'\n')
+                        p.stdin.flush()
                 # When the subprocess ends there might be unconsumed output
                 # that still needs to be processed.
                 if not suppress_output: print(p.stdout.read().decode('UTF-8'))
