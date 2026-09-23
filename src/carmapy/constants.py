@@ -320,7 +320,7 @@ group_dict = {
         "vp_logpcoeff": 0,
         "wtmol": WTMOL_H2O,
         "mucos_dict": {},
-        "opacity_files": "WS15/H2O_complex.txt",
+        "opacity_files": "H2O_complex.txt",
         "rho_cond": RHO_W,
         "surften_0": np.nan,
         "surften_slope": np.nan,

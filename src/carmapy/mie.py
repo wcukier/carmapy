@@ -1,9 +1,14 @@
 import numpy as np
-import PyMieScatt as ps
+import scipy.integrate
 import os
 
+# PyMieScatt imports scipy.integrate.trapz, which SciPy 1.14 removed
+if not hasattr(scipy.integrate, "trapz"):
+    scipy.integrate.trapz = getattr(np, "trapezoid", None) or np.trapz
+import PyMieScatt as ps
+
 from scipy.interpolate import interp1d
-from .constants import gas_dict
+from .constants import group_dict
 
 _SRC = os.path.dirname(os.path.dirname(__file__))
 defualt_lambdas = np.linspace(1e-4, 3e-3, 1000)
@@ -19,7 +24,7 @@ def _load_cloud_indices(path):
 
 def gen_mie_table(species: str,
                   min_r: float = 1e-8,
-                  ratio: float = 2,
+                  ratio: float = 2**(1/3),
                   n_r: int = 80,
                   lambdas : np.ndarray = defualt_lambdas, 
                   indices_path : str = None):
@@ -34,7 +39,8 @@ def gen_mie_table(species: str,
         The minimum particle radius to generate the table for [cm], 
         by default 1e-8
     ratio : float, optional
-        The ratio between sucessive radii, by default 2
+        The ratio between sucessive radii, by default 2**(1/3) (corresponding to
+         a mass ratio of 2)
     n_r : int, optional
         The number of radii to generate the table for, by default 80
     lambdas : np.ndarray, optional
@@ -47,10 +53,10 @@ def gen_mie_table(species: str,
         By default will use the carmapy default files
     """
     if indices_path is None:
-        indices_path = os.path.join(os.path.dirname(_SRC),
+        indices_path = os.path.join(_SRC,
                                     "mie_tables",
                                     "indices",
-                                    gas_dict[species]["opacity_files"])
+                                    group_dict[species]["opacity_files"])
     n_interp, k_interp = _load_cloud_indices(indices_path)
 
     rs = np.array([min_r * ratio ** ir for ir in range(n_r)])
