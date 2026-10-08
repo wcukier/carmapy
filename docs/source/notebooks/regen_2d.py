@@ -4,10 +4,12 @@ import numpy as np
 import warnings
 import os
 
+# Write 2d_carmapy/ next to this script, where tutorial 5 expects it.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 carma = carmapy.Carma("2d_carmapy", is_2d=True)
 
-carma.set_stepping(dt=5000, output_gap=99999, n_tstep=100000)
+carma.set_stepping(dt=2500, output_gap=249999, n_tstep=1_000_000)
 
 P_levs, T_levs, kzz_levs, U_levs, longitudes = carmapy.example.example_2d_levels()
 
@@ -31,7 +33,7 @@ carma.set_atmospheric_parameters_from_defaults("Pure H2")
 
 
 carma.calculate_z()
-carma.extend_atmosphere(1e9)
+carma.extend_atmosphere(1e11)
 
 
 carma.add_hom_group("TiO2", 1e-8)

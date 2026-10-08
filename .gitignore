@@ -51,3 +51,8 @@ docs/source/notebooks/regen_2d.py
 docs/source/notebooks/my_first_carma/clouds.atm
 docs/source/notebooks/my_first_carma/fastchem.atm
 issues/**
+coupled_brown_dwarf/**
+bd_1000k/**
+**/*_user.dat
+src/carmapy/carmapy.exe.*
+sonora_2020_feh+000_co_100.data.196.tar.gz
