@@ -1045,17 +1045,19 @@ class Results:
         plt.show()
 
     def plot_condensation_curves(self, ax=None, t_step=-1, skip_gases=None, **kwargs):
-        """Plots condensation curves for each gas species in the CARMA model
+        """Plots condensation curves for each condensate in the CARMA model
         overlaid on the model's P-T profile.
 
-        For each gas the condensation curve is the locus of (T, P) points at
-        which the gas partial pressure equals its saturation vapour pressure
-        (i.e. saturation ratio = 1).  The curve is computed analytically from
-        the vapour-pressure coefficients stored in ``constants.gas_dict`` using
-        the deep-atmosphere gas mixing ratio from the simulation.  Species whose
-        vapour-pressure formula does not have a temperature coefficient (e.g. H2O,
-        which uses a custom Fortran routine) are plotted using the saturation
-        vapour pressures stored directly in ``results.sat_vp``.
+        For each condensate group the condensation curve is the locus of (T, P)
+        points at which the partial pressure of its limiting gas equals the
+        condensate's saturation vapour pressure (i.e. saturation ratio = 1).
+        The curve is computed analytically from the vapour-pressure
+        coefficients stored on the group using the deep-atmosphere mixing
+        ratio of the group's limiting gas.  Several condensates may share one
+        limiting gas, in which case each gets its own curve.  Condensates
+        whose vapour-pressure formula does not have a temperature coefficient
+        (e.g. H2O, which uses a custom Fortran routine) are plotted using the
+        saturation vapour pressures stored directly in ``results.sat_vp``.
 
         Parameters
         ----------
@@ -1101,9 +1103,19 @@ class Results:
         # Pressure grid for computing smooth condensation curves
         P_curve = np.logspace(np.log10(P.min()), np.log10(P.max()), 300)
 
-        for i, gas_name in enumerate(self.gas_names):
+        plotted = set()
+        for grp in self.carma.groups.values():
+            gas_name = grp.gas.name
+            if gas_name not in self.gas_names:
+                continue
+            i = self.gas_names.index(gas_name)
             if i in skip_gases:
                 continue
+
+            label = grp.material or gas_name
+            if label in plotted:
+                continue
+            plotted.add(label)
 
             # Deep abundance: max over altitude gives uninhibited mixing ratio
             x_gas = np.max(self.gas_abund[:, i, t_step]) / 1e6
@@ -1111,8 +1123,7 @@ class Results:
             if x_gas <= 0:
                 continue
 
-            entry = gas_dict.get(gas_name, {})
-            tcoeff = entry.get("vp_tcoeff", 0)
+            tcoeff = grp.vp_tcoeff
 
             if tcoeff == 0:
                 # No analytic inversion available (e.g. H2O Murphy 2005).
@@ -1120,11 +1131,11 @@ class Results:
                 # pressure for a given T is sat_vp / x_gas.
                 order = np.argsort(T)
                 P_cond = self.sat_vp[:, i, t_step] / x_gas  # barye
-                ax.plot(T[order], P_cond[order] / 1e6, label=gas_name)
+                ax.plot(T[order], P_cond[order] / 1e6, label=label)
             else:
-                offset    = entry.get("vp_offset",    0.0)
-                metcoeff  = entry.get("vp_metcoeff",  0.0)
-                logpcoeff = entry.get("vp_logpcoeff", 0.0)
+                offset    = grp.vp_offset
+                metcoeff  = grp.vp_metcoeff
+                logpcoeff = grp.vp_logpcoeff
 
                 # Condensation condition: sat_vp(T, P) = x_gas * P
                 #   1e6 * 10^(offset - tcoeff/T - metcoeff*log_met
@@ -1143,7 +1154,7 @@ class Results:
                 with np.errstate(invalid="ignore", divide="ignore"):
                     T_cond = np.where(denom > 0, tcoeff / denom, np.nan)
 
-                ax.plot(T_cond, P_curve / 1e6, label=gas_name)
+                ax.plot(T_cond, P_curve / 1e6, label=label)
 
         ax.set_yscale("log")
         ax.invert_yaxis()

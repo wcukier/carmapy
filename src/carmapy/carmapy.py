@@ -6,6 +6,7 @@ from carmapy.adiabat import (ADIABAT_CODES, ADIABAT_PARMENTIER, ADIABAT_TABLE,
 import os
 import shutil
 import f90nml
+import types
 import numpy as np
 import subprocess
 import warnings
@@ -13,7 +14,7 @@ import shlex
 import contextlib
 from numpy.typing import ArrayLike
 
-from typing import Union
+from typing import Optional, Union
 
 # The src/ directory in the package
 SRC = os.path.dirname(os.path.dirname(__file__)) 
@@ -178,6 +179,8 @@ class Carma:
         self.mu0:           float       = 0.5
         self.w_surf:        float       = 0.
         self.rad_accel:     float       = 1.
+        self.rad_accel_deep: float      = 1.
+        self.rad_zone_damp: int         = 0
         self.rad_dT_max:    float       = 0.5
         self.rad_dT_tol:    float       = 1.
         self.rad_dtau_tol:  float       = 0.02
@@ -196,6 +199,17 @@ class Carma:
         self.adiabat:       str         = ADIABAT_PARMENTIER
 
 
+        self.do_secondary_depletion: bool = True  # emit non-key depletion pathways from each condensate's stoich vector
+        self.do_cons_evap: bool = False  # bound explicit evaporation production by the donor bin's implicit loss (prevents cascade amplification where evaplg*dt >> 1)
+        self.maxntsubsteps_cap: int = 16384  # hard cap on the substep count a microphysics retry may request
+        self.minsubsteps: int = 1  # microphysics substeps every layer starts from; above 10 this fixes the substep
+        self.do_key_swap: bool = False  # let condensates swap their key reactant to the limiting one (reaction supersaturation follows every reactant)
+        self.implicit_gas: bool = True  # solve gas depletion implicitly with the particles (backward Euler in the gas)
+        self.implicit_trigger: float = 0.1  # relative gas change in one substep above which the implicit solve runs
+        self.implicit_rtol: float = 1e-6  # relative tolerance on the implicit gas fixed point
+        self.implicit_dgmax: float = 0.1  # largest relative gas change an implicit substep may take; bounds the partition error between condensates sharing a reservoir
+        self.gstickl: float = 1.0  # sticking coefficient of condensing vapor on (non-ice) particles; CARMA's gstickl
+        self.gstick_by_group: dict[str, float] = {}  # {group name: growth sticking coefficient}; groups not listed use gstickl
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
         self.growth:    list["Growth"]          = []      # list of carma Growth objects
         self.elems:     dict[str, "Element"]    = {}      # dictionary of carma Element objects
@@ -489,6 +503,33 @@ class Carma:
         self.winds = np.asarray(wind_centers, dtype=float)
 
     
+    def _add_secondary_depletion(self, group: "Group", elem: "Element") -> None:
+        """Register non-key growth pathways for the secondary gases of a
+        multi-educt condensation reaction (e.g. Mg for MgSiO3, whose key gas
+        is SiO).  Secondary pathways deplete their gas stoichiometrically but
+        do not drive the growth kinetics.  Gas reservoirs are created (or
+        reused) by gas-phase name, so e.g. Mg2SiO4 and MgSiO3 share one Mg
+        reservoir.
+
+        Parameters
+        ----------
+        group : Group
+            The condensate group whose ``stoich`` vector is being registered.
+        elem : Element
+            The volatile element of the group (the mantle for heterogeneous
+            groups).
+        """
+        if not self.do_secondary_depletion:
+            return
+        stoich = group.stoich or {}
+        for gas_name, nu in stoich.items():
+            if gas_name == group.gas.name:
+                continue
+            if gas_name not in self.gases:
+                self.gases[gas_name] = Gas(gas_name, len(self.gases) + 1)
+            self.growth.append(Growth(elem, self.gases[gas_name], nu=nu,
+                                      is_key=False))
+
     def add_het_group(self, 
                       mantle_group: Union[str, "Group"],
                       seed_group: Union[str, "Group"], 
@@ -600,8 +641,9 @@ class Carma:
         self.elems[core_elem.name] = core_elem
         group.core = core_elem
         
-        growth = Growth(mantle_elem, gas)
+        growth = Growth(mantle_elem, gas, nu=group.stofact)
         self.growth.append(growth)
+        self._add_secondary_depletion(group, mantle_elem)
         
         if add_coag:
             self.add_coag(group)
@@ -669,8 +711,9 @@ class Carma:
                             self.gases[gas.name].igas)
         group.core = elem
         self.elems[elem.name] = elem
-        self.growth.append(Growth(elem, gas))
-        
+        self.growth.append(Growth(elem, gas, nu=group.stofact))
+        self._add_secondary_depletion(group, elem)
+
         if add_coag:
             self.add_coag(group)
         
@@ -1227,6 +1270,8 @@ class Carma:
                       kzz_lapse_smooth: int = 0,
                       accel: float | None = None,
                       rad_gap_max: int = 100,
+                      accel_deep: float = 1.0,
+                      zone_damp: int = 0,
                       rad_dT_tol: float = 1.0,
                       rad_dtau_tol: float = 0.02,
                       dT_max: float = 0.5) -> None:
@@ -1345,6 +1390,21 @@ class Carma:
             steps.  Spin up with it raised, produce science at 1, where the two
             clocks stay together and the time history is physical.  Defaults
             to 1.
+        accel_deep : float, optional
+            Heat-capacity divisor for the convective zone reaching the base
+            of the column.  The deep interior holds most of the column's
+            heat capacity, so an interior that starts off its equilibrium
+            adiabat takes ~1e9 s to reach it, during which ``F_TOA`` stays
+            below ``sigma*t_int**4``.  The zone stops warming only when its
+            net heating averages to zero, so the equilibrium is unchanged.
+            Spin up with it raised, produce science at 1.  Defaults to 1.
+        zone_damp : int, optional
+            How a convective zone's uniform damping factor is chosen.  0
+            takes the fastest layer's ``1/(1 + dt/tau_rad)``; 1 takes the
+            zone's collective implicit factor from the Jacobian (falling back
+            to 0's choice where the zone's collective response is not
+            damping), which applies more of a cycling zone's computed heating.
+            Defaults to 0.
         rad_gap_max : int, optional
             Hard ceiling on the number of timesteps between full solves,
             by default 100
@@ -1410,6 +1470,8 @@ class Carma:
         self.kzz_mixl_scale = kzz_mixl_scale
         self.kzz_lapse_smooth = kzz_lapse_smooth
         self.rad_accel = accel
+        self.rad_accel_deep = accel_deep
+        self.rad_zone_damp = zone_damp
         self.rad_gap_max = rad_gap_max
         self.rad_dT_tol = rad_dT_tol
         self.rad_dtau_tol = rad_dtau_tol
@@ -1469,6 +1531,27 @@ class Carma:
 
         return nwave
 
+
+    # LLM-GENERATED — UNVERIFIED (tier: physics)
+    # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+    def _growth_xref(self, g: "Growth") -> float:
+        """Reference mass mixing ratio of a secondary reactant for growth.txt.
+
+        Key pathways carry none (0).  A secondary pathway uses ``g.xref`` if
+        given, otherwise the gas's bottom-boundary abundance (``bot_conc`` when
+        set, else the deepest ``nmr``) as a placeholder for the abundance
+        assumed by the condensate's vapor-pressure fit.
+        """
+        if g.is_key:
+            return 0.0
+        if g.xref is not None:
+            return float(g.xref)
+        nmr = g.gas.boundary.get("bot_conc", -1)
+        if nmr is None or nmr <= 0:
+            nmr = g.gas.nmr[0] if np.ndim(g.gas.nmr) > 0 else g.gas.nmr
+        if nmr is None or nmr <= 0:
+            return 0.0
+        return float(nmr) * g.gas.wtmol_dif / self.wt_mol
 
     def run(self,
             suppress_output=False,
@@ -1587,6 +1670,15 @@ class Carma:
                 "NCOAG":                len(self.coags),
                 "IS_2D":                int(self.is_2d),
                 "t_evolves":            int(self.t_evolves),
+                "ido_cons_evap":        int(self.do_cons_evap),
+                "imaxntsubsteps_cap":   int(self.maxntsubsteps_cap),
+                "iminsubsteps":         int(self.minsubsteps),
+                "iimplicit_gas":        int(self.implicit_gas),
+                "ikey_swap":            int(self.do_key_swap),
+                "implicit_trigger":     float(self.implicit_trigger),
+                "implicit_rtol":        float(self.implicit_rtol),
+                "implicit_dgmax":       float(self.implicit_dgmax),
+                "gstickl_in":           float(self.gstickl),
                 "igridv":               self.igridv,
                 "iappend":              self.iappend,
                 "itbnd_pc":             _bc2int(self.top_bound_type_cloud),
@@ -1607,6 +1699,8 @@ class Carma:
                 "rad_mu0":              self.mu0,
                 "rad_w_surf":           self.w_surf,
                 "rad_accel":            self.rad_accel,
+                "rad_accel_deep":       self.rad_accel_deep,
+                "rad_zone_damp":        self.rad_zone_damp,
                 "rad_dT_max":           self.rad_dT_max,
                 "rad_dT_tol":           self.rad_dT_tol,
                 "rad_dtau_tol":         self.rad_dtau_tol,
@@ -1621,6 +1715,16 @@ class Carma:
                 "cloud_rad":            int(self.cloud_rad),
                 }
             }
+        if self.gstick_by_group:
+            unknown = set(self.gstick_by_group) - set(self.groups)
+            if unknown:
+                raise ValueError(f"gstick_by_group names unknown groups: {sorted(unknown)}")
+            if len(self.groups) > 50:
+                raise ValueError("gstick_by_group supports at most 50 groups "
+                                 "(the driver's gstick_grp array size)")
+            # In groups.txt order; -1 = the group uses gstickl.
+            nml["input_params"]["gstick_grp"] = [
+                float(self.gstick_by_group.get(name, -1.0)) for name in self.groups]
         nml = f90nml.Namelist(nml)
         nml.write(os.path.join(path, "inputs", "input.nml"), force=True)
         
@@ -1713,10 +1817,13 @@ class Carma:
                     f.write(f'{ele_from:3d}\t{ele_to:3d}\t0\t{igas:3d}\t'
                             f'{0:3d}\t{0:1.8f}\n')
         
+        # LLM-GENERATED — UNVERIFIED (tier: simulation)
+        # Remove this line only after completing the checks in Assistant/POLICY.md §2.
         with open(os.path.join(path, io["growth_file"]), "w+") as f:
-            f.write("ielem\tigas\n")
+            f.write("ielem\tigas\tnu\tis_key\txref\n")
             for g in self.growth:
-                f.write(f"{g.elem.ielem}\t {g.gas.igas}\n")
+                f.write(f"{g.elem.ielem}\t {g.gas.igas}\t {g.nu}\t "
+                        f"{int(g.is_key)}\t {self._growth_xref(g):.10e}\n")
         
         with open (os.path.join(path, io["coag_file"]), "w+") as f:
             f.write("igroup\n")
@@ -1976,10 +2083,11 @@ class Element:
         self.igas:  int     = igas #TODO change to reference gas directly
     
 
-_DEFAULT_GAS_BC = {"bot_conc": -1,
+# Read-only default; each Gas takes a mutable copy at construction.
+_DEFAULT_GAS_BC = types.MappingProxyType({"bot_conc": -1,
                     "top_conc": -1,
                     "bot_flux": 0,
-                    "top_flux": 0}
+                    "top_flux": 0})
 
 class Gas: 
     """An object representing a limiting gas resevoir for a condensate.  Attributes
@@ -2081,7 +2189,7 @@ class Gas:
         self.wtmol_dif      = kwargs.get("wtmol_dif",     defaults["wtmol_dif"])
         self.gcomp          = kwargs.get("gcomp",         defaults.get("gcomp", 0))
         self.hill_formula   = kwargs.get("hill_formula",  defaults["hill_formula"])
-        self.boundary       = kwargs.get("boundary",      _DEFAULT_GAS_BC)
+        self.boundary       = kwargs.get("boundary",      dict(_DEFAULT_GAS_BC))
 
         
     
@@ -2126,11 +2234,30 @@ class Growth:
         The element upon which the gas condenses/evaportates from
     gas : Gas
         The gas resevoir from/to which the gas condenses/evaportates
+    nu : int, optional
+        Stoichiometric coefficient of this gas in the condensation reaction
+        (moles of gas consumed per mole of condensate formed), by default 1.
+        For the key gas this equals the group's ``stofact``.
+    is_key : bool, optional
+        True if this gas is the kinetically limiting ("key") species whose
+        supersaturation drives the growth rate, by default True.  Each element
+        has exactly one key pathway; non-key pathways only deplete their gas
+        stoichiometrically.
+    xref : float, optional
+        Reference mass mixing ratio [g/g] of this (secondary) gas implicit in
+        the condensate's vapor-pressure fit.  With ``Carma.do_key_swap`` the
+        condensate's supersaturation scales with this gas's abundance relative
+        to the reference.  By default None, in which case ``Carma.run`` uses
+        the gas's bottom-boundary abundance.
 
     """
-    def __init__(self, elem: "Element", gas: "Gas") -> None:
+    def __init__(self, elem: "Element", gas: "Gas", nu: int = 1,
+                 is_key: bool = True, xref: Optional[float] = None) -> None:
         self.elem = elem
         self.gas = gas
+        self.nu = nu
+        self.is_key = is_key
+        self.xref = xref
     
 class Group:
     """An object representing a cloud species
@@ -2297,6 +2424,7 @@ class Group:
         self.stofact        = kwargs.get("stofact",       defaults["stofact"])
         self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
         self.desorption     = kwargs.get("desorption",    defaults.get("desorption", -1))
+        self.stoich         = kwargs.get("stoich",        defaults.get("stoich", None))
 
 
 

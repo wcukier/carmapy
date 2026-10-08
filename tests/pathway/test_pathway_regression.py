@@ -28,7 +28,7 @@ PATHWAY_DATA = REPO_ROOT / "tests" / "data" / "pathways"
 RTOL = 0.10
 ATOL = 1e-30
 
-PATHWAYS = ["tio2_hom", "tio2_coag", "mg2sio4_het"]
+PATHWAYS = ["tio2_hom", "tio2_coag", "mg2sio4_het", "silicate_comp"]
 
 
 def _build_pathway(name: str, path: str, example_levels):
@@ -62,6 +62,14 @@ def _build_pathway(name: str, path: str, example_levels):
         c.add_gas("Mg2SiO4")
         c.add_hom_group("TiO2", 1e-8)
         c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
+
+    elif name == "silicate_comp":
+        # Competitive condensation of the three silicates from shared Mg and
+        # SiO reservoirs (many-to-many depletion).
+        c.add_hom_group("TiO2", 1e-8)
+        c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
+        c.add_het_group("MgSiO3", "TiO2", 1e-8 * 2 ** (1 / 3))
+        c.add_het_group("SiO2", "TiO2", 1e-8 * 2 ** (1 / 3))
 
     else:
         raise ValueError(f"Unknown pathway: {name}")

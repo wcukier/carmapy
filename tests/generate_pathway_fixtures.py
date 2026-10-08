@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 PATHWAY_DATA = REPO_ROOT / "tests" / "data" / "pathways"
-PATHWAYS = ["tio2_hom", "tio2_coag", "kcl_hom", "mg2sio4_het", "multispecies"]
+PATHWAYS = ["tio2_hom", "tio2_coag", "kcl_hom", "mg2sio4_het", "multispecies", "silicate_comp"]
 
 
 def _build_pathway(name, path, example_levels):
@@ -52,6 +52,15 @@ def _build_pathway(name, path, example_levels):
         c.add_gas("Mg2SiO4")
         c.add_hom_group("TiO2", 1e-8)
         c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
+
+    elif name == "silicate_comp":
+        # Competitive condensation: Mg2SiO4 (key Mg, secondary SiO), MgSiO3
+        # (key SiO, secondary Mg), and SiO2 (key SiO) share the Mg and SiO
+        # reservoirs.
+        c.add_hom_group("TiO2", 1e-8)
+        c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
+        c.add_het_group("MgSiO3", "TiO2", 1e-8 * 2 ** (1 / 3))
+        c.add_het_group("SiO2", "TiO2", 1e-8 * 2 ** (1 / 3))
 
     elif name == "multispecies":
         c.add_gas("TiO2")

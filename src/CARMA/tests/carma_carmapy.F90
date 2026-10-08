@@ -1,3 +1,5 @@
+! LLM-GENERATED — UNVERIFIED (tier: physics)
+! Remove this banner only after completing the checks in Assistant/POLICY.md §2.
 !! @author Diana Powell
 !! @version Oct-2019
 
@@ -39,6 +41,26 @@ subroutine test_day()
   integer   :: NGROWTH, NNUC, NCOAG
   integer   :: IS_2D
   integer   :: t_evolves
+  integer   :: ido_cons_evap
+  integer   :: imaxntsubsteps_cap
+  integer   :: iimplicit_gas
+  integer   :: ikey_swap
+  real(kind=f) :: xref_dep
+  integer   :: iminsubsteps
+  real(kind=f) :: implicit_trigger
+  ! Sticking coefficient of condensing vapor on liquid/non-ice particles,
+  ! passed to CARMA_Initialize as gstickl (CARMA default 1).
+  ! LLM-GENERATED — UNVERIFIED (tier: physics)
+  real(kind=f) :: gstickl_in
+  ! Per-group growth sticking coefficients, in groups.txt order, passed to
+  ! CARMAGROUP_Create as gstick. Entries <= 0 (the default) fall back to
+  ! gstickl_in; groups past MAXGRP_GSTICK always use gstickl_in.
+  ! LLM-GENERATED — UNVERIFIED (tier: physics)
+  integer, parameter :: MAXGRP_GSTICK = 50
+  real(kind=f) :: gstick_grp(MAXGRP_GSTICK)
+  real(kind=f) :: gstick_i
+  real(kind=f) :: implicit_rtol
+  real(kind=f) :: implicit_dgmax
   integer   :: igridv
   integer   :: idocoag
   logical   :: do_coag
@@ -95,6 +117,8 @@ subroutine test_day()
   real(kind=f), allocatable   :: satliq_old(:,:)
   real(kind=f), allocatable   :: satice_old(:,:)
   real(kind=f), allocatable   :: svpliq(:,:)
+  real(kind=f), allocatable   :: svp_gas(:,:)
+  integer, allocatable        :: grpgas(:)
   real(kind=f), allocatable   :: wtpct(:,:)
   real(kind=f), allocatable   :: gflux(:,:)
   real(kind=f), allocatable   :: pflux(:,:,:)
@@ -149,6 +173,8 @@ subroutine test_day()
   integer               :: ibinm
   integer               :: iz
   integer               :: icomposition, iroutine
+  integer               :: nu_dep, is_key, ios
+  character(len=256)    :: linebuf
   integer, parameter    :: lunerr = 48
   integer, parameter    :: lun = 42
   integer, parameter    :: lunp = 43
@@ -258,6 +284,13 @@ subroutine test_day()
   integer             :: cloud_rad
   character(len=256)  :: ck_table_file
   real(kind=f)        :: t_int, rad_accel, rad_dT_max
+  ! Heat-capacity divisor for the base-connected convective zone; see
+  ! rce_type%accel_deep. 1 = physical time history.
+  ! LLM-GENERATED — UNVERIFIED (tier: physics)
+  real(kind=f)        :: rad_accel_deep
+  ! Convective-zone damping: 0 = fastest layer, 1 = collective; see
+  ! rce_type%zone_damp. LLM-GENERATED — UNVERIFIED (tier: physics)
+  integer             :: rad_zone_damp
   real(kind=f)        :: t_irr, t_star, rad_mu0, rad_w_surf
   real(kind=f)        :: rad_dT_tol, rad_dtau_tol
   ! Which adiabat the convective interior follows: 0 = Parmentier fit,
@@ -277,12 +310,12 @@ subroutine test_day()
 
   namelist / radiation / do_radiation, ck_table_file, t_int, &
          t_irr, t_star, rad_mu0, rad_w_surf, &
-         rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
+         rad_accel, rad_accel_deep, rad_zone_damp, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
          rad_gap_max, adiabat, adiabat_file, kzz_mode, kzz_mixl_scale, kzz_lapse_smooth, cloud_rad
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
-         NCOAG, IS_2D, t_evolves, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
+         NCOAG, IS_2D, t_evolves, ido_cons_evap, imaxntsubsteps_cap, iminsubsteps, iimplicit_gas, ikey_swap, implicit_trigger, implicit_rtol, implicit_dgmax, gstickl_in, gstick_grp, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
          ibbnd_gc
 
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
@@ -303,7 +336,6 @@ subroutine test_day()
   real(kind=f), allocatable :: grp_vp_metcoeff(:), grp_vp_logpcoeff(:), grp_lat_heat_e(:)
   real(kind=f), allocatable :: grp_desorption(:), grp_wtmol_core(:)
   integer, allocatable :: grp_iroutine(:), grp_is_type3(:), grp_stofact(:)
-  integer, allocatable :: gas2group(:)
 
   ! Per-group cloud optics, read from optics_file when NWAVE > 0. Generated in
   ! Python on exactly this bin grid and wavelength set, so they are handed to
@@ -329,6 +361,16 @@ subroutine test_day()
 
   ! Defaults for namelist params that may be missing from older input.nml files.
   t_evolves = 0   ! 0 = T,P fixed across the run -> fixed initialization, setupgkern caches its outputs
+  ido_cons_evap = 0  ! 1 = bound explicit evaporation production by the donor bin's implicit loss
+  imaxntsubsteps_cap = 16384  ! hard cap on the substep count a retry may request
+  gstickl_in = 1._f
+  gstick_grp = -1._f          ! <= 0 = group uses gstickl_in
+  iminsubsteps = 1            ! substeps every layer starts from (above maxsubsteps, a fixed substep)
+  ikey_swap = 0               ! 1 = condensates may swap their key reactant to the limiting one
+  iimplicit_gas = 0           ! 1 = solve gas depletion implicitly with the particles
+  implicit_trigger = 0.1_f    ! relative gas change in one substep that triggers the implicit solve
+  implicit_rtol = 1.e-6_f     ! relative tolerance on the implicit gas fixed point
+  implicit_dgmax = 1.e30_f    ! largest relative gas change an implicit substep may take
   optics_file = ""  ! only read when NWAVE > 0, i.e. radiatively coupled runs
 
   do_radiation  = 0        ! 0 = fixed T,P -- the whole radiation group is inert
@@ -339,6 +381,8 @@ subroutine test_day()
   rad_mu0       = 0.5_f     ! dayside average
   rad_w_surf    = 0._f      ! gas giant: no surface to reflect
   rad_accel     = 1._f
+  rad_accel_deep = 1._f
+  rad_zone_damp  = 0
   rad_dT_max    = 0.5_f
   rad_dT_tol    = 1._f
   rad_dtau_tol  = 0.02_f
@@ -406,8 +450,6 @@ subroutine test_day()
   allocate(grp_vp_metcoeff(NGROUP), grp_vp_logpcoeff(NGROUP), grp_lat_heat_e(NGROUP))
   allocate(grp_desorption(NGROUP), grp_wtmol_core(NGROUP))
   allocate(grp_iroutine(NGROUP), grp_is_type3(NGROUP), grp_stofact(NGROUP))
-  allocate(gas2group(NGAS))
-  gas2group = 0
   allocate(winds(NZ))
 
   ! Cloud optics for the radiatively coupled path. NWAVE is 0 for an ordinary
@@ -544,6 +586,12 @@ subroutine test_day()
   open(unit=lun,file =  filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
   open(unit=lunf,file =  flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
   open(unit=lunrates,file =  rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
+#ifdef CARMA_TEST_CHECKS
+  ! Test-build diagnostics: per-substep gas-failure log (written by gsolve) and
+  ! full-precision number densities at each output stamp.
+  open(unit=91, file='failures_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
+  open(unit=92, file='fullprec_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
+#endif
 
   ! Allocate the arrays that we need for the model
   allocate(xc(NZ), dx(NZ), yc(NZ), dy(NZ), &
@@ -553,11 +601,13 @@ subroutine test_day()
   allocate(numden(NZ,NELEM,NBIN))
   allocate(mmr_gas(NZ,NGAS))
   allocate(mmr_gas_old(NZ,NGAS))
-  allocate(satliq(NZ,NGAS))
-  allocate(satice(NZ,NGAS))
-  allocate(satliq_old(NZ,NGAS))
-  allocate(satice_old(NZ,NGAS))
-  allocate(svpliq(NZ,NGAS))
+  allocate(satliq(NZ,NGROUP))
+  allocate(satice(NZ,NGROUP))
+  allocate(satliq_old(NZ,NGROUP))
+  allocate(satice_old(NZ,NGROUP))
+  allocate(svpliq(NZ,NGROUP))
+  allocate(svp_gas(NZ,NGAS))
+  allocate(grpgas(NGROUP))
   allocate(wtpct(NZ,NGAS))
   allocate(gflux(NZP1,NGAS))
   allocate(pflux(NZP1,NBIN,NELEM))
@@ -613,8 +663,8 @@ subroutine test_day()
   open(10, file = groups_file)
   read(10, *)
   do i = 1, NGROUP
-    ! New CARMApy group file carries the condensate properties. They are
-    ! buffered here and applied to the corresponding gas (see gas creation).
+    ! The group file carries the condensate properties; they live on the
+    ! group so several condensates can share one gas reservoir.
     read(10, *) name, rmin, grp_wtmol(i), grp_iroutine(i), grp_rho_cond(i), &
      grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), grp_vp_tcoeff(i), &
      grp_is_type3(i), grp_surften_slope(i), grp_vp_metcoeff(i), grp_vp_logpcoeff(i), &
@@ -622,13 +672,29 @@ subroutine test_day()
 
     write(*,*) "Add " //TRIM(name)//"..."
 
+    gstick_i = -1._f
+    if (i <= MAXGRP_GSTICK) gstick_i = gstick_grp(i)
+    if (gstick_i > 0._f) write(*,*) "  growth sticking coefficient ", gstick_i
+
     if (NWAVE > 0) then
-      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, I_SPHERE, 1._f, &
-      .FALSE., rc, do_vtran=.TRUE., is_sulfate=.FALSE., &
+      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
+      .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), &
+      grp_vp_tcoeff(i), INT(grp_iroutine(i)), rc, &
+      wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
+      surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
+      vp_logpcoeff=grp_vp_logpcoeff(i), lat_heat_e=grp_lat_heat_e(i), &
+      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), gstick=gstick_i, &
+      do_vtran=.TRUE., is_sulfate=.FALSE., &
       qext=grp_qext(:,:,i), ssa=grp_ssa(:,:,i), asym=grp_asym(:,:,i))
     else
-      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, I_SPHERE, 1._f, &
-      .FALSE., rc, do_vtran=.TRUE., is_sulfate=.FALSE.)
+      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
+      .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), &
+      grp_vp_tcoeff(i), INT(grp_iroutine(i)), rc, &
+      wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
+      surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
+      vp_logpcoeff=grp_vp_logpcoeff(i), lat_heat_e=grp_lat_heat_e(i), &
+      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), gstick=gstick_i, &
+      do_vtran=.TRUE., is_sulfate=.FALSE.)
     end if
 
     if (rc < 0) stop "    *** FAILED ***"
@@ -690,49 +756,18 @@ subroutine test_day()
   write(*,*) "  Add Gas(es) ..."
   write(*,*) " "
 
-  ! Build the gas -> group map from the growth pathways: each growth line pairs a
-  ! volatile element (ito) with the gas it exchanges with (igas); elem2group then
-  ! gives the group that owns that gas's condensate properties. Core (Core Mass)
-  ! elements have no growth pathway, so they never appear here. (This file is read
-  ! again below for CARMA_AddGrowth.)
-  open(10, file=growth_file)
-  read(10, *)
-  do i = 1, NGROWTH
-    read(10, *) ito, igas
-    gas2group(igas) = elem2group(ito)
-  enddo
-  close(10)
-
   open(10, file=gases_file)
   read(10, *)
   do i=1, NGAS
 
-    ! New CARMApy gas file holds gas-phase properties only. The condensate
-    ! properties are pulled from the group that condenses this gas. hill_formula
-    ! is read but unused by the engine (it is a Python-side fastchem label).
+    ! The gas file holds gas-phase properties only; condensate properties
+    ! live on the groups, so several condensates can share one reservoir.
+    ! hill_formula is read but unused by the engine (it is a Python-side
+    ! fastchem label).
     read(10, *) name, wtmol_dif, icomposition, hill_formula
 
-    igrp = gas2group(i)
-
     write(*,*) "Add "//trim(name) //" ..."
-    if (igrp > 0) then
-      call CARMAGAS_Create(carma, i, name, grp_wtmol(igrp), grp_iroutine(igrp), icomposition, &
-       grp_rho_cond(igrp), grp_surften_0(igrp), grp_coldia(igrp), grp_vp_offset(igrp), &
-       grp_vp_tcoeff(igrp), rc, is_type3=grp_is_type3(igrp), surften_slope=grp_surften_slope(igrp), &
-       vp_metcoeff=grp_vp_metcoeff(igrp), vp_logpcoeff=grp_vp_logpcoeff(igrp), wtmol_dif=wtmol_dif, &
-       lat_heat_e=grp_lat_heat_e(igrp), stofact=grp_stofact(igrp), desorption=grp_desorption(igrp))
-    else
-      ! Background gas with no condensate (e.g. H2O when there is no water cloud).
-      ! No group grows it, so its condensate properties are never used; supply
-      ! harmless placeholders and pick the vapor-pressure routine from composition.
-      if (icomposition == I_GCOMP_H2O) then
-        iroutine = I_VAPRTN_H2O_MURPHY2005
-      else
-        iroutine = I_VAPRTN_USER
-      end if
-      call CARMAGAS_Create(carma, i, name, wtmol_dif, iroutine, icomposition, &
-       1._f, 0._f, 1.0e-8_f, 0._f, 0._f, rc, wtmol_dif=wtmol_dif)
-    end if
+    call CARMAGAS_Create(carma, i, name, wtmol_dif, icomposition, rc)
 
     if (rc < 0) stop "    *** FAILED ***"
 
@@ -760,13 +795,43 @@ subroutine test_day()
   close(10)
 
   write(*,*) "  Add Growth ..."
+  grpgas(:) = 0
   open(10, file=growth_file)
   read(10, *)
-  do i = 1, NNUC
-    read(10, *) ito, igas
+  do i = 1, NGROWTH
+    ! growth.txt v3 rows are (ielem, igas, nu, is_key, xref), where xref is the
+    ! reference mass mixing ratio of a secondary reactant in the condensate's
+    ! vapor-pressure fit (0 = none); v2 rows omit xref; legacy rows are
+    ! (ielem, igas), which are key pathways with nu = the group's stofact.
+    ! Key rows define the growth kinetics; non-key rows only register the
+    ! stoichiometric depletion of a secondary gas.
+    read(10, '(a)') linebuf
+    read(linebuf, *, iostat=ios) ito, igas, nu_dep, is_key, xref_dep
+    if (ios /= 0) then
+      xref_dep = 0._f
+      read(linebuf, *, iostat=ios) ito, igas, nu_dep, is_key
+      if (ios /= 0) then
+        read(linebuf, *) ito, igas
+        nu_dep = 0
+        is_key = 1
+      end if
+    end if
 
-    call CARMA_AddGrowth(carma, ito, igas, rc)
-    if (rc < 0) stop "    *** FAILED ***"
+    if (is_key == 1) then
+      call CARMA_AddGrowth(carma, ito, igas, rc)
+      if (rc < 0) stop "    *** FAILED ***"
+      grpgas(elem2group(ito)) = igas
+    end if
+
+    if (nu_dep > 0) then
+      call CARMA_AddGasDepletion(carma, elem2group(ito), igas, nu_dep, rc)
+      if (rc < 0) stop "    *** FAILED CARMA_AddGasDepletion ***"
+    end if
+
+    if (xref_dep > 0._f) then
+      call CARMA_SetGasReference(carma, elem2group(ito), igas, xref_dep, rc)
+      if (rc < 0) stop "    *** FAILED CARMA_SetGasReference ***"
+    end if
 
   enddo
   close(10)
@@ -798,9 +863,13 @@ subroutine test_day()
   call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, &
                         do_fixedinit=(t_evolves .eq. 0), do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
-                        do_vdiff=.TRUE., do_vtran=.TRUE., maxsubsteps=10, maxretries=10, &
+                        do_vdiff=.TRUE., do_vtran=.TRUE., minsubsteps=iminsubsteps, maxsubsteps=10, maxretries=10, &
+                        maxntsubsteps_cap=imaxntsubsteps_cap, &
+                        do_implicit_gas=(iimplicit_gas .ne. 0), implicit_trigger=implicit_trigger, &
+                        implicit_rtol=implicit_rtol, implicit_dgmax=implicit_dgmax, do_key_swap=(ikey_swap .ne. 0), &
                         itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc, &
-                        do_t_evolves=(t_evolves .ne. 0))
+                        do_t_evolves=(t_evolves .ne. 0), do_cons_evap=(ido_cons_evap .ne. 0), &
+                        gstickl=gstickl_in)
   if (rc < 0) stop "    *** FAILED CARMA_Initialize ***"
 
   write(*,*) " "
@@ -920,6 +989,8 @@ subroutine test_day()
                   rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
                   rad_gap_max, rc)
     if (rc < 0) stop "    *** FAILED rce_init ***"
+    rce%accel_deep = rad_accel_deep
+    rce%zone_damp  = rad_zone_damp
 
     ! The evolving column gets its own output file, so the existing outputs
     ! keep their format and a fixed-T run produces no extra file at all.
@@ -996,6 +1067,17 @@ subroutine test_day()
     close(unit=lunres)
   endif
 
+  ! The radiative update at the top of the first step reads numden before any
+  ! step has filled it, so derive it from the state the run starts from, with
+  ! the air density setupatm computes from the same p [Pa -> barye] and t.
+  ! LLM-GENERATED — UNVERIFIED (tier: physics)
+  do j = 1, NBIN
+    do ielem = 1, NELEM
+      numden(:, ielem, j) = mmr(:, ielem, j) * (p(:) * 10._f) &
+                            / (RGAS / wtmol_air(:) * t(:)) / rmass(j, elem2group(ielem))
+    end do
+  end do
+
   call CARMASTATE_CreateFromReference(cstate, carma_ptr, time, dtime, NZ, &
                          	      igridv, I_CART, lat, lon, &
                          	      xc(:), dx(:), &
@@ -1018,6 +1100,9 @@ subroutine test_day()
     time = (istep - 1) * dtime
 
     write(*,*) 'istep, time', istep, time, filename(1:len_trim(filename))
+#ifdef CARMA_TEST_CHECKS
+    write(91,'(a,i10)') 'S', istep
+#endif
 
 
     if (IS_2D .eq. 1) then
@@ -1080,11 +1165,12 @@ subroutine test_day()
       end do
     end do
 
-    do igas = 1, NGAS
-      call CARMASTATE_SetGas(cstate, igas, mmr_gas(:,igas), rc, mmr_old=mmr_gas_old(:,igas), &
-                             satice_old=satice(:,igas), satliq_old=satliq(:,igas))
-      if (rc < 0) stop "    *** FAILED CARMASTATE_SetGas ***"
-    end do
+    ! Load all gases and the per-condensate saturation state in one call
+    ! (the old saturations are per group, so they can only be initialized
+    ! once all gas concentrations are known).
+    call CARMASTATE_PrepareStep(cstate, mmr_gas, rc, mmr_old=mmr_gas_old, &
+                                satice_old=satice, satliq_old=satliq)
+    if (rc < 0) stop "    *** FAILED CARMASTATE_PrepareStep ***"
 
     ! Execute the step
     call CARMASTATE_Step(cstate, rc)
@@ -1103,9 +1189,29 @@ subroutine test_day()
     end do
 
     do igas = 1, NGAS
-      call CARMASTATE_GetGas(cstate, igas, mmr_gas(:,igas), rc, satliq=satliq(:,igas), &
-                             satice=satice(:,igas), eqliq = svpliq(:,igas), wtpct=wtpct(:,igas), gflux=gflux(:,igas))
+      call CARMASTATE_GetGas(cstate, igas, mmr_gas(:,igas), rc, wtpct=wtpct(:,igas), gflux=gflux(:,igas))
       if (rc < 0) stop "    *** FAILED CARMASTATE_GetGas ***"
+    end do
+
+    ! Saturation state is per condensate (group); several groups may share
+    ! one gas reservoir with different vapor pressures.
+    do igroup = 1, NGROUP
+      call CARMASTATE_GetGroup(cstate, igroup, rc, satliq=satliq(:,igroup), &
+                               satice=satice(:,igroup), eqliq=svpliq(:,igroup))
+      if (rc < 0) stop "    *** FAILED CARMASTATE_GetGroup ***"
+    end do
+
+    ! Per-gas equilibrium vapor pressure for output and the input cap: the
+    ! most restrictive (lowest) saturation vapor pressure among the
+    ! condensates keyed to each gas. A gas with no condensate gets a huge
+    ! value (no cap).
+    svp_gas(:,:) = 1e30_f
+    do igroup = 1, NGROUP
+      if (grpgas(igroup) > 0) then
+        do i = 1, NZ
+          svp_gas(i,grpgas(igroup)) = min(svp_gas(i,grpgas(igroup)), svpliq(i,igroup))
+        end do
+      end if
     end do
 
 
@@ -1127,7 +1233,7 @@ subroutine test_day()
       do i = 1, NZ
         READ(gas_in, *) mmr_gas(i, :)
         do j = 1, NGAS
-          mmr_gas(i,j) = min(mmr_gas(i,j) * (wtmol_gas(j)/ wtmol_air(1)), svpliq(i,j) * (wtmol_gas(j) / wtmol_air(1)))
+          mmr_gas(i,j) = min(mmr_gas(i,j) * (wtmol_gas(j)/ wtmol_air(1)), svp_gas(i,j) * (wtmol_gas(j) / wtmol_air(1)))
         end do
       end do
 
@@ -1176,6 +1282,21 @@ subroutine test_day()
         write(lunratesp,'(f25.5)') (istep)*dtime
       end if
 
+#ifdef CARMA_TEST_CHECKS
+      ! Per layer: air density and thickness; then per (bin, layer): the mass
+      ! mixing ratio of every element and every gas.
+      write(92,'(a,i10)') 'T', istep
+      do i = 1, NZ
+        write(92,'(2es26.16e3)') rho_atm_cgs(i), abs(zl(i+1) - zl(i))
+      end do
+      do j = 1, NBIN
+        do i = 1, NZ
+          write(92,'(*(es26.16e3))') (mmr(i, ielem, j), ielem = 1, NELEM), &
+            (mmr_gas(i,igas), igas = 1, NGAS)
+        end do
+      end do
+#endif
+
       do j = 1, NBIN
         do i = 1, NZ
 
@@ -1190,10 +1311,10 @@ subroutine test_day()
           do igas = 1, NGAS
             write(lun, '(2e25.15)', advance="no") &
             real(mmr_gas(i,igas) * 1.0e6_f / (wtmol_gas(igas) / wtmol_air(i))), &
-            real(svpliq(i,igas) * 1.0e6_f)
+            real(svp_gas(i,igas) * 1.0e6_f)
             write(lunp, '(2e11.3)', advance="no") &
             real(mmr_gas(i,igas) * 1.0e6_f / (wtmol_gas(igas) / wtmol_air(i))), &
-            real(svpliq(i,igas) * 1.0e6_f)
+            real(svp_gas(i,igas) * 1.0e6_f)
           end do
 
           write(lun, '(f8.0)') zsubsteps(i)
@@ -1234,6 +1355,12 @@ subroutine test_day()
                                   real(rce%nzone, f), rce%conv_resid, &
                                   rce%absorbed_sw, rce%reflected_sw
         nsolve_last = rce%nsolve
+        ! Cumulative energy budget of the temperature update [J/m^2]; see
+        ! rce_type%e_comp. LLM-GENERATED — UNVERIFIED (tier: physics)
+        write(*,'(a,9es20.11)') ' RCE energy:', istep*dtime, rce%e_comp, &
+                                rce%e_appl, rce%e_adj, rce%e_deep, &
+                                rce%e_comp_rad, rce%e_appl_rad, &
+                                rce%e_comp_cnv, rce%e_appl_cnv
 
         do i = 1, NZ
           write(lunrad,'(i5,3e25.15,i3)') i, p(i) * 10._f, t(i), rce%dtdt(i), &
@@ -1271,6 +1398,16 @@ subroutine test_day()
   if (do_radiation .eq. 1) then
     write(*,*) "Radiation: solves =", rce%nsolve, " of", nstep, &
                " steps; dT clamp fired", rce%nclamp, "times"
+    ! Per-layer energy budget of the temperature update [J/m^2]: layer,
+    ! pressure [barye], computed heating, applied heating.
+    ! LLM-GENERATED — UNVERIFIED (tier: physics)
+    if (allocated(rce%e_comp_z)) then
+      open(unit=99, file='rce_energy_' // filename(1:len_trim(filename)) // filesuffix, status='unknown')
+      do i = 1, NZ
+        write(99,'(i5,3es20.11)') i, p(i) * 10._f, rce%e_comp_z(i), rce%e_appl_z(i)
+      end do
+      close(99)
+    end if
     close(unit=lunrad)
     call rce_destroy(rce)
   end if

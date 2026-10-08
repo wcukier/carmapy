@@ -131,6 +131,7 @@ I_GCOMP_MG2SIO4         = 12  ## Mg2SiO4
 I_GCOMP_TIO2            = 13 ## TiO2
 I_GCOMP_AL2O3           = 14 ## Al2O3
 I_GCOMP_CO              = 15 ## CO
+I_GCOMP_SIO             = 16 ## SiO
 
 # How is the CARMA group represented in the parent model
 I_CNSTTYPE_PROGNOSTIC   = 1   ## Prognostic, advected constituent for each bin
@@ -305,7 +306,7 @@ gas_dict = {
     },
         "SiO": { # need better sourcing for these constants
         "wtmol_dif": 44.0849,
-        "gcomp": I_GCOMP_AL2O3,
+        "gcomp": I_GCOMP_SIO,
         "hill_formula": "O1Si1"
     }
 }
@@ -328,7 +329,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": np.nan, # ignored
         "stofact": 1,
-        "gas_phase": "H2O"
+        "gas_phase": "H2O",
+        "stoich": {"H2O": 1}
 
     },
         "KCl": {
@@ -348,7 +350,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "KCl"
+        "gas_phase": "KCl",
+        "stoich": {"KCl": 1}
     },
         "ZnS": {
         "cond_rho": RHO_ZNS,
@@ -367,7 +370,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Zn"
+        "gas_phase": "Zn",
+        "stoich": {"Zn": 1}
     },
         "Na2S": {
         "cond_rho": RHO_NA2S,
@@ -386,7 +390,8 @@ group_dict = {
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
-        "gas_phase": "Na"
+        "gas_phase": "Na",
+        "stoich": {"Na": 2}
     },
         "MnS": {
         "cond_rho": RHO_MNS,
@@ -405,7 +410,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Mn"
+        "gas_phase": "Mn",
+        "stoich": {"Mn": 1}
     },
         "Cr": {
         "cond_rho": RHO_CR,
@@ -424,7 +430,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Cr"
+        "gas_phase": "Cr",
+        "stoich": {"Cr": 1}
     },
         "Mg2SiO4": {
         "cond_rho": RHO_MG2SIO4,
@@ -443,7 +450,8 @@ group_dict = {
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
-        "gas_phase": "Mg"
+        "gas_phase": "Mg",
+        "stoich": {"Mg": 2, "SiO": 1}
     },
         "Fe": {
         "cond_rho": RHO_FE,
@@ -462,7 +470,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Fe"
+        "gas_phase": "Fe",
+        "stoich": {"Fe": 1}
     },
         "TiO2": {
         "cond_rho": RHO_TIO2,
@@ -481,7 +490,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "TiO2"
+        "gas_phase": "TiO2",
+        "stoich": {"TiO2": 1}
     },
         "Al2O3": {
         "cond_rho": RHO_AL2O3,
@@ -500,7 +510,8 @@ group_dict = {
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
-        "gas_phase": "Al"
+        "gas_phase": "Al",
+        "stoich": {"Al": 2}
     },
         "SiO": { 
         "cond_rho": 2.13,
@@ -519,7 +530,8 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "SiO"
+        "gas_phase": "SiO",
+        "stoich": {"SiO": 1}
     },
     "MgSiO3": {
         "cond_rho": RHO_MGSIO3,
@@ -538,7 +550,33 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "SiO"
+        "gas_phase": "SiO",
+        "stoich": {"SiO": 1, "Mg": 1}
+    },
+    # LLM-GENERATED — UNVERIFIED (tier: physics)
+    # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+    "SiO2": {
+        "cond_rho": 2.65,   # alpha-quartz, Kiefer et al. 2026 Table 1, doi:10.3847/1538-4357/ae5101
+        "rtn": I_VAPRTN_USER,
+        # SiO(g) + H2O(g) -> SiO2(s) + H2(g): log10 P[bar] = 13.168 - 28265/T - [Fe/H]
+        # Grant et al. 2023 Eq. 3, doi:10.3847/2041-8213/acfc3b
+        "vp_offset": 13.168,
+        "vp_tcoeff": 28265.0,
+        "vp_metcoeff": 1,
+        "vp_logpcoeff": 0,
+        "wtmol": 60.0843,
+        "mucos_dict": {"TiO2": 0.995},  # assumed equal to Mg2SiO4/MgSiO3; not sourced
+        "opacity_files": "SiO2_complex.txt",  # TODO: add alpha-quartz indices file
+        "rho_cond": 2.65,
+        # sigma = 243.2 + 0.031*T erg/cm^2, Kiefer et al. 2026 Table 1 (surften_0 - surften_slope*T)
+        "surften_0": 243.2,
+        "surften_slope": -0.031,
+        "coldia": 4.04e-8,  # placeholder, same unsourced value as the SiO entry; needs sourcing
+        "is_typeIII": False,
+        "lat_heat_e": -1,
+        "stofact": 1,
+        "gas_phase": "SiO",
+        "stoich": {"SiO": 1}
     }
 }
 

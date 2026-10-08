@@ -62,6 +62,13 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.is_2d = nml["input_params"]["IS_2D"]
     carma.igridv = nml["input_params"]["igridv"]
     carma.t_evolves = bool(nml["input_params"]["t_evolves"])
+    carma.minsubsteps = int(nml["input_params"].get("iminsubsteps", 1))
+    carma.do_key_swap = bool(nml["input_params"].get("ikey_swap", 0))
+    carma.implicit_gas = bool(nml["input_params"].get("iimplicit_gas", 0))
+    carma.implicit_trigger = float(nml["input_params"].get("implicit_trigger", 0.1))
+    carma.implicit_rtol = float(nml["input_params"].get("implicit_rtol", 1e-6))
+    carma.implicit_dgmax = float(nml["input_params"].get("implicit_dgmax", 1e30))
+    carma.gstickl = float(nml["input_params"].get("gstickl_in", 1.0))
     carma.NBIN = nml["input_params"]["NBIN"]
     carma.output_gap = nml["input_params"]["iskip"]
     carma.n_tstep  = nml["input_params"]["nstep"]
@@ -107,6 +114,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
         carma.mu0 = rad.get("rad_mu0", 0.5)
         carma.w_surf = rad.get("rad_w_surf", 0.0)
         carma.rad_accel = rad["rad_accel"]
+        carma.rad_accel_deep = rad.get("rad_accel_deep", 1.0)
+        carma.rad_zone_damp = rad.get("rad_zone_damp", 0)
         carma.rad_dT_max = rad["rad_dt_max"]
         carma.rad_dT_tol = rad["rad_dt_tol"]
         carma.rad_dtau_tol = rad["rad_dtau_tol"]
@@ -161,6 +170,15 @@ def load_carma(path: str, restart: int =0) -> Carma:
                                        desorption=float(desorption),
                                        stofact=int(float(stofact)))
 
+    # Per-group sticking coefficients, in groups.txt order; entries <= 0 mean
+    # the group uses gstickl.
+    gstick_grp = nml["input_params"].get("gstick_grp", [])
+    if not isinstance(gstick_grp, list):
+        gstick_grp = [gstick_grp]
+    carma.gstick_by_group = {
+        name: float(s) for name, s in zip(carma.groups, gstick_grp)
+        if s is not None and float(s) > 0}
+
     with open(os.path.join(path, io["gases_file"]), "r") as f:
         f.readline()
         for line in f:
@@ -207,13 +225,25 @@ def load_carma(path: str, restart: int =0) -> Carma:
             gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
             carma.nucs.append(Nuc(group_core, group_mantle, is_het, gas, float(mucos)))
             
+    # LLM-GENERATED — UNVERIFIED (tier: simulation)
+    # Remove this line only after completing the checks in Assistant/POLICY.md §2.
     with open(os.path.join(path, io["growth_file"])) as f:
         f.readline()
         for line in f:
-            ielem, igas = shlex.split(line[:-1])
+            # v3 rows add the secondary reactant's reference mass mixing
+            # ratio; v2 rows are (ielem, igas, nu, is_key); legacy rows are (ielem,
+            # igas), in which case nu is the group's stofact and the row is
+            # the key pathway.
+            fields = shlex.split(line[:-1])
+            ielem, igas = fields[0], fields[1]
             elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]
             gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
-            carma.growth.append(Growth(elem, gas))
+            if len(fields) >= 4:
+                nu, is_key = int(fields[2]), bool(int(fields[3]))
+            else:
+                nu, is_key = elem.group.stofact, True
+            xref = float(fields[4]) if (len(fields) >= 5 and not is_key) else None
+            carma.growth.append(Growth(elem, gas, nu=nu, is_key=is_key, xref=xref))
             
     with open(os.path.join(path, io["coag_file"])) as f:
         f.readline()

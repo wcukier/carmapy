@@ -3,7 +3,7 @@ from carmapy.constants import gas_dict, group_dict, TCOEFF_TIO2_HELLING
 
 KNOWN_SPECIES = [
     "H2O", "KCl", "ZnS", "Na2S", "MnS", "Cr",
-    "Mg2SiO4", "Fe", "TiO2", "Al2O3", "SiO",
+    "Mg2SiO4", "Fe", "TiO2", "Al2O3", "SiO", "MgSiO3", "SiO2",
 ]
 
 # Condensate properties now live on the group (group_dict).
@@ -11,7 +11,7 @@ GROUP_FIELDS = [
     "rho_cond", "wtmol", "coldia",
     "vp_offset", "vp_tcoeff", "vp_metcoeff", "vp_logpcoeff",
     "surften_0", "surften_slope", "is_typeIII", "stofact",
-    "mucos_dict", "gas_phase",
+    "mucos_dict", "gas_phase", "stoich",
 ]
 
 # Gas-phase properties stay on the gas (gas_dict), keyed by the gas-phase name.
@@ -78,3 +78,39 @@ def test_zns_has_metcoeff():
 def test_mucos_dict_is_dict():
     for species in KNOWN_SPECIES:
         assert isinstance(group_dict[species]["mucos_dict"], dict)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("species", KNOWN_SPECIES)
+def test_stoich_schema(species):
+    """stoich is the full depletion vector; its key-gas entry equals stofact
+    and every gas it names is a defined gas reservoir."""
+    entry = group_dict[species]
+    stoich = entry["stoich"]
+    assert isinstance(stoich, dict) and len(stoich) >= 1
+    assert entry["gas_phase"] in stoich, \
+        f"{species}: key gas '{entry['gas_phase']}' missing from stoich"
+    assert stoich[entry["gas_phase"]] == entry["stofact"], \
+        f"{species}: stoich[key gas] != stofact"
+    for gas, nu in stoich.items():
+        assert gas in gas_dict, f"{species}: stoich names unknown gas '{gas}'"
+        assert isinstance(nu, int) and nu > 0
+
+
+@pytest.mark.unit
+def test_gcomp_unique():
+    """Each gas reservoir has a distinct composition flag."""
+    gcomps = [v["gcomp"] for v in gas_dict.values()]
+    assert len(gcomps) == len(set(gcomps)), "duplicate gcomp values in gas_dict"
+
+
+@pytest.mark.unit
+def test_silicates_share_sio_reservoir():
+    """SiO2 and MgSiO3 draw from the SiO reservoir; Mg2SiO4 is keyed to Mg but
+    also depletes SiO — the configuration the competitive-condensation upgrade
+    (FINESST Task 1) requires."""
+    assert group_dict["SiO2"]["gas_phase"] == "SiO"
+    assert group_dict["MgSiO3"]["gas_phase"] == "SiO"
+    assert group_dict["Mg2SiO4"]["gas_phase"] == "Mg"
+    assert group_dict["Mg2SiO4"]["stoich"] == {"Mg": 2, "SiO": 1}
+    assert group_dict["MgSiO3"]["stoich"] == {"SiO": 1, "Mg": 1}

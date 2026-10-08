@@ -256,29 +256,37 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   nmr_dict = {"H2O": 0}
   P_dict = {}
 
-  for g in list(carma.groups.keys()):
-    group = carma.groups[g]
-    gas = group.gas.name
+  # Cache each group's cloud base; several pathways may share a group.
+  base_cache = {}
 
-    P_int, T_int = find_cloud_base(carma, group)
+  # Iterate over the growth pathways rather than the groups: a gas may be
+  # depleted by several condensates (as a key or a secondary educt), and its
+  # reservoir abundance is set at the deepest cloud base among all of them.
+  for pathway in carma.growth:
+    group = pathway.elem.group
+    gas = pathway.gas.name
+
+    if group.name not in base_cache:
+      base_cache[group.name] = find_cloud_base(carma, group)
+    P_int, T_int = base_cache[group.name]
 
     if P_int > P_dict.get(gas, 0):
 
-      fast_chem_gas = group.gas.hill_formula
+      fast_chem_gas = pathway.gas.hill_formula
 
-      if fast_chem_gas == -1: 
-        raise ValueError("{g} is not currently supported by "
+      if fast_chem_gas == -1:
+        raise ValueError(f"{gas} is not currently supported by "
                           "the carmapy fastchem interface")
 
       metallicity = 10 ** carma.log_metallicity
 
-      nmr_dict[gas] = get_fastchem_abundances(np.array([T_int]), 
-                                            np.array([P_int]), 
-                                            [fast_chem_gas], 
+      nmr_dict[gas] = get_fastchem_abundances(np.array([T_int]),
+                                            np.array([P_int]),
+                                            [fast_chem_gas],
                                             metallicity)[0]
-      P_dict[gas] = P_int 
-  
-  
+      P_dict[gas] = P_int
+
+
   carma.set_nmr(nmr_dict)
 
 
