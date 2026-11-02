@@ -133,11 +133,8 @@ class Results:
     ``sigma * t_int**4``.  None if the run was not radiatively coupled. """
 
     kzz_history : np.ndarray
-    """ Eddy diffusion at the cell levels [cm²/s] (NZ+1, NT) -- what the
-    microphysics actually mixed with at each output.  Equal to ``add_kzz``'s
-    profile throughout unless ``set_radiation(self_consistent_kzz=True)``, in
-    which case it follows the evolving profile; see ``rce_kzz``.  None if
-    the run was not radiatively coupled. """
+    """ Eddy diffusion the microphysics used at each output, at the cell levels
+    [cm²/s] (NZ+1, NT).  None if the run was not radiatively coupled. """
 
     convective : np.ndarray
     """ Which layers the convective adjustment left neutrally stable, at each
@@ -149,11 +146,10 @@ class Results:
     run was not radiatively coupled. """
 
     conv_resid : np.ndarray
-    """ Largest fractional superadiabaticity the convective adjustment left
-    behind at each output (NT).  The adjustment stops after a fixed number of
-    sweeps and relaxes the remainder over subsequent steps, so a small non-zero
-    value is normal; a growing one means the profile is moving faster than the
-    adjustment can follow.  None if the run was not radiatively coupled. """
+    """ Largest fractional superadiabaticity left by the convective adjustment
+    at each output (NT).  A small value is normal; a growing one means the
+    adjustment is not keeping up.  None if the run was not radiatively
+    coupled. """
 
     rad_interval : np.ndarray
     """ Realized number of timesteps per full radiative solve (NT).  1 means the
@@ -511,12 +507,8 @@ class Results:
                 return
             nz_file, _, iskip = (int(x) for x in header[:3])
             self.t_int = float(header[3])
-            # Absent from output written before the shortwave existed, so
-            # defaulted rather than indexed -- an older run reads back as the
-            # isolated object it was.
-            if len(header) >= 6:
-                self.t_irr = float(header[4])
-                self.mu0   = float(header[5])
+            self.t_irr = float(header[4])
+            self.mu0   = float(header[5])
 
             if nz_file != NZ:
                 raise ValueError("temperature output inconsistent with carma run")
@@ -526,9 +518,6 @@ class Results:
             convective = np.zeros((NZ, n_tstep), dtype=bool)
             flux_net  = np.zeros((NZ + 1, n_tstep))
             kzz       = np.zeros((NZ + 1, n_tstep))
-            # Absent from output written before Kzz followed the profile, in
-            # which case the level block is three columns wide instead of four.
-            has_kzz   = False
             F_TOA     = np.zeros(n_tstep)
             nzone     = np.zeros(n_tstep, dtype=int)
             conv_resid = np.zeros(n_tstep)
@@ -541,14 +530,11 @@ class Results:
             nt = 0
             for it in range(n_tstep):
                 scalars = f.readline().split()
-                if len(scalars) < 5:
+                if len(scalars) < 7:
                     break
-                _, F_TOA[it], nsolve[it], zones, conv_resid[it] = (
-                    float(x) for x in scalars[:5])
+                (_, F_TOA[it], nsolve[it], zones, conv_resid[it],
+                 absorbed_sw[it], reflected_sw[it]) = (float(x) for x in scalars[:7])
                 nzone[it] = int(zones)
-                if len(scalars) >= 7:
-                    absorbed_sw[it] = float(scalars[5])
-                    reflected_sw[it] = float(scalars[6])
 
                 lines = [f.readline() for _ in range(2 * NZ + 1)]
                 if not lines[-1]:
@@ -558,10 +544,7 @@ class Results:
                     break
 
                 levels = np.fromstring(' '.join(lines[NZ:]), sep=' ')
-                if levels.size % (NZ + 1) != 0:
-                    break
-                ncol = levels.size // (NZ + 1)
-                if ncol not in (3, 4):
+                if levels.size != 4 * (NZ + 1):
                     break
 
                 block = block.reshape(NZ, 5)
@@ -569,27 +552,22 @@ class Results:
                 T_history[:, it] = block[:, 2]
                 dTdt[:, it]      = block[:, 3]
 
-                levels = levels.reshape(NZ + 1, ncol)
+                levels = levels.reshape(NZ + 1, 4)
                 flux_net[:, it]  = levels[:, 2]
-                if ncol == 4:
-                    kzz[:, it] = levels[:, 3]
-                    has_kzz = True
-                # Fixed for the run; the levels the convective zones are
-                # bounded by, which nothing else on Results carries.
+                kzz[:, it]       = levels[:, 3]
+                # Level pressures bounding the convective zones.
                 self.P_levels_rad = levels[:, 1]
                 nt += 1
 
         self.T_history = T_history[:, :nt]
         self.dTdt      = dTdt[:, :nt]
         self.flux_net  = flux_net[:, :nt]
-        self.kzz_history = kzz[:, :nt] if has_kzz else None
+        self.kzz_history = kzz[:, :nt]
         self.F_TOA     = F_TOA[:nt]
         self.convective = convective[:, :nt]
         self.nzone     = nzone[:nt]
         self.conv_resid = conv_resid[:nt]
 
-        # Steps per full radiative solve. A value of 1 means the adaptive
-        # cadence is doing nothing; the ceiling is the run's rad_gap_max.
         with np.errstate(divide='ignore', invalid='ignore'):
             self.rad_interval = np.where(nsolve[:nt] > 0,
                                          iskip / np.maximum(nsolve[:nt], 1),
@@ -600,12 +578,8 @@ class Results:
 
     @property
     def bond_albedo(self) -> np.ndarray:
-        """Fraction of the incident beam reflected back to space (NT).
-
-        Zero for an unirradiated run, where nothing is incident.  This is an
-        *output* of the run: it is what the cloud and Rayleigh scattering
-        produced, which is why the equilibrium temperature below cannot be an
-        input.
+        """Fraction of the incident beam reflected back to space (NT).  Zero
+        for an unirradiated run.
         """
         incident = self.mu0 * 5.670374419e-8 * self.t_irr ** 4
         if self.reflected_sw is None or incident <= 0:
@@ -614,11 +588,8 @@ class Results:
 
     @property
     def T_eq(self) -> np.ndarray:
-        """Equilibrium temperature (NT) [K], from the *absorbed* shortwave.
-
-        ``sigma * T_eq**4 == absorbed_sw``.  Note this is not ``t_irr`` even at
-        zero albedo: the geometry factor ``mu0`` remains, so
-        ``T_eq**4 == mu0 * (1 - A) * t_irr**4``.
+        """Equilibrium temperature (NT) [K], from the absorbed shortwave:
+        ``sigma * T_eq**4 == absorbed_sw == mu0 * (1 - A) * sigma * t_irr**4``.
         """
         if self.absorbed_sw is None:
             return np.zeros_like(self.F_TOA)
@@ -626,20 +597,10 @@ class Results:
 
     @property
     def T_eff(self) -> np.ndarray:
-        """Effective temperature (NT) [K], from the emergent *thermal* flux.
-
-        ``sigma * T_eff**4 == F_TOA + absorbed_sw``, the longwave the column
-        actually radiates to space.  ``F_TOA`` is a net flux carrying the beam
-        with it, so adding back what the column absorbed leaves the thermal
-        emission alone; reflected starlight is in neither, having cancelled
-        against the incident beam it never became.
-
-        In equilibrium the column radiates away the starlight it absorbed plus
-        its own internal heat, which is ``T_eff**4 == t_int**4 + T_eq**4`` --
-        the relation the run converges *to* rather than one imposed on it.  A
-        column still out of balance emits more or less than that, and the gap
-        is what the flux ratio reports.  For an isolated object this is the
-        emergent flux itself, approaching ``t_int``.
+        """Effective temperature (NT) [K], from the emergent thermal flux:
+        ``sigma * T_eff**4 == F_TOA + absorbed_sw``, since ``F_TOA`` is a net
+        flux that includes the incident beam.  In equilibrium
+        ``T_eff**4 == t_int**4 + T_eq**4``.
         """
         emitted = self.F_TOA
         if self.absorbed_sw is not None:
@@ -651,11 +612,8 @@ class Results:
 
         Returns ``(p_bottom, p_top)`` in barye for each contiguous run of
         convective layers, deepest zone first.  Empty when the column is
-        entirely radiative.
-
-        There is deliberately no single "the RCB": a cloud deck can drive a
-        detached convective layer aloft over a stable region, and reducing that
-        to one boundary pressure would discard it.
+        entirely radiative.  A cloud deck can drive a detached convective
+        layer aloft, so there may be more than one zone.
 
         Parameters
         ----------
@@ -672,8 +630,7 @@ class Results:
 
         mask = self.convective[:, it]
 
-        # Edges of each run of True, found on the mask padded with False so a
-        # zone touching the bottom or top of the column is not missed.
+        # Pad with False so zones touching either end of the column are found.
         edges = np.flatnonzero(np.diff(np.concatenate(([False], mask, [False]))))
         starts, ends = edges[::2], edges[1::2]
 
@@ -742,11 +699,9 @@ class Results:
     def plot_temperature_evolution(self, nprofile=8, **kwargs):
         """Plots how the P-T profile evolved over a radiatively coupled run.
 
-        Draws a sample of profiles from the first output to the last with the
-        final convective zones shaded, the emergent flux relative to
-        ``sigma * t_int**4`` -- the quantity equilibrium drives to 1 -- and where
-        the convective zones sat over the run, which is how a cloud deck
-        reshaping the profile shows itself.
+        Three panels: a sample of P-T profiles with the final convective zones
+        shaded, ``F_TOA / sigma t_int**4`` against time, and the convective
+        zones against time.
 
         Parameters
         ----------
@@ -1089,8 +1044,7 @@ class Results:
         ax.set_prop_cycle(mpl.cycler(color=petroff10))
 
         P = self.P      # [barye], shape (NZ,)
-        # In a radiatively coupled run self.T is only the starting profile, so
-        # the condensation curves have to be read against the evolved one.
+        # In a radiatively coupled run self.T is only the starting profile.
         T = self.T if self.T_history is None else self.T_history[:, t_step]
         if T.ndim > 1:
             T = T[:, 0]  # use first longitude for 2D runs

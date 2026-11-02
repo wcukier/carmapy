@@ -1,14 +1,6 @@
-"""The Python side of the radiative coupling, end to end.
-
-``test_rce.py`` pins the physics of ``carma_rce`` against numpy references;
-these tests pin the plumbing around it -- that ``set_radiation`` reaches the
-Fortran, that the temperature output parses back into the shapes it claims, and
-that a configured run survives ``load_carma``.
-
-They run the real binary, so they need ``CARMAPY_RUN_INTEGRATION=1``. The ck
-table is the grey one from ``test_rce``: it needs no Sonora download, and with
-a wavelength-independent opacity the emergent flux can be compared against
-``sigma*Teff^4`` directly.
+"""The Python side of the radiative coupling, end to end: ``set_radiation``
+reaches the Fortran, the temperature output parses, and a configured run
+survives ``load_carma``.  Uses the grey ck table from ``test_rce``.
 """
 import os
 
@@ -47,24 +39,19 @@ def coupled_carma(tmp_path, example_levels, ck_table):
     c.add_kzz(kzz)
     c.calculate_z(mu)
     populate_abundances_at_cloud_base(c)
-    c.set_radiation(t_int=T_INT, ck_table_path=ck_table,
-                    accel=20.0, dT_max=5.0)
+    c.set_radiation(t_int=T_INT, ck_table_path=ck_table, accel=20.0)
     return c
 
 
 def test_set_radiation_forces_t_evolves(coupled_carma):
-    """Without t_evolves the growth kernels are cached from step 1 and the
-    coupling is silently inert, so enabling radiation must set it."""
+    """Enabling radiation sets t_evolves, without which growth kernels are
+    cached from step 1."""
     assert coupled_carma.t_evolves is True
 
 
 def test_namelist_has_no_radiative_convective_boundary(coupled_carma):
-    """The boundary is diagnosed, not configured, so nothing may carry it in.
-
-    A stale ``p_rcb`` in the group would make the Fortran namelist read fail,
-    which falls back to ``do_radiation = 0`` -- radiation silently off rather
-    than an error.
-    """
+    """The radiation namelist has radiation on and carries no ``p_rcb``; an
+    unknown key would fail the Fortran namelist read and turn radiation off."""
     import f90nml
 
     coupled_carma.run(suppress_output=True)
@@ -76,7 +63,7 @@ def test_namelist_has_no_radiative_convective_boundary(coupled_carma):
 
 
 def test_radiation_survives_load_carma(coupled_carma):
-    """A restarted run must reproduce the same coupling, not a default one."""
+    """A restarted run reproduces the configured coupling."""
     from carmapy.base import load_carma
 
     coupled_carma.run(suppress_output=True)
@@ -89,13 +76,9 @@ def test_radiation_survives_load_carma(coupled_carma):
     assert reloaded.t_evolves is True
     assert os.path.exists(reloaded.ck_table_path)
 
-    # Every knob the Fortran is configured by, not just the headline ones: a
-    # restart that quietly reverted one of these to its default would produce
-    # a plausible run at the wrong settings.
     assert reloaded.self_consistent_kzz == coupled_carma.self_consistent_kzz
     assert reloaded.kzz_mixl_scale == pytest.approx(
         coupled_carma.kzz_mixl_scale)
-    assert reloaded.kzz_lapse_smooth == coupled_carma.kzz_lapse_smooth
     assert reloaded.adiabat == coupled_carma.adiabat
     assert reloaded.rad_gap_max == coupled_carma.rad_gap_max
 
@@ -126,7 +109,7 @@ def test_temperature_output_parses(coupled_carma):
 
 
 def test_temperature_actually_evolves(coupled_carma):
-    """The whole point of the coupling: t(:) must not be the input profile."""
+    """The temperature profile moves away from the input profile."""
     from carmapy.results import Results
 
     coupled_carma.run(suppress_output=True)
@@ -140,14 +123,8 @@ def test_temperature_actually_evolves(coupled_carma):
 
 
 def test_tabulated_adiabat_end_to_end(coupled_carma):
-    """A coupled run with ``adiabat="table"`` must put its convective interior
-    on the tabulated adiabat, not the analytic one.
-
-    This is the whole Fortran path in one assertion: the table is found by the
-    path in the namelist, read and interpolated, and the temperature ratio
-    across each convective interface is the one the *tabulated* gradient
-    demands rather than the analytic fit's.
-    """
+    """A coupled run with ``adiabat="table"`` puts its convective interior on
+    the tabulated adiabat, not the analytic one."""
     from carmapy.adiabat import grad_ad
     from carmapy.constants import (PARMENTIER_A_COEFF as PARM_A,
                                    PARMENTIER_B_COEFF as PARM_B)
@@ -171,16 +148,12 @@ def test_tabulated_adiabat_end_to_end(coupled_carma):
     tab = (p[:-1] / p[1:]) ** grad_ad(t_bar, np.sqrt(p[:-1] * p[1:]))
     fit = (p[:-1] / p[1:]) ** (PARM_A - PARM_B * t_bar)
 
-    # The adjustment stops after a fixed number of sweeps rather than at an
-    # exactly neutral column, so the floor here is its own residual -- a few
-    # parts in 1e6 -- not machine precision.
+    # The adjustment stops after a fixed number of sweeps, so the tolerance
+    # is its residual (a few parts in 1e6), not machine precision.
     np.testing.assert_allclose(ratio[inside], tab[inside], rtol=1e-4)
 
-    # And the two gradients genuinely differ here, by a good margin over that
-    # tolerance, or the test would pass just as well with the flag ignored.
-    # The margin is only ~45x because this run's convective layers sit near the
-    # top of the column, where the table is clamped at its 0.01 bar floor and
-    # the dissociation flattening that separates the two has not switched on.
+    # The two gradients must differ by well over that tolerance, or the check
+    # above would also pass with the flag ignored.
     separation = np.abs(tab[inside] / fit[inside] - 1).max()
     assert separation > 2e-3, f"table and fit differ by only {separation:.2e}"
 
@@ -197,13 +170,8 @@ def test_cadence_is_reported(coupled_carma):
 
 
 def test_kzz_follows_the_profile(coupled_carma):
-    """The eddy diffusion the microphysics mixes with must be the recomputed
-    one, not the profile ``add_kzz`` supplied.
-
-    This is the whole coupling in one assertion: ``rce_kzz`` produces a profile,
-    the driver copies it into ``ekz``, and ``ekz`` is what the output records.
-    A break anywhere along that chain leaves the input profile in the file.
-    """
+    """The recorded Kzz is the one ``rce_kzz`` recomputes each output, not the
+    profile ``add_kzz`` supplied."""
     from carmapy.results import Results
 
     coupled_carma.run(suppress_output=True)
@@ -217,18 +185,13 @@ def test_kzz_follows_the_profile(coupled_carma):
 
     assert not np.allclose(r.kzz_history[:, -1], coupled_carma.kzz_levels)
 
-    # And it keeps moving with the profile rather than being computed once.
+    # Recomputed as the profile moves, not once.
     assert not np.allclose(r.kzz_history[:, 0], r.kzz_history[:, -1])
 
 
 def test_static_kzz_holds_the_input_profile(tmp_path, example_levels, ck_table):
-    """``self_consistent_kzz=False`` must leave the supplied profile alone.
-
-    The A/B against ``test_kzz_follows_the_profile``: the same coupled run with
-    the recomputation off has to reproduce ``add_kzz``'s profile exactly at
-    every output, which is what makes the difference in that test attributable
-    to the recomputation rather than to the run having moved.
-    """
+    """``self_consistent_kzz=False`` keeps ``add_kzz``'s profile at every
+    output."""
     from carmapy.carmapy import Carma
     from carmapy.chemistry import populate_abundances_at_cloud_base
     from carmapy.results import Results
@@ -246,7 +209,7 @@ def test_static_kzz_holds_the_input_profile(tmp_path, example_levels, ck_table):
     c.calculate_z(mu)
     populate_abundances_at_cloud_base(c)
     c.set_radiation(t_int=T_INT, ck_table_path=ck_table, accel=20.0,
-                    dT_max=5.0, self_consistent_kzz=False)
+                    self_consistent_kzz=False)
     c.run(suppress_output=True)
 
     r = Results(c)
@@ -265,15 +228,8 @@ def test_self_consistent_kzz_survives_load_carma(coupled_carma):
 
 
 def test_kzz_mixl_scale_reaches_the_fortran(tmp_path, example_levels, ck_table):
-    """The mixing length scale must move the Kzz the run actually mixes with.
-
-    Two otherwise identical coupled runs differing only in ``kzz_mixl_scale``.
-    Kzz goes as the 4/3 power of the mixing length and nothing else in the
-    expression touches it, so at the *first* output -- before the two columns
-    have had time to diverge -- the ratio must be exactly ``f**(4/3)``. Later
-    outputs drift apart, which is the point of the knob but not a fixed number
-    to assert on.
-    """
+    """At the first output, before the columns diverge, scaling
+    ``kzz_mixl_scale`` by ``f`` scales the recorded Kzz by ``f**(4/3)``."""
     from carmapy.base import load_carma
     from carmapy.carmapy import Carma
     from carmapy.chemistry import populate_abundances_at_cloud_base
@@ -289,10 +245,13 @@ def test_kzz_mixl_scale_reaches_the_fortran(tmp_path, example_levels, ck_table):
         c.set_stepping(dt=250, output_gap=5, n_tstep=10)
         c.add_gas("TiO2")
         c.add_hom_group("TiO2", 1e-8)
-        c.add_P(P); c.add_T(T); c.add_kzz(kzz); c.calculate_z(mu)
+        c.add_P(P)
+        c.add_T(T)
+        c.add_kzz(kzz)
+        c.calculate_z(mu)
         populate_abundances_at_cloud_base(c)
         c.set_radiation(t_int=T_INT, ck_table_path=ck_table, accel=20.0,
-                        dT_max=5.0, kzz_mixl_scale=scale)
+                        kzz_mixl_scale=scale)
         c.run(suppress_output=True)
         return Results(c)
 
@@ -305,8 +264,8 @@ def test_kzz_mixl_scale_reaches_the_fortran(tmp_path, example_levels, ck_table):
 
 
 def test_final_profiles_track_the_coupled_run(coupled_carma):
-    """The PICASO writers must not be handed the input profile and the grid
-    calculate_z built from it -- the Fortran moved both."""
+    """final_T_levels and final_z_levels return the coupled run's evolved
+    profile, not the inputs."""
     from carmapy.results import Results
 
     coupled_carma.run(suppress_output=True)
@@ -349,7 +308,7 @@ def test_final_profiles_are_the_inputs_when_uncoupled(tmp_path, example_levels):
 
 
 def test_uncoupled_run_has_no_temperature_output(tmp_path, example_levels):
-    """Radiation off must leave the outputs exactly as they were."""
+    """An uncoupled run writes no temperature output."""
     from carmapy.carmapy import Carma
     from carmapy.chemistry import populate_abundances_at_cloud_base
     from carmapy.results import Results

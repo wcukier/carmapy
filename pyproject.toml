@@ -28,10 +28,7 @@ dependencies = [
     "scipy",
     "pyfastchem",
     "f90nml",
-    # NOTE: PyMieScatt is unmaintained and calls scipy.integrate.trapz, which
-    # scipy removed in 1.14. carmapy.mie restores the name before importing it
-    # (see _import_pymiescatt). Deliberately unpinned -- the shim is expected
-    # to outlive any version bound we could pick here.
+    # Needs scipy.integrate.trapz, which carmapy.mie restores for scipy >= 1.14.
     "PyMieScatt"
 ]
 readme = "README.md"
@@ -44,8 +41,7 @@ Issues = "https://github.com/wcukier/carmapy/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=8.0", "pytest-timeout"]
-# Only needed to prepare the correlated-k opacity tables for radiatively
-# coupled runs (carmapy.radiation). Running CARMA never imports these.
+# Only needed to prepare the correlated-k tables (carmapy.radiation).
 radiation = ["pyharp"]
 
 [tool.pytest.ini_options]

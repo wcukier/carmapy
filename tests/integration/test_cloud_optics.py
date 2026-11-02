@@ -1,13 +1,8 @@
-"""Verify the Fortran cloud-optics sum and the optics file it reads.
+"""The Fortran cloud-optics sum and the optics file it reads.
 
-``carma_cloudopt`` reproduces ``results.py::_get_cloud_opacities``, so it is
-checked against a numpy transcription of that function's sums rather than
-against a tolerance pulled from thin air -- both compute the same quantity from
-the same inputs, so agreement should be at round-off.
-
-Unlike ``test_radiation_port.py`` these need neither pyharp nor torch -- the
-cloud-optics path carries no such dependency.  ``gfortran`` is still required
-for the solver test; the file-format test is pure Python.
+``carma_cloudopt`` is checked against a numpy transcription of the sums in
+``results.py::_get_cloud_opacities``, to round-off.  The solver test needs
+``gfortran``; the file-format tests are pure Python.
 """
 import subprocess
 import textwrap
@@ -91,8 +86,7 @@ def test_cloud_optics_matches_reference(probe):
     nz, nbin, nwave, ngroup = 40, 30, 24, 2
 
     # Number densities spanning many orders of magnitude with most bins empty,
-    # which is what a real cloud field looks like and what exercises the
-    # zero-cross-section skip.
+    # to exercise the zero-cross-section skip.
     numden = 10.0 ** rng.uniform(-20, 4, (nz, nbin, ngroup))
     numden[rng.random((nz, nbin, ngroup)) < 0.6] = 0.0
     numden[7, :, :] = 0.0            # one wholly cloud-free layer
@@ -139,8 +133,7 @@ def test_cloud_optics_matches_reference(probe):
         rel = np.abs(got[name] - ref[name]).max() / scale
         assert rel < 1e-13, f"{name} mismatch ({rel:.2e})"
 
-    # A cloud-free layer must contribute nothing at all, not merely something
-    # small -- the solver divides by these.
+    # A cloud-free layer must give exact zeros; the solver divides by these.
     assert np.all(got["tau"][:, 7] == 0.0)
     assert np.all(got["w0"][:, 7] == 0.0)
     assert np.all(got["g"][:, 7] == 0.0)
@@ -149,11 +142,8 @@ def test_cloud_optics_matches_reference(probe):
 def test_optics_file_ordering(tmp_path):
     """The optics file must be written in the order the Fortran reads it.
 
-    carma_carmapy.F90 loops group, then wavelength, then bin, and stores into
-    ``(NWAVE, NBIN, NGROUP)``, whereas the Mie tables are ``(nbin, nband, 3)``.
-    A transpose here would silently put one band's optics on every bin, which
-    is exactly the kind of error that produces plausible-looking output, so the
-    layout is pinned rather than assumed.
+    carma_carmapy.F90 loops group, then wavelength, then bin, into
+    ``(NWAVE, NBIN, NGROUP)``; the Mie tables are ``(nbin, nband, 3)``.
     """
     from carmapy import radiation
 

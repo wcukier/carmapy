@@ -1,17 +1,8 @@
-"""``carma_swsolve``'s Toon-McKay89 shortwave, against pyHARP and against analysis.
+"""``carma_swsolve``'s Toon-McKay89 shortwave, against pyHARP and analytic cases.
 
-Against older pyHARP releases the longwave port could only be checked on the
-terrestrial bottom boundary, because their longwave dispatch shadowed the
-``hard_surface`` parameter and always took the terrestrial branch (since fixed
-upstream; ``test_radiation_port`` detects which build is installed). The
-shortwave dispatch was never affected, so this port can be checked end to end
-against any release -- and is, here.
-
-One real limitation. pyHARP expands ``umu0`` to ``{nwave, ncol, nlyr+1, 1}``,
-the same value at every level, so it only ever exercises the uniform-mu branch.
-The slant-path branch, which the reference implements and this port preserves,
-has no reference to compare against. It is tested structurally instead: it must
-converge on the uniform branch as the per-level angles converge.
+pyHARP uses one ``umu0`` at every level, so it only exercises the uniform-mu
+branch; the slant-path branch is checked by requiring it to converge on the
+uniform branch as the per-level angles converge.
 """
 import shutil
 import subprocess
@@ -184,12 +175,9 @@ def test_shortwave_matches_pyharp(probe, torch):
                  f"mu0={c['mu'][0]:.3g} w0={np.mean(c['w0']):.3g} "
                  f"alb={c['w_surf']:.3g}")
 
-        # Normalise by the column's own flux scale, not by each stream's max.
-        # In an optically thin column the upward flux is ~1e-6 of the incident
-        # beam, so dividing by its own maximum turns ordinary round-off
-        # (~1e-14 W/m^2) into an apparent 1e-11 relative error while the
-        # physical agreement is exact. The incident beam is the scale that
-        # means something.
+        # Normalise by the incident beam, not each stream's max: in a thin
+        # column the upward flux is ~1e-6 of the beam, and its own max would
+        # inflate round-off.
         scale = max(np.abs(ref).max(), c["f0"] * c["mu"][0], 1e-300)
 
         for name, mine, theirs in (("up", f_up, ref[:, 0]),
@@ -220,9 +208,8 @@ def test_pure_absorption_is_beer_lambert(probe):
 
 
 def test_incident_flux_at_the_top_is_mu_times_f0(probe):
-    """The convention that everything downstream depends on: f0 is the flux
-    normal to the beam, so the flux entering the top is mu0*f0. Getting this
-    wrong rescales every irradiated run and still looks plausible."""
+    """f0 is the flux normal to the beam, so the flux entering the top is
+    mu0*f0."""
     f0, mu0 = 1361.0, 0.5
     nlay = 4
     (f_up, f_dn), = _run(probe, [dict(
@@ -242,8 +229,7 @@ def test_slant_path_converges_on_the_uniform_branch(probe):
                 g=np.full(nlay, 0.5))
 
     uniform = dict(base, mu=np.full(nlay + 1, mu0))
-    # A gradient small enough that the physical answer cannot really differ,
-    # but not exactly equal -- which is what selects the other branch.
+    # Not exactly uniform, so the slant-path branch is selected.
     slant = dict(base, mu=np.linspace(mu0, mu0 * (1 + 1e-9), nlay + 1))
 
     (u_up, u_dn), (s_up, s_dn) = _run(probe, [uniform, slant])
@@ -255,8 +241,7 @@ def test_slant_path_converges_on_the_uniform_branch(probe):
 
 
 def test_a_bright_surface_sends_flux_back_up(probe):
-    """The surface term is the one place the shortwave bottom boundary does
-    anything, and a gas giant sets it to zero -- so it needs its own check."""
+    """A reflecting surface sends flux back up; a dark one does not."""
     nlay = 6
     common = dict(nlay=nlay, f0=1000.0,
                   dtau=np.full(nlay, 0.05), w0=np.full(nlay, 1e-14),

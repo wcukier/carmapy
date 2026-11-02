@@ -88,10 +88,8 @@ def test_grow_and_evap_not_simultaneously_large(tmp_path, example_levels):
 
 
 def _build_silicate_closed_box(path, example_levels):
-    """The three competing silicates (Mg2SiO4, MgSiO3, SiO2 on TiO2) sharing
-    the Mg and SiO reservoirs, in a closed box: zero-flux boundaries for both
-    gas and particles, so the column totals of each reservoir are exact
-    invariants."""
+    """Mg2SiO4, MgSiO3 and SiO2 on TiO2 sharing the Mg and SiO reservoirs,
+    with zero-flux boundaries for gas and particles."""
     from carmapy.carmapy import Carma
     from carmapy.chemistry import populate_abundances_at_cloud_base
     P, T, kzz, mu = example_levels
@@ -116,13 +114,8 @@ def _build_silicate_closed_box(path, example_levels):
 
 @pytest.mark.integration
 def test_silicate_elemental_conservation(tmp_path, example_levels):
-    """Closed-box run of the three competing silicates (Mg2SiO4, MgSiO3, SiO2
-    sharing the Mg and SiO reservoirs): column-integrated elemental Mg and Si
-    -- gas phase plus stoichiometry-weighted condensates -- must stay
-    constant. This is the invariant that many-to-many gas depletion has to
-    preserve: every gram of Mg or Si leaving a reservoir must appear in a
-    condensate, in the right stoichiometric ratio, and return on evaporation.
-    """
+    """In the closed silicate box, column Mg and Si (gas plus
+    stoichiometry-weighted condensate) stay constant."""
     from carmapy.carmapy import Carma
     from carmapy.chemistry import populate_abundances_at_cloud_base
     from carmapy.results import Results
@@ -171,11 +164,9 @@ def test_silicate_elemental_conservation(tmp_path, example_levels):
     for elem in ("Mg", "Si"):
         series = np.array(totals[elem])
         assert series[0] > 0
-        # The t=0 output row is written from the raw initial abundances,
-        # before the engine's first-step gas adjustment, so measure the
-        # conservation drift from the first post-step output onward.  The
-        # output file stores numden at 3 significant figures, which limits
-        # what this test can resolve to ~1e-3.
+        # The t=0 row precedes the engine's first-step gas adjustment, so
+        # drift is measured from the first post-step output.  numden is
+        # written to 3 significant figures, which limits resolution to ~1e-3.
         drift = np.abs(series[1:] - series[1]).max() / series[1]
         assert drift < 1e-3, (
             f"Column elemental {elem} drifts by {drift:.2e} "
@@ -199,10 +190,10 @@ def _ffloat(tok):
 
 def _reservoir_columns(c):
     """Column totals [mol/cm2 x const] of every non-water gas reservoir at each
-    output stamp, from the test binary's full-precision dump: the gas, plus nu
-    times the mantle of every condensate depleting it, plus seed mass for the
-    seed's own reservoir.  The dump's air density carries a constant factor
-    (see TODO.md, driver rho_atm_cgs), which cancels in relative drift."""
+    output, from the test binary's full-precision dump: the gas, plus nu times
+    the mantle of every condensate depleting it, plus seed mass for the seed's
+    own reservoir.  The dump's air density carries a constant factor, which
+    cancels in relative drift."""
     import os
     from carmapy.constants import group_dict, gas_dict
     name = os.path.basename(c.name.rstrip("/"))
@@ -249,10 +240,9 @@ def _reservoir_columns(c):
 
 
 def _floor_clamps(c):
-    """Number of gas floor clamps (the non-conservative last-retry fallback in
-    gsolve) of gas that microphysics was consuming, from the test binary's
-    log.  Clamps of round-off negatives that reach gsolve from transport into
-    empty layers, with no microphysical consumption, are not counted."""
+    """Number of gsolve floor clamps of gas that microphysics was consuming,
+    from the test binary's failure log.  Clamps of round-off negatives
+    transported into empty layers are not counted."""
     import os
     name = os.path.basename(c.name.rstrip("/"))
     path = os.path.join(c.name, f"failures_{name}.txt")
@@ -268,17 +258,12 @@ def _floor_clamps(c):
 
 @pytest.mark.integration
 def test_silicate_reservoirs_conserved_full_precision(tmp_path, example_levels):
-    """The closed-box three-silicate deck at full precision.  Its cloud base is
-    where Mg2SiO4 (keyed to Mg) drains SiO while the SiO-keyed condensates are
-    subsaturated, which the explicit scheme could only survive by
-    floor-clamping SiO.  With the implicit gas solve and key swapping, every
-    reservoir (gas + stoichiometric condensate + seed) must hold to round-off,
-    with no floor clamp of consumed gas.  (The implicit solve alone cannot do
-    this: a secondary reactant absent from the rate law has no non-negative
-    end-of-step state to converge to.)"""
+    """With implicit_gas, every reservoir in the closed
+    silicate box (gas + stoichiometric condensate + seed) holds to round-off
+    at full precision, with no floor clamp of consumed gas.  At the cloud base
+    Mg2SiO4 drains SiO while the SiO-keyed condensates are subsaturated."""
     c = _build_silicate_closed_box(str(tmp_path / "fpcons"), example_levels)
     c.implicit_gas = True
-    c.do_key_swap = True
     c.run(suppress_output=True)
 
     totals = _reservoir_columns(c)

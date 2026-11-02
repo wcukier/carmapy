@@ -1,11 +1,8 @@
 """The two adiabat models and the gradient table behind one of them.
 
-``parmentier_adiabat`` is checked against the closed form it replaced, so the
-refactor that moved it out of ``extend_atmosphere`` cannot change a number.
-``tabulated_adiabat`` has no closed form to check against, so it is pinned
-three ways instead: it must reproduce the table at its own nodes, agree with
-the fit where the two physically should agree, and disagree with it in the
-specific direction H2 dissociation implies.
+``parmentier_adiabat`` is checked against its closed form. ``tabulated_adiabat``
+has none, so it must reproduce the table at its nodes, agree with the fit below
+~1500 K, and run cooler than the fit where H2 dissociates.
 """
 import warnings
 
@@ -26,7 +23,7 @@ P_IN_TABLE = np.geomspace(1e4, 1e9, 25)
 
 
 def _closed_form(P, t0, p0):
-    """The expression extend_atmosphere used before carmapy.adiabat existed."""
+    """The Parmentier adiabat T(P), written out directly."""
     a, b = PARMENTIER_A_COEFF, PARMENTIER_B_COEFF
     k = t0 / (a - b * t0) * (P / p0) ** a
     return a * k / (1 + b * k)
@@ -38,14 +35,13 @@ def _closed_form(P, t0, p0):
 
 @pytest.mark.parametrize("t0", [500.0, 1200.0, 3000.0])
 def test_parmentier_matches_closed_form(t0):
-    """Bit-for-bit with the pre-refactor expression."""
+    """Bit-for-bit with the closed form."""
     got = parmentier_adiabat(P_IN_TABLE, t0, 1e7)
     assert np.array_equal(got, _closed_form(P_IN_TABLE, t0, 1e7))
 
 
 def test_parmentier_gradient_is_a_minus_bt():
-    """d ln T / d ln P of the fit must be a - b*T, the identity everything
-    else in this module is reasoned from."""
+    """d ln T / d ln P of the fit must be a - b*T."""
     P = np.geomspace(1e6, 1e8, 400)
     T = parmentier_adiabat(P, 1500.0, 1e7)
 
@@ -125,12 +121,8 @@ def test_tabulated_integrates_its_own_gradient():
 
 
 def test_tabulated_agrees_with_the_fit_when_cool():
-    """Below ~1500 K the two models describe the same physics.
-
-    The gradients agree to better than 2% there, but integrating over three
-    decades of pressure accumulates that into a slightly larger difference in
-    temperature, hence 3% rather than 2%.
-    """
+    """Below ~1500 K the two models agree. The gradients differ by <2%, which
+    integrates to <3% in T over three decades of pressure."""
     P = np.geomspace(1e5, 1e8, 20)
     fit = parmentier_adiabat(P, 800.0, 1e7)
     table = tabulated_adiabat(P, 800.0, 1e7)
@@ -142,7 +134,7 @@ def test_tabulated_agrees_with_the_fit_when_cool():
 
 def test_tabulated_runs_cooler_than_the_fit_when_hot():
     """Dissociation flattens the real adiabat, so integrating through it must
-    land below the fit. The fit's error is what motivates this module."""
+    land below the fit."""
     # 1 to 20 bar from a 2000 K anchor stays inside the table, so this is the
     # table's own statement rather than an extrapolation.
     P = np.geomspace(1e6, 2e7, 40)
@@ -189,7 +181,8 @@ def test_get_adiabat_rejects_unknown_names():
 
 
 def test_models_are_interchangeable():
-    """Same signature, same return shape -- the drop-in property."""
+    """Every registered model takes the same arguments and returns the same
+    shape."""
     results = [model(P_IN_TABLE, 1200.0, 1e7)
                for model in ADIABAT_MODELS.values()]
 

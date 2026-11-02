@@ -63,11 +63,11 @@ def load_carma(path: str, restart: int =0) -> Carma:
     carma.igridv = nml["input_params"]["igridv"]
     carma.t_evolves = bool(nml["input_params"]["t_evolves"])
     carma.minsubsteps = int(nml["input_params"].get("iminsubsteps", 1))
-    carma.do_key_swap = bool(nml["input_params"].get("ikey_swap", 0))
+    carma.do_cons_evap = bool(nml["input_params"].get("ido_cons_evap", 0))
+    carma.maxntsubsteps_cap = int(nml["input_params"].get("imaxntsubsteps_cap", 16384))
     carma.implicit_gas = bool(nml["input_params"].get("iimplicit_gas", 0))
     carma.implicit_trigger = float(nml["input_params"].get("implicit_trigger", 0.1))
     carma.implicit_rtol = float(nml["input_params"].get("implicit_rtol", 1e-6))
-    carma.implicit_dgmax = float(nml["input_params"].get("implicit_dgmax", 1e30))
     carma.gstickl = float(nml["input_params"].get("gstickl_in", 1.0))
     carma.NBIN = nml["input_params"]["NBIN"]
     carma.output_gap = nml["input_params"]["iskip"]
@@ -95,37 +95,25 @@ def load_carma(path: str, restart: int =0) -> Carma:
         "CP" : nml["physical_params"]["CP"]
     }
 
-    # Radiative coupling. Absent from an input.nml written before the coupling
-    # existed, in which case the Carma defaults leave it off.
+    # Inputs without a &radiation group leave the Carma defaults (uncoupled).
+    # The adiabat is restored either way, since extend_atmosphere uses it.
     rad = nml.get("radiation", {})
-
-    # The adiabat is used by extend_atmosphere too, so it is restored whether
-    # or not the run was radiatively coupled.
     carma.adiabat = _int2adiabat[rad.get("adiabat", ADIABAT_CODES[ADIABAT_PARMENTIER])]
 
     if rad.get("do_radiation", 0):
         carma.ck_table_path = rad["ck_table_file"]
         carma.t_int = rad["t_int"]
-        # Defaulted rather than indexed: an input.nml written before the
-        # shortwave existed has no irradiation keys, and reloading such a run
-        # should give back the isolated object it was.
-        carma.t_irr = rad.get("t_irr", 0.0)
-        carma.t_star = rad.get("t_star", 0.0)
-        carma.mu0 = rad.get("rad_mu0", 0.5)
-        carma.w_surf = rad.get("rad_w_surf", 0.0)
+        carma.t_irr = rad["t_irr"]
+        carma.t_star = rad["t_star"]
+        carma.mu0 = rad["rad_mu0"]
+        carma.w_surf = rad["rad_w_surf"]
         carma.rad_accel = rad["rad_accel"]
-        carma.rad_accel_deep = rad.get("rad_accel_deep", 1.0)
-        carma.rad_zone_damp = rad.get("rad_zone_damp", 0)
-        carma.rad_dT_max = rad["rad_dt_max"]
         carma.rad_dT_tol = rad["rad_dt_tol"]
         carma.rad_dtau_tol = rad["rad_dtau_tol"]
         carma.rad_gap_max = rad["rad_gap_max"]
         carma.cloud_rad = bool(rad["cloud_rad"])
-        # Defaulted for the same reason as the irradiation keys above: a run
-        # written before Kzz followed the profile held it fixed.
-        carma.self_consistent_kzz = bool(rad.get("kzz_mode", 0))
-        carma.kzz_mixl_scale = rad.get("kzz_mixl_scale", 1.0)
-        carma.kzz_lapse_smooth = rad.get("kzz_lapse_smooth", 0)
+        carma.self_consistent_kzz = bool(rad["kzz_mode"])
+        carma.kzz_mixl_scale = rad["kzz_mixl_scale"]
 
     io = nml["io_files"]
 
@@ -169,15 +157,6 @@ def load_carma(path: str, restart: int =0) -> Carma:
                                        lat_heat_e=float(lat_heat_e),
                                        desorption=float(desorption),
                                        stofact=int(float(stofact)))
-
-    # Per-group sticking coefficients, in groups.txt order; entries <= 0 mean
-    # the group uses gstickl.
-    gstick_grp = nml["input_params"].get("gstick_grp", [])
-    if not isinstance(gstick_grp, list):
-        gstick_grp = [gstick_grp]
-    carma.gstick_by_group = {
-        name: float(s) for name, s in zip(carma.groups, gstick_grp)
-        if s is not None and float(s) > 0}
 
     with open(os.path.join(path, io["gases_file"]), "r") as f:
         f.readline()
@@ -230,19 +209,18 @@ def load_carma(path: str, restart: int =0) -> Carma:
     with open(os.path.join(path, io["growth_file"])) as f:
         f.readline()
         for line in f:
-            # v3 rows add the secondary reactant's reference mass mixing
-            # ratio; v2 rows are (ielem, igas, nu, is_key); legacy rows are (ielem,
-            # igas), in which case nu is the group's stofact and the row is
-            # the key pathway.
+            # Rows are (ielem, igas, nu, is_key, xref), or just (ielem, igas)
+            # for a single key pathway per element with nu = stofact.  The
+            # silicate_comp test fixture has no xref column.
             fields = shlex.split(line[:-1])
             ielem, igas = fields[0], fields[1]
             elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]
             gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
-            if len(fields) >= 4:
-                nu, is_key = int(fields[2]), bool(int(fields[3]))
+            if len(fields) == 2:
+                nu, is_key, xref = elem.group.stofact, True, None
             else:
-                nu, is_key = elem.group.stofact, True
-            xref = float(fields[4]) if (len(fields) >= 5 and not is_key) else None
+                nu, is_key = int(fields[2]), bool(int(fields[3]))
+                xref = float(fields[4]) if len(fields) > 4 and not is_key else None
             carma.growth.append(Growth(elem, gas, nu=nu, is_key=is_key, xref=xref))
             
     with open(os.path.join(path, io["coag_file"])) as f:

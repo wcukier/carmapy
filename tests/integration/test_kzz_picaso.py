@@ -1,17 +1,9 @@
-"""Check ``tests.reference.kzz`` against the PICASO routine it is a port of.
+"""``tests.reference.kzz`` against ``picaso.climate.get_kzz``.
 
-``tests/integration/test_rce.py`` pins the Fortran to the reference module;
-this pins the reference module to ``picaso.climate.get_kzz``.  Only the two together
-support the claim that a CARMA column and a PICASO column with the same profile
-mix the same way -- the first alone would be satisfied by two identical
-mistakes.
-
-PICASO's reference data is *not* needed.  ``picaso.climate`` imports without it,
-and the adiabatic gradient table ``get_kzz`` interpolates is the same Saumon
-table CARMApy bundles as ``data/adiabat_grad.txt``, so the bundle can be
-assembled here.  Skipped when picaso is not installed.
-
-Run with ``CARMAPY_RUN_INTEGRATION=1 pytest tests/integration/test_kzz_picaso.py``.
+``test_rce.py`` checks the Fortran against the reference module; this checks
+the reference module against PICASO.  PICASO's reference data is not needed:
+the gradient table ``get_kzz`` interpolates is the one CARMApy bundles as
+``data/adiabat_grad.txt``.  Skipped when picaso is not installed.
 """
 from collections import namedtuple
 
@@ -25,13 +17,10 @@ SIGMA_SB_CGS = 0.56687e-4
 
 @pytest.fixture(scope="module")
 def picaso_get_kzz():
-    """PICASO's ``get_kzz``, as the plain Python function behind the jit.
+    """PICASO's ``get_kzz`` without the numba jit.
 
-    ``get_kzz`` is ``@jit(nopython=True)``, and numba type-infers the
-    ``moist=True`` branch even though nothing here takes it -- that branch
-    reads condensate fields off ``Atmosphere`` which a dry column has no
-    business carrying.  ``.py_func`` is the same source without the
-    compilation, which is what is under test here anyway.
+    numba type-infers the ``moist=True`` branch, which reads condensate fields
+    a dry ``Atmosphere`` does not carry; ``.py_func`` skips compilation.
     """
     climate = pytest.importorskip("picaso.climate",
                                   reason="picaso not installed")
@@ -41,10 +30,7 @@ def picaso_get_kzz():
 def _adiabat_bundle():
     """PICASO's ``AdiabatBundle``, built from the table CARMApy bundles.
 
-    ``did_grad_cp`` indexes the grid with hard-coded bounds for 53 temperatures
-    and 26 pressures, which is the shape of this table; a differently shaped
-    one would read out of bounds rather than fail cleanly, so the shape is
-    asserted here.
+    ``did_grad_cp`` hard-codes a 53x26 grid, so the shape is asserted.
     """
     from carmapy.adiabat import TABLE_FILE
 
@@ -65,24 +51,15 @@ def _adiabat_bundle():
 
 
 def _column(nz=40, t_int=1100.0, wt_mol=2.2, grav=1e5):
-    """A profile both sides can be handed.
-
-    Built from *levels*, because PICASO derives its layer grid from them --
-    layer pressures as the geometric mean and layer temperatures as the
-    arithmetic one -- while CARMApy takes the layer grid directly.  Starting
-    from levels and deriving the layers the same way is what makes the two
-    evaluate the same column rather than two similar ones.
-    """
+    """A column built from levels, with layers derived as PICASO derives them
+    (geometric-mean pressure, arithmetic-mean temperature)."""
     from carmapy.adiabat import tabulated_adiabat
 
-    # Bottom to top, inside the gradient table's own range so neither side is
-    # comparing its clamping behaviour rather than its interpolation.
+    # Bottom to top, inside the gradient table's range.
     pl_bar = np.geomspace(3e2, 1e-2, nz + 1)[::-1]
 
     # An adiabatic interior under a shallower radiative gradient, joined at
-    # 5 bar.  A real structure rather than a smooth curve, and the point of it:
-    # the lapse ratio saturates at 1 below the join and falls away above it, so
-    # the ``min(1, ...)`` and the ``max(0.1, ...)`` both do work.
+    # 5 bar, so both the ``min(1, ...)`` and ``max(0.1, ...)`` clips bind.
     p_rcb = 5.0
     tl = tabulated_adiabat(pl_bar * 1e6, 2200.0, 3e8)
     above = pl_bar < p_rcb
@@ -92,13 +69,10 @@ def _column(nz=40, t_int=1100.0, wt_mol=2.2, grav=1e5):
     p_bar = np.sqrt(pl_bar[1:] * pl_bar[:-1])
     t = 0.5 * (tl[1:] + tl[:-1])
 
-    # Net upward flux at levels [W/m^2]: nothing at the base, where convection
-    # carries everything, rising to a little over the internal flux at the top.
-    # The bump partway up is what a cloud deck does, and it is here on purpose
-    # -- it carries more than the column emits, so the convective flux beneath
-    # it goes negative.  That is what puts the overshoot sweep and the absolute
-    # floor to work instead of leaving them decorative, and a negative flux
-    # under a cube root is exactly the case the floors exist to survive.
+    # Net upward flux at levels [W/m^2]: zero at the base, rising to a little
+    # over the internal flux at the top.  The bump partway up carries more than
+    # the column emits, so the convective flux beneath it goes negative and the
+    # overshoot sweep and absolute floor both bind.
     f_int = SIGMA_SB_CGS * t_int**4 * 1e-3
     x = np.linspace(0.0, 1.0, nz + 1)
     fnet = 1.05 * f_int * x ** 0.6 * (1 + 0.9 * np.exp(-((x - 0.72) / 0.1)**2))
@@ -110,11 +84,9 @@ def _column(nz=40, t_int=1100.0, wt_mol=2.2, grav=1e5):
 def _picaso_kzz(get_kzz, case, dtdp):
     """``get_kzz`` on ``case``, returned bottom-to-top.
 
-    PICASO's arrays run top-to-bottom, so everything is reversed on the way in
-    and the answer reversed back on the way out.  ``dtdp`` is passed in rather
-    than recomputed because PICASO takes it from its climate solver instead of
-    differencing the profile; handing it the lapse rate CARMApy computed is
-    what isolates the parameterisation from how the two get their gradients.
+    PICASO's arrays run top-to-bottom.  ``dtdp`` is passed in because PICASO
+    takes it from its climate solver; using CARMApy's lapse rate isolates the
+    parameterisation.
     """
     nz = case["nz"]
 
@@ -125,8 +97,7 @@ def _picaso_kzz(get_kzz, case, dtdp):
                      mmw_layer=np.full(nz, case["wt_mol"]),
                      dtdp=dtdp[::-1])
 
-    # sigma*T_int^4 in cgs, as the flux the column is asked to carry.  PICASO
-    # reads it off tidal[0] and takes its absolute value.
+    # sigma*T_int^4 in cgs; PICASO reads abs(tidal[0]).
     tidal = np.full(nz + 1, -SIGMA_SB_CGS * case["t_int"] ** 4)
 
     # The layer net flux PICASO differences against, and the emergent flux it
@@ -145,15 +116,8 @@ def _picaso_kzz(get_kzz, case, dtdp):
 
 
 def test_kzz_matches_picaso(picaso_get_kzz):
-    """``mixing_length_kzz_layers`` against ``picaso.climate.get_kzz``.
-
-    Both evaluate the same closed-form expression on the same column against
-    the same gradient table, so the agreement should be at round-off.  What
-    would show up here and nowhere else is a coefficient copied wrong, a floor
-    applied in the wrong order, or the convective flux sweep run in the wrong
-    direction -- the index order is reversed between the two, and getting that
-    backwards leaves a profile that still looks entirely plausible.
-    """
+    """``mixing_length_kzz_layers`` against ``picaso.climate.get_kzz``, to
+    round-off."""
     from tests.reference.kzz import _lapse_rate, mixing_length_kzz_layers
 
     case = _column()
@@ -168,9 +132,7 @@ def test_kzz_matches_picaso(picaso_get_kzz):
 
     np.testing.assert_allclose(got, ref, rtol=1e-10)
 
-    # The column radiates more than it was asked to, so the rescale is live
-    # rather than an identity that would agree by default.  Both sides derive
-    # it the same way, from the target flux over the emergent one.
+    # The column radiates more than its target, so the rescale is not 1.
     f_target = SIGMA_SB_CGS * case["t_int"] ** 4
     f_sum = case["fnet"][-1] * 1e3
     assert rescale == pytest.approx(f_target / f_sum, rel=1e-12)

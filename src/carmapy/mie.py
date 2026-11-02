@@ -3,15 +3,8 @@ import os
 
 
 def _import_pymiescatt():
-    """Import PyMieScatt, restoring the scipy alias it needs first.
-
-    PyMieScatt does ``from scipy.integrate import trapz``, which scipy 1.14
-    removed in favour of the identically-behaved ``trapezoid``, so on a modern
-    scipy the import raises and takes this module with it.
-
-    Restoring the name mutates ``scipy.integrate`` for the whole process, which
-    is why it is done here, immediately around the one import that needs it,
-    rather than as a side effect of importing ``carmapy``.
+    """Import PyMieScatt, first restoring ``scipy.integrate.trapz`` (removed
+    in scipy 1.14) as an alias of ``trapezoid``.
     """
     import scipy.integrate
 
@@ -54,22 +47,16 @@ def default_indices_path(species):
 def _load_cloud_indices(path, clamp=False):
     """Build n(lambda) and k(lambda) interpolators from a refractive index file.
 
-    By default the interpolators raise outside the tabulated wavelength range.
-    With ``clamp=True`` they hold the endpoint values instead, which is what the
-    radiative-coupling path needs -- the Sonora band set is far wider than any
-    of the bundled index files.  Callers that clamp are expected to tell the
-    user how far they are extrapolating; see
-    :func:`carmapy.radiation.gen_band_mie_table`.
+    By default the interpolators raise outside the tabulated wavelength range;
+    with ``clamp=True`` they hold the endpoint values instead.
 
-    Returns ``(n_interp, k_interp, lambda_min, lambda_max)`` with the bounds in
-    cm, so callers can report the extrapolation without re-reading the file.
+    Returns ``(n_interp, k_interp, lambda_min, lambda_max)``, bounds in cm.
     """
     data = np.genfromtxt(path,
                         comments="#")
     wavelengths = data[:, 0] * 1e-4 # convert to cm
 
-    # The files are ordered by wavelength, but don't rely on it -- interp1d
-    # sorts internally and the endpoint values must match that order.
+    # Sort so the clamped endpoint values are the true wavelength extremes.
     order = np.argsort(wavelengths)
     wavelengths = wavelengths[order]
     n_vals = data[order, 1]

@@ -44,23 +44,13 @@ subroutine test_day()
   integer   :: ido_cons_evap
   integer   :: imaxntsubsteps_cap
   integer   :: iimplicit_gas
-  integer   :: ikey_swap
   real(kind=f) :: xref_dep
   integer   :: iminsubsteps
   real(kind=f) :: implicit_trigger
-  ! Sticking coefficient of condensing vapor on liquid/non-ice particles,
-  ! passed to CARMA_Initialize as gstickl (CARMA default 1).
+  ! Growth sticking coefficient on liquid/non-ice particles (CARMA gstickl).
   ! LLM-GENERATED — UNVERIFIED (tier: physics)
   real(kind=f) :: gstickl_in
-  ! Per-group growth sticking coefficients, in groups.txt order, passed to
-  ! CARMAGROUP_Create as gstick. Entries <= 0 (the default) fall back to
-  ! gstickl_in; groups past MAXGRP_GSTICK always use gstickl_in.
-  ! LLM-GENERATED — UNVERIFIED (tier: physics)
-  integer, parameter :: MAXGRP_GSTICK = 50
-  real(kind=f) :: gstick_grp(MAXGRP_GSTICK)
-  real(kind=f) :: gstick_i
   real(kind=f) :: implicit_rtol
-  real(kind=f) :: implicit_dgmax
   integer   :: igridv
   integer   :: idocoag
   logical   :: do_coag
@@ -271,51 +261,34 @@ subroutine test_day()
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
          met, rmu_1, rmu_2, rmu_3, rmu_4, thcond_0, thcond_1, thcond_2, CP
 
-  ! Radiative-convective coupling. Absent from input.nml unless the run was
-  ! configured with Carma.set_radiation(), and inert when do_radiation is 0.
+  ! Radiative-convective coupling, inert when do_radiation is 0.
   type(rce_type)      :: rce
   integer             :: do_radiation, rad_gap_max, ios_rad, ios_scan, ic_scan
   logical             :: has_rad_group
   character(len=256)  :: rad_line
-  ! Diagnostic label and round-trip field, not a control. The clouds' opacity
-  ! is zeroed in optics_file on the Python side rather than branched on here,
-  ! so nothing below reads this; it records which case the run was, and
-  ! load_carma reads it back to restore Carma.cloud_rad.
+  ! Whether cloud opacity was included; only printed. The cloud optics are
+  ! zeroed in optics_file when it is not.
   integer             :: cloud_rad
   character(len=256)  :: ck_table_file
-  real(kind=f)        :: t_int, rad_accel, rad_dT_max
-  ! Heat-capacity divisor for the base-connected convective zone; see
-  ! rce_type%accel_deep. 1 = physical time history.
-  ! LLM-GENERATED — UNVERIFIED (tier: physics)
-  real(kind=f)        :: rad_accel_deep
-  ! Convective-zone damping: 0 = fastest layer, 1 = collective; see
-  ! rce_type%zone_damp. LLM-GENERATED — UNVERIFIED (tier: physics)
-  integer             :: rad_zone_damp
+  real(kind=f)        :: t_int, rad_accel
   real(kind=f)        :: t_irr, t_star, rad_mu0, rad_w_surf
   real(kind=f)        :: rad_dT_tol, rad_dtau_tol
-  ! Which adiabat the convective interior follows: 0 = Parmentier fit,
-  ! 1 = the tabulated H/He gradient read from adiabat_file.
+  ! 0 = Parmentier fit, 1 = tabulated H/He gradient from adiabat_file.
   integer             :: adiabat
   character(len=256)  :: adiabat_file
-  ! Whether the eddy diffusion profile follows the evolving temperature
-  ! profile: 0 = hold the levels_file values, 1 = mixing length theory.
+  ! 0 = hold the levels_file Kzz, 1 = mixing length theory.
   integer             :: kzz_mode
-  ! Multiplier on the mixing length. 1 is the parameterisation as PICASO
-  ! has it; Kzz goes as L^(4/3), so this moves it by its 4/3 power.
   real(kind=f)        :: kzz_mixl_scale
-  ! Half-width in layers of the smoothing applied to the lapse rate that sets
-  ! the mixing length. 0 = off, which is PICASO's behaviour.
-  integer             :: kzz_lapse_smooth
   integer             :: nsolve_last   !! rce%nsolve as of the previous output
 
   namelist / radiation / do_radiation, ck_table_file, t_int, &
          t_irr, t_star, rad_mu0, rad_w_surf, &
-         rad_accel, rad_accel_deep, rad_zone_damp, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
-         rad_gap_max, adiabat, adiabat_file, kzz_mode, kzz_mixl_scale, kzz_lapse_smooth, cloud_rad
+         rad_accel, rad_dT_tol, rad_dtau_tol, &
+         rad_gap_max, adiabat, adiabat_file, kzz_mode, kzz_mixl_scale, cloud_rad
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
          NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
-         NCOAG, IS_2D, t_evolves, ido_cons_evap, imaxntsubsteps_cap, iminsubsteps, iimplicit_gas, ikey_swap, implicit_trigger, implicit_rtol, implicit_dgmax, gstickl_in, gstick_grp, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
+         NCOAG, IS_2D, t_evolves, ido_cons_evap, imaxntsubsteps_cap, iminsubsteps, iimplicit_gas, implicit_trigger, implicit_rtol, gstickl_in, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
          ibbnd_gc
 
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
@@ -327,19 +300,15 @@ subroutine test_day()
   real(kind=f), allocatable ::temp_equator(:, :), p_equator_center(:), p_equator_level(:), velocity(:), longitudes(:)
   integer, allocatable :: elem2group(:)
 
-  ! Condensate properties are written per-group by CARMApy (new API), but the
-  ! engine still owns them per-gas. These arrays buffer the group properties so
-  ! they can be translated onto the corresponding gas (the gas grown by each
-  ! group's "Volatile" element) when the gases are created below.
+  ! Per-group condensate properties from groups_file, passed to CARMAGROUP_Create.
   real(kind=f), allocatable :: grp_wtmol(:), grp_rho_cond(:), grp_surften_0(:), grp_coldia(:)
   real(kind=f), allocatable :: grp_vp_offset(:), grp_vp_tcoeff(:), grp_surften_slope(:)
   real(kind=f), allocatable :: grp_vp_metcoeff(:), grp_vp_logpcoeff(:), grp_lat_heat_e(:)
   real(kind=f), allocatable :: grp_desorption(:), grp_wtmol_core(:)
   integer, allocatable :: grp_iroutine(:), grp_is_type3(:), grp_stofact(:)
 
-  ! Per-group cloud optics, read from optics_file when NWAVE > 0. Generated in
-  ! Python on exactly this bin grid and wavelength set, so they are handed to
-  ! CARMAGROUP_Create as-is; see carmapy.radiation.write_optics_file.
+  ! Per-group cloud optics on this bin grid and band set, read from
+  ! optics_file when NWAVE > 0 (see carmapy.radiation.write_optics_file).
   real(kind=f), allocatable :: grp_qext(:,:,:), grp_ssa(:,:,:), grp_asym(:,:,:)
   integer :: opt_ngroup, opt_nwave, opt_nbin, opt_ig, opt_iw, opt_ib
 
@@ -364,26 +333,20 @@ subroutine test_day()
   ido_cons_evap = 0  ! 1 = bound explicit evaporation production by the donor bin's implicit loss
   imaxntsubsteps_cap = 16384  ! hard cap on the substep count a retry may request
   gstickl_in = 1._f
-  gstick_grp = -1._f          ! <= 0 = group uses gstickl_in
   iminsubsteps = 1            ! substeps every layer starts from (above maxsubsteps, a fixed substep)
-  ikey_swap = 0               ! 1 = condensates may swap their key reactant to the limiting one
   iimplicit_gas = 0           ! 1 = solve gas depletion implicitly with the particles
   implicit_trigger = 0.1_f    ! relative gas change in one substep that triggers the implicit solve
   implicit_rtol = 1.e-6_f     ! relative tolerance on the implicit gas fixed point
-  implicit_dgmax = 1.e30_f    ! largest relative gas change an implicit substep may take
-  optics_file = ""  ! only read when NWAVE > 0, i.e. radiatively coupled runs
+  optics_file = ""            ! only read when NWAVE > 0
 
-  do_radiation  = 0        ! 0 = fixed T,P -- the whole radiation group is inert
+  do_radiation  = 0         ! 0 = fixed T,P; the radiation group is inert
   ck_table_file = ""
   t_int         = 0._f
-  t_irr         = 0._f      ! 0 = isolated object, no incident beam
-  t_star        = 0._f      ! 0 = shape the beam like t_irr itself
+  t_irr         = 0._f      ! 0 = no incident beam
+  t_star        = 0._f      ! 0 = use t_irr
   rad_mu0       = 0.5_f     ! dayside average
-  rad_w_surf    = 0._f      ! gas giant: no surface to reflect
+  rad_w_surf    = 0._f
   rad_accel     = 1._f
-  rad_accel_deep = 1._f
-  rad_zone_damp  = 0
-  rad_dT_max    = 0.5_f
   rad_dT_tol    = 1._f
   rad_dtau_tol  = 0.02_f
   rad_gap_max   = 100
@@ -391,23 +354,18 @@ subroutine test_day()
   adiabat_file  = ""
   kzz_mode      = I_KZZ_STATIC
   kzz_mixl_scale = 1._f
-  kzz_lapse_smooth = 0
   cloud_rad     = 1
 
   open(unit=10, file=nml_file, status='old')
     read(10, nml=input_params)
     read(10, nml=io_files)
     read(10, nml=physical_params)
-    ! Optional: older input.nml files have no radiation group at all, which
-    ! leaves the defaults above and the run behaves exactly as before.
+    ! The radiation group is optional; without it the defaults above apply.
     read(10, nml=radiation, iostat=ios_rad)
   close(10)
 
-  ! A group that is absent is fine. A group that is present but fails to parse
-  ! is not: the read stops at the offending name, so the entries before it are
-  ! assigned and everything after it silently keeps its default. That would run
-  ! a radiatively coupled case at settings nobody asked for, which is far worse
-  ! than stopping. An obsolete or misspelled key is the usual cause.
+  ! A radiation group that is present but fails to parse is fatal, since the
+  ! keys after the bad one would silently keep their defaults.
   if (ios_rad /= 0) then
     has_rad_group = .false.
     open(unit=10, file=nml_file, status='old')
@@ -452,8 +410,7 @@ subroutine test_day()
   allocate(grp_iroutine(NGROUP), grp_is_type3(NGROUP), grp_stofact(NGROUP))
   allocate(winds(NZ))
 
-  ! Cloud optics for the radiatively coupled path. NWAVE is 0 for an ordinary
-  ! run, in which case nothing is read and the group optics stay unallocated.
+  ! Cloud optics, only for NWAVE > 0.
   if (NWAVE > 0) then
     allocate(grp_qext(NWAVE, NBIN, NGROUP), grp_ssa(NWAVE, NBIN, NGROUP), &
              grp_asym(NWAVE, NBIN, NGROUP))
@@ -466,8 +423,6 @@ subroutine test_day()
     open(10, file = optics_file, status='old')
     read(10, *) opt_ngroup, opt_nwave, opt_nbin
 
-    ! A silent shape mismatch here would put the wrong wavelength's optics on
-    ! every bin, so it is checked rather than trusted.
     if (opt_ngroup /= NGROUP .or. opt_nwave /= NWAVE .or. opt_nbin /= NBIN) then
       write(*,*) "*** optics_file is (ngroup,nwave,nbin) = ", opt_ngroup, opt_nwave, opt_nbin, &
                  " but input.nml says ", NGROUP, NWAVE, NBIN, " ***"
@@ -663,18 +618,13 @@ subroutine test_day()
   open(10, file = groups_file)
   read(10, *)
   do i = 1, NGROUP
-    ! The group file carries the condensate properties; they live on the
-    ! group so several condensates can share one gas reservoir.
+    ! The group file carries the condensate properties.
     read(10, *) name, rmin, grp_wtmol(i), grp_iroutine(i), grp_rho_cond(i), &
      grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), grp_vp_tcoeff(i), &
      grp_is_type3(i), grp_surften_slope(i), grp_vp_metcoeff(i), grp_vp_logpcoeff(i), &
      grp_lat_heat_e(i), grp_desorption(i), grp_stofact(i), grp_wtmol_core(i)
 
     write(*,*) "Add " //TRIM(name)//"..."
-
-    gstick_i = -1._f
-    if (i <= MAXGRP_GSTICK) gstick_i = gstick_grp(i)
-    if (gstick_i > 0._f) write(*,*) "  growth sticking coefficient ", gstick_i
 
     if (NWAVE > 0) then
       call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
@@ -683,7 +633,7 @@ subroutine test_day()
       wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
       surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
       vp_logpcoeff=grp_vp_logpcoeff(i), lat_heat_e=grp_lat_heat_e(i), &
-      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), gstick=gstick_i, &
+      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), &
       do_vtran=.TRUE., is_sulfate=.FALSE., &
       qext=grp_qext(:,:,i), ssa=grp_ssa(:,:,i), asym=grp_asym(:,:,i))
     else
@@ -693,7 +643,7 @@ subroutine test_day()
       wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
       surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
       vp_logpcoeff=grp_vp_logpcoeff(i), lat_heat_e=grp_lat_heat_e(i), &
-      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), gstick=gstick_i, &
+      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), &
       do_vtran=.TRUE., is_sulfate=.FALSE.)
     end if
 
@@ -728,8 +678,7 @@ subroutine test_day()
     endif
       call CARMAELEMENT_Create(carma, i, igroup, name, rho, itype, icomposition, rc)
       elem2group(i) = igroup
-      ! Core-mass elements hold a mass concentration in the same array, so only
-      ! the others carry the group's particle number density.
+      ! Core-mass elements hold a mass concentration, not a number density.
       elem_is_number(i) = (itype /= I_COREMASS)
       if (rc < 0) stop "    *** FAILED ***"
 
@@ -760,10 +709,8 @@ subroutine test_day()
   read(10, *)
   do i=1, NGAS
 
-    ! The gas file holds gas-phase properties only; condensate properties
-    ! live on the groups, so several condensates can share one reservoir.
-    ! hill_formula is read but unused by the engine (it is a Python-side
-    ! fastchem label).
+    ! Gas-phase properties only. hill_formula is a Python-side fastchem label,
+    ! unused here.
     read(10, *) name, wtmol_dif, icomposition, hill_formula
 
     write(*,*) "Add "//trim(name) //" ..."
@@ -799,12 +746,11 @@ subroutine test_day()
   open(10, file=growth_file)
   read(10, *)
   do i = 1, NGROWTH
-    ! growth.txt v3 rows are (ielem, igas, nu, is_key, xref), where xref is the
-    ! reference mass mixing ratio of a secondary reactant in the condensate's
-    ! vapor-pressure fit (0 = none); v2 rows omit xref; legacy rows are
-    ! (ielem, igas), which are key pathways with nu = the group's stofact.
-    ! Key rows define the growth kinetics; non-key rows only register the
-    ! stoichiometric depletion of a secondary gas.
+    ! Rows are (ielem, igas, nu, is_key, xref), xref being the reference mass
+    ! mixing ratio of a secondary reactant in the vapor-pressure fit (0 =
+    ! none). Rows may omit xref, or be (ielem, igas): a key pathway whose
+    ! depletion defaults to the group's stofact. Key rows set the growth
+    ! kinetics; nu > 0 registers the stoichiometric depletion of igas.
     read(10, '(a)') linebuf
     read(linebuf, *, iostat=ios) ito, igas, nu_dep, is_key, xref_dep
     if (ios /= 0) then
@@ -857,16 +803,15 @@ subroutine test_day()
   ! Setup the CARMA processes to exercise
   write(*,*) "Initialize CARMA ..."
 
-  ! do_fixedinit initializes the fall velocities, diffusion coefficients and
-  ! growth kernels once from the reference atmosphere. That is only valid while
-  ! T and P are fixed, so a T-evolving run pays for per-step initialization.
+  ! do_fixedinit initializes fall velocities, diffusion coefficients and growth
+  ! kernels once from the reference atmosphere, which is only valid for fixed T.
   call CARMA_Initialize(carma, rc, do_cnst_rlh =.FALSE., do_coag=DO_COAG, &
                         do_fixedinit=(t_evolves .eq. 0), do_grow=.TRUE., &
                         do_explised=.FALSE., do_substep=.TRUE., do_print_init=.TRUE., &
                         do_vdiff=.TRUE., do_vtran=.TRUE., minsubsteps=iminsubsteps, maxsubsteps=10, maxretries=10, &
                         maxntsubsteps_cap=imaxntsubsteps_cap, &
                         do_implicit_gas=(iimplicit_gas .ne. 0), implicit_trigger=implicit_trigger, &
-                        implicit_rtol=implicit_rtol, implicit_dgmax=implicit_dgmax, do_key_swap=(ikey_swap .ne. 0), &
+                        implicit_rtol=implicit_rtol, &
                         itbnd_pc=itbnd_pc, ibbnd_pc=ibbnd_pc, itbnd_gc=itbnd_gc, ibbnd_gc=ibbnd_gc, &
                         do_t_evolves=(t_evolves .ne. 0), do_cons_evap=(ido_cons_evap .ne. 0), &
                         gstickl=gstickl_in)
@@ -974,8 +919,7 @@ subroutine test_day()
 
   rho_atm_cgs = p(:) / (RGAS/wtmol_air(:) * t(:))
 
-  ! Set up the radiative-convective coupling. The optics read above are the
-  ! cloud half of it; the ck table is the gas half.
+  ! Set up the radiative-convective coupling.
   if (do_radiation .eq. 1) then
     if (NWAVE .le. 0) then
       write(*,*) "*** do_radiation = 1 requires NWAVE > 0 and an optics_file ***"
@@ -985,15 +929,12 @@ subroutine test_day()
     call rce_init(rce, NZ, NBIN, NGROUP, NWAVE, igridv, trim(ck_table_file), &
                   t_int, t_irr, t_star, rad_mu0, rad_w_surf, &
                   CP, grav_set, wtmol_air_set, &
-                  adiabat, trim(adiabat_file), kzz_mode, kzz_mixl_scale, kzz_lapse_smooth, &
-                  rad_accel, rad_dT_max, rad_dT_tol, rad_dtau_tol, &
+                  adiabat, trim(adiabat_file), kzz_mode, kzz_mixl_scale, &
+                  rad_accel, rad_dT_tol, rad_dtau_tol, &
                   rad_gap_max, rc)
     if (rc < 0) stop "    *** FAILED rce_init ***"
-    rce%accel_deep = rad_accel_deep
-    rce%zone_damp  = rad_zone_damp
 
-    ! The evolving column gets its own output file, so the existing outputs
-    ! keep their format and a fixed-T run produces no extra file at all.
+    ! The evolving column is written to its own file.
     open(unit=lunrad, file = radpre // filename(1:len_trim(filename)) // filesuffix, &
          status="unknown", position=file_pos)
     write(lunrad,'(3i10,3e25.15)') NZ, nstep / iskip, iskip, t_int, &
@@ -1067,9 +1008,8 @@ subroutine test_day()
     close(unit=lunres)
   endif
 
-  ! The radiative update at the top of the first step reads numden before any
-  ! step has filled it, so derive it from the state the run starts from, with
-  ! the air density setupatm computes from the same p [Pa -> barye] and t.
+  ! Initial number density for the first radiative update, using the air
+  ! density setupatm computes from the same p [Pa -> barye] and t.
   ! LLM-GENERATED — UNVERIFIED (tier: physics)
   do j = 1, NBIN
     do ielem = 1, NELEM
@@ -1122,18 +1062,14 @@ subroutine test_day()
     end if
 
 
-    ! Evolve the temperature profile and the altitude grid before the state is
-    ! built, so this step's microphysics sees the updated column. The cloud
-    ! field is the one left by the previous step, which is what makes the
-    ! coupling explicit.
+    ! Evolve T and the altitude grid before the state is built, using the
+    ! previous step's cloud field (explicit coupling).
     if (do_radiation .eq. 1) then
       call rce_update(rce, dtime, p(:), pl(:), t(:), zc(:), zl(:), &
                       NELEM, numden, elem2group, elem_is_number, &
                       grp_r, grp_qext, grp_ssa, grp_asym)
 
-      ! Mix with the eddy diffusion the new profile implies rather than the
-      ! one the run started from. ekz is handed to CARMASTATE_Create below, so
-      ! this is the whole of the coupling back into the microphysics.
+      ! ekz is handed to CARMASTATE_Create below.
       if (kzz_mode .eq. I_KZZ_MIXING_LENGTH) then
         ekz(:) = rce%kzz(:)
       end if
@@ -1165,9 +1101,8 @@ subroutine test_day()
       end do
     end do
 
-    ! Load all gases and the per-condensate saturation state in one call
-    ! (the old saturations are per group, so they can only be initialized
-    ! once all gas concentrations are known).
+    ! Load all gases and the per-group old saturations in one call, since
+    ! the saturations need every gas concentration.
     call CARMASTATE_PrepareStep(cstate, mmr_gas, rc, mmr_old=mmr_gas_old, &
                                 satice_old=satice, satliq_old=satliq)
     if (rc < 0) stop "    *** FAILED CARMASTATE_PrepareStep ***"
@@ -1202,9 +1137,7 @@ subroutine test_day()
     end do
 
     ! Per-gas equilibrium vapor pressure for output and the input cap: the
-    ! most restrictive (lowest) saturation vapor pressure among the
-    ! condensates keyed to each gas. A gas with no condensate gets a huge
-    ! value (no cap).
+    ! lowest among the condensates keyed to each gas, 1e30 (no cap) if none.
     svp_gas(:,:) = 1e30_f
     do igroup = 1, NGROUP
       if (grpgas(igroup) > 0) then
@@ -1345,20 +1278,19 @@ subroutine test_day()
         end do
       end do
 
-      ! The radiative column: layer temperatures, heating rates and which
-      ! layers convection left neutrally stable, then the level net fluxes the
-      ! heating was differenced from. F_net at the top is the emergent flux,
-      ! which is what sigma*t_int^4 is checked against.
+      ! Radiative column: a summary line, then per layer p, T, dT/dt and the
+      ! convective flag, then per level p, F_net and Kzz.
       if (do_radiation .eq. 1) then
         write(lunrad,'(7e25.15)') (istep)*dtime, rce%fnet(NZP1), &
                                   real(rce%nsolve - nsolve_last, f), &
                                   real(rce%nzone, f), rce%conv_resid, &
                                   rce%absorbed_sw, rce%reflected_sw
         nsolve_last = rce%nsolve
+
         ! Cumulative energy budget of the temperature update [J/m^2]; see
         ! rce_type%e_comp. LLM-GENERATED — UNVERIFIED (tier: physics)
-        write(*,'(a,9es20.11)') ' RCE energy:', istep*dtime, rce%e_comp, &
-                                rce%e_appl, rce%e_adj, rce%e_deep, &
+        write(*,'(a,8es20.11)') ' RCE energy:', istep*dtime, rce%e_comp, &
+                                rce%e_appl, rce%e_adj, &
                                 rce%e_comp_rad, rce%e_appl_rad, &
                                 rce%e_comp_cnv, rce%e_appl_cnv
 

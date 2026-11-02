@@ -125,7 +125,7 @@ def test_extend_atmosphere_pressure_monotonic(isothermal_carma):
 
 @pytest.mark.unit
 def test_extend_atmosphere_defaults_to_parmentier(isothermal_carma):
-    """The flag defaults off, so the deep extension is unchanged."""
+    """extend_atmosphere uses the Parmentier fit by default."""
     from carmapy.adiabat import ADIABAT_PARMENTIER, parmentier_adiabat
 
     c = isothermal_carma
@@ -141,9 +141,8 @@ def test_extend_atmosphere_defaults_to_parmentier(isothermal_carma):
 
 @pytest.mark.unit
 def test_extend_atmosphere_table_tracks_the_fit_when_cool(isothermal_carma):
-    """A 1000 K anchor never reaches the dissociation regime, so switching the
-    adiabat must barely move the extension. Where the two *do* diverge is
-    covered in test_adiabat.py."""
+    """A 1000 K anchor stays out of the dissociation regime, so the two
+    adiabats agree on the extension."""
     from carmapy.adiabat import parmentier_adiabat, tabulated_adiabat
 
     c = isothermal_carma

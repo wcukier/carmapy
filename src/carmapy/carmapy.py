@@ -167,10 +167,8 @@ class Carma:
         self.iappend:       int         = 0
         self.t_evolves:     bool        = False
 
-        # Radiative coupling. Setting ck_table_path to an exported Sonora
-        # correlated-k table (see carmapy.radiation) turns it on: the Mie
-        # tables are regenerated on that table's band set at run() time and
-        # NWAVE follows from it. None means an ordinary fixed-T run.
+        # Radiative coupling, set by set_radiation. ck_table_path = None is a
+        # fixed-T run.
         self.ck_table_path: str         = None
         self.cloud_rad:     bool        = True
         self.t_int:         float       = 0.
@@ -179,37 +177,29 @@ class Carma:
         self.mu0:           float       = 0.5
         self.w_surf:        float       = 0.
         self.rad_accel:     float       = 1.
-        self.rad_accel_deep: float      = 1.
-        self.rad_zone_damp: int         = 0
-        self.rad_dT_max:    float       = 0.5
         self.rad_dT_tol:    float       = 1.
         self.rad_dtau_tol:  float       = 0.02
         self.rad_gap_max:   int         = 100
 
-        # Whether the eddy diffusion profile follows the evolving temperature
-        # profile. Only read by a radiatively coupled run; a fixed-T run has
-        # nothing for Kzz to follow. See rce_kzz in carma_rce.F90.
+        # Kzz from mixing length theory on each radiative solve (coupled runs
+        # only); see rce_kzz in carma_rce.F90.
         self.self_consistent_kzz: bool  = True
         self.kzz_mixl_scale: float      = 1.0
-        self.kzz_lapse_smooth: int      = 0
 
-        # Which adiabat sets the temperature below the convective boundary,
-        # and the deep extension built by extend_atmosphere. See
+        # Adiabat for the convective adjustment and extend_atmosphere; see
         # carmapy.adiabat.
         self.adiabat:       str         = ADIABAT_PARMENTIER
 
+        # Microphysics
+        self.do_secondary_depletion: bool   = True   # add non-key growth pathways from each group's stoich
+        self.do_cons_evap:      bool        = False  # bound evaporation production by the donor bin's loss
+        self.maxntsubsteps_cap: int         = 16384  # cap on the substep count a retry may request
+        self.minsubsteps:       int         = 1      # starting substep count; above 10 it is fixed
+        self.implicit_gas:      bool        = True   # backward-Euler gas depletion with the particles
+        self.implicit_trigger:  float       = 0.1    # relative gas change per substep that triggers it
+        self.implicit_rtol:     float       = 1e-6   # tolerance on the implicit gas fixed point
+        self.gstickl:           float       = 1.0    # growth sticking coefficient (CARMA gstickl)
 
-        self.do_secondary_depletion: bool = True  # emit non-key depletion pathways from each condensate's stoich vector
-        self.do_cons_evap: bool = False  # bound explicit evaporation production by the donor bin's implicit loss (prevents cascade amplification where evaplg*dt >> 1)
-        self.maxntsubsteps_cap: int = 16384  # hard cap on the substep count a microphysics retry may request
-        self.minsubsteps: int = 1  # microphysics substeps every layer starts from; above 10 this fixes the substep
-        self.do_key_swap: bool = False  # let condensates swap their key reactant to the limiting one (reaction supersaturation follows every reactant)
-        self.implicit_gas: bool = True  # solve gas depletion implicitly with the particles (backward Euler in the gas)
-        self.implicit_trigger: float = 0.1  # relative gas change in one substep above which the implicit solve runs
-        self.implicit_rtol: float = 1e-6  # relative tolerance on the implicit gas fixed point
-        self.implicit_dgmax: float = 0.1  # largest relative gas change an implicit substep may take; bounds the partition error between condensates sharing a reservoir
-        self.gstickl: float = 1.0  # sticking coefficient of condensing vapor on (non-ice) particles; CARMA's gstickl
-        self.gstick_by_group: dict[str, float] = {}  # {group name: growth sticking coefficient}; groups not listed use gstickl
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
         self.growth:    list["Growth"]          = []      # list of carma Growth objects
         self.elems:     dict[str, "Element"]    = {}      # dictionary of carma Element objects
@@ -938,9 +928,8 @@ class Carma:
 
             P_new[:n] = self.P_levels[0] * ratio ** (n - np.arange(n))
 
-            # One call per column: the tabulated adiabat integrates the whole
-            # pressure grid in a single sweep, and calling it per level would
-            # restart that integration each time.
+            # One call per column; the tabulated adiabat integrates the whole
+            # grid at once.
             if not self.is_2d:
                 T_new[:n] = adiabat_of(P_new[:n], self.T_levels[0],
                                        self.P_levels[0])
@@ -959,7 +948,6 @@ class Carma:
                          / (self.wt_mol * PROTON_MASS * self.surface_grav))
 
                 kzz_new[i] = self.kzz_levels[0] * (H/H0)**(-1/3)
-
 
         elif method == "isothermal":
             for i in range(n-1, -1, -1):
@@ -1267,165 +1255,83 @@ class Carma:
                       cloud_rad: bool = True,
                       self_consistent_kzz: bool = True,
                       kzz_mixl_scale: float = 1.0,
-                      kzz_lapse_smooth: int = 0,
-                      accel: float | None = None,
+                      accel: float = 1.0,
                       rad_gap_max: int = 100,
-                      accel_deep: float = 1.0,
-                      zone_damp: int = 0,
                       rad_dT_tol: float = 1.0,
-                      rad_dtau_tol: float = 0.02,
-                      dT_max: float = 0.5) -> None:
+                      rad_dtau_tol: float = 0.02) -> None:
         """Couples the temperature profile to radiative transfer.
 
-        Turns the simulation from a fixed-``T`` run into a
-        radiative-convective one.  Every layer evolves under the radiative
-        heating of the gas and the clouds, and a dry convective adjustment then
-        mixes away whatever superadiabatic gradients that leaves, against the
-        adiabat selected by ``self.adiabat``.  The internal flux enters as the
-        net flux through the base of the column, so equilibrium is the state in
-        which the emergent flux matches ``sigma * t_int**4``.  Intended for
-        isolated brown dwarfs, where there is no irradiation, so the internal
-        temperature is also the effective one.
+        Each layer evolves under the radiative heating of the gas and clouds,
+        followed by a dry convective adjustment to the adiabat selected by
+        ``self.adiabat``.  Convective zones are diagnosed every step and there
+        may be more than one; see ``Results.convective_zones``.
 
-        The convective zones are an output, not an input: they are located
-        every step and there may be more than one, since a cloud deck can drive
-        a detached convective layer aloft.  See ``results.convective`` and
-        ``results.convective_zones()``.
-
-        The full radiative transfer runs on an adaptive cadence, but the
-        heating rate it produces is applied on every microphysical timestep, so
-        the profile evolves continuously.  ``rad_gap_max=1`` forces a solve
-        every step.
-
-        The eddy diffusion profile follows the temperature profile by default.
-        ``add_kzz`` then supplies only what the run *starts* from: once the
-        first radiative solve lands, Kzz is recomputed from mixing length
-        theory on the same cadence and the supplied profile is not used again.
-        Set ``self_consistent_kzz=False`` to hold it for the whole run.  The
-        parameterisation is PICASO's: the mixing length velocity is set by the
-        convective heat flux and the mixing length by how close each layer's
-        lapse rate sits to the adiabatic one.  See ``rce_kzz`` in
-        ``carma_rce.F90``.
+        The full radiative transfer runs on an adaptive cadence, but its
+        heating rate is applied every timestep.  By default Kzz is recomputed
+        from mixing length theory (PICASO's parameterisation; see ``rce_kzz``
+        in ``carma_rce.F90``) on the same cadence, so ``add_kzz`` only sets
+        the starting profile.
 
         Parameters
         ----------
         t_int : float
-            Internal temperature [K] -- the temperature corresponding to the
-            heat flux escaping from the interior, imposed as the net flux
-            through the base of the column.  For an unirradiated object it is
-            also the effective temperature, but the two are distinct
-            quantities and this is the internal one.
+            Internal temperature [K], imposed as the net flux
+            ``sigma * t_int**4`` through the base of the column.
         ck_table_path : str
-            Path to a correlated-k opacity table exported by
+            Correlated-k table written by
             ``carmapy.radiation.export_ck_table``.
         t_irr : float, optional
-            Irradiation temperature [K].  The incident flux *normal to the
-            beam* is ``sigma * t_irr**4``; the flux entering the top of the
-            atmosphere is ``mu0`` times that.  Zero, the default, means an
-            isolated object and switches the shortwave off entirely.
+            Irradiation temperature [K]; the flux normal to the beam is
+            ``sigma * t_irr**4``.  By default 0, an isolated object with the
+            shortwave off.
         t_star : float, optional
-            Temperature of the blackbody the incident spectrum is *shaped*
-            like [K].  It sets only the colour of the beam, never its
-            magnitude, so a hot primary at large separation is expressed as a
-            high ``t_star`` with a low ``t_irr``.  Zero, the default, shapes
-            the beam like ``t_irr`` itself.
+            Blackbody temperature [K] setting the spectral shape, not the
+            magnitude, of the incident beam.  By default 0, which uses
+            ``t_irr``.
         mu0 : float, optional
-            Cosine of the incidence angle, in (0, 1].  This is also where
-            redistribution is expressed: 0.5, the default, is a dayside
-            average and 0.25 is full redistribution.
+            Cosine of the incidence angle, in (0, 1].  0.5 is a dayside
+            average and 0.25 full redistribution.  By default 0.5
         w_surf : float, optional
-            Surface albedo, in [0, 1).  Zero, the default, is correct for a
-            gas giant or brown dwarf, which has no surface.
-
-        Notes
-        -----
-        ``t_int`` is an **input**; the equilibrium and effective temperatures
-        are **outputs**, because the Bond albedo that connects them is what the
-        clouds determine::
-
-            sigma * T_eq**4  =  mu0 * sigma * t_irr**4 * (1 - A)
-            sigma * T_eff**4 =  emergent longwave
-
-        Both are reported by ``results``.  Note ``T_eq`` does not equal
-        ``t_irr`` even at zero albedo -- the geometry factor ``mu0`` remains.
-        ``T_eff**4 == t_int**4 + T_eq**4`` is what equilibrium *makes* true, so
-        the difference between the two sides measures how far a run still has
-        to go.
-
-        Composition is fixed at solar H/He.  The Rayleigh cross-section, the
-        adiabat table and the correlated-k table all assume it, so a
-        higher-metallicity atmosphere needs all three changed together.
+            Surface albedo, in [0, 1).  By default 0
         cloud_rad : bool, optional
-            If False the clouds are still simulated in full but contribute no
-            opacity.  Running the same case with it True and False isolates
-            what the cloud radiative feedback changed.  By default True
+            If False the clouds are simulated but contribute no opacity.
+            By default True
         self_consistent_kzz : bool, optional
-            Recompute the eddy diffusion profile from mixing length theory on
-            every radiative solve, so the mixing follows the convective heat
-            flux and the lapse rate as they evolve.  If False the profile
-            passed to ``add_kzz`` is held for the whole run, which leaves a
-            column whose radiative-convective boundary has moved mixing with
-            the eddy diffusion of the atmosphere it started from.
+            Recompute Kzz from mixing length theory on each radiative solve.
+            If False the ``add_kzz`` profile is held for the whole run.
             By default True
         kzz_mixl_scale : float, optional
-            Multiplier on the mixing length used by ``self_consistent_kzz``.
-            The mixing length is otherwise diagnosed entirely from the profile
-            and cannot exceed a scale height, so this is the one free parameter
-            in the scheme, and the handle for asking how sensitive the clouds
-            are to the strength of the mixing.  Kzz goes as the 4/3 power of
-            the mixing length, so 2 here is a factor 2.52 in Kzz, not 2.
-            Ignored when ``self_consistent_kzz`` is False.  By default 1, which
-            is the parameterisation as PICASO has it.
-        kzz_lapse_smooth : int, optional
-            Half-width, in layers, of a centred running mean applied to the
-            lapse rate that sets the mixing length, which is what dominates the
-            spikiness of Kzz on a real column.  Expect a wide window to be
-            needed, and diminishing returns from it: much of the residual comes
-            from layers crossing the clips downstream and is not reachable by
-            smoothing the input.  0 reproduces PICASO, which smooths nothing.
-            Ignored when ``self_consistent_kzz`` is False.  By default 0.
+            Multiplier on the mixing length; Kzz scales as its 4/3 power.
+            By default 1
         accel : float, optional
-            Factor decoupling the radiative clock from the microphysical one,
-            to reach radiative-convective equilibrium in a tractable number of
-            steps.  Spin up with it raised, produce science at 1, where the two
-            clocks stay together and the time history is physical.  Defaults
-            to 1.
-        accel_deep : float, optional
-            Heat-capacity divisor for the convective zone reaching the base
-            of the column.  The deep interior holds most of the column's
-            heat capacity, so an interior that starts off its equilibrium
-            adiabat takes ~1e9 s to reach it, during which ``F_TOA`` stays
-            below ``sigma*t_int**4``.  The zone stops warming only when its
-            net heating averages to zero, so the equilibrium is unchanged.
-            Spin up with it raised, produce science at 1.  Defaults to 1.
-        zone_damp : int, optional
-            How a convective zone's uniform damping factor is chosen.  0
-            takes the fastest layer's ``1/(1 + dt/tau_rad)``; 1 takes the
-            zone's collective implicit factor from the Jacobian (falling back
-            to 0's choice where the zone's collective response is not
-            damping), which applies more of a cycling zone's computed heating.
-            Defaults to 0.
+            Speed-up of the radiative clock relative to the microphysical one,
+            for spin-up.  Use 1 for a physical time history.  By default 1
         rad_gap_max : int, optional
-            Hard ceiling on the number of timesteps between full solves,
-            by default 100
+            Maximum number of timesteps between full radiative solves.
+            By default 100
         rad_dT_tol : float, optional
             Force a solve once the accumulated ``max|dT|`` since the last one
-            exceeds this [K], by default 1.0
+            exceeds this [K].  By default 1
         rad_dtau_tol : float, optional
             Force a solve once the column cloud cross section changes by this
-            fraction, by default 0.02
-        dT_max : float, optional
-            Per-step limit on ``|dT|`` [K], a backstop on the semi-implicit
-            update.  Frequent clamping means the cadence or ``accel`` is too
-            coarse; the count is reported at the end of the run.
-            By default 0.5
+            fraction.  By default 0.02
 
         Notes
         -----
-        Enabling radiation sets ``t_evolves`` to True.  Without it CARMA
-        initializes fall velocities, diffusion coefficients and growth kernels
-        once from the reference atmosphere and serves them for the whole run,
-        which would leave the coupling silently inert.
+        ``T_eq`` and ``T_eff`` are outputs, reported by ``Results``, since the
+        Bond albedo that connects them to ``t_irr`` is set by the clouds::
+
+            sigma * T_eq**4  = mu0 * sigma * t_irr**4 * (1 - A)
+            sigma * T_eff**4 = emergent longwave
+
+        In equilibrium ``T_eff**4 == t_int**4 + T_eq**4``.
+
+        Composition is fixed at solar H/He: the Rayleigh cross section, the
+        adiabat table and the ck table all assume it.
+
+        Sets ``t_evolves`` to True; otherwise CARMA would hold fall
+        velocities, diffusion coefficients and growth kernels at their
+        initial values.
         """
         if t_int <= 0:
             raise ValueError("t_int must be positive")
@@ -1445,19 +1351,12 @@ class Carma:
         if not os.path.exists(ck_table_path):
             raise FileNotFoundError(f"ck table not found: {ck_table_path}")
 
-        if accel is None:
-            accel = 1.0
-
         if rad_gap_max < 1:
             raise ValueError("rad_gap_max must be at least 1")
 
         if kzz_mixl_scale <= 0:
             raise ValueError("kzz_mixl_scale must be positive, got "
                              f"{kzz_mixl_scale}")
-
-        if kzz_lapse_smooth < 0:
-            raise ValueError("kzz_lapse_smooth must be non-negative, got "
-                             f"{kzz_lapse_smooth}")
 
         self.t_int = t_int
         self.t_irr = t_irr
@@ -1468,14 +1367,10 @@ class Carma:
         self.cloud_rad = cloud_rad
         self.self_consistent_kzz = self_consistent_kzz
         self.kzz_mixl_scale = kzz_mixl_scale
-        self.kzz_lapse_smooth = kzz_lapse_smooth
         self.rad_accel = accel
-        self.rad_accel_deep = accel_deep
-        self.rad_zone_damp = zone_damp
         self.rad_gap_max = rad_gap_max
         self.rad_dT_tol = rad_dT_tol
         self.rad_dtau_tol = rad_dtau_tol
-        self.rad_dT_max = dT_max
 
         self.t_evolves = True
 
@@ -1487,14 +1382,10 @@ class Carma:
     def _write_optics(self, path, suppress_output=False) -> int:
         """Generate the per-group cloud optics for a radiatively coupled run.
 
-        Returns NWAVE -- 0 when radiation is off, which is what keeps the
-        Fortran optics arrays unallocated and the coupling inert.
+        The Mie tables are on exactly the run's bin grid and the ck table's
+        band set, and are cached in the run's ``inputs/`` directory.
 
-        The Mie tables are generated on exactly the run's bin grid and the ck
-        table's band set, so the Fortran interpolates nothing at run time.
-        They are cached in the run's own ``inputs/`` directory: generating them
-        costs a Mie call per (bin, band) per group, which is seconds, but there
-        is no reason to repeat it on a restart.
+        Returns NWAVE, which is 0 when radiation is off.
         """
         if self.ck_table_path is None:
             return 0
@@ -1512,10 +1403,7 @@ class Carma:
                     name, group.rmin, self.NBIN, self.ck_table_path,
                     table_path)
             else:
-                # Clouds are still simulated in full; they just contribute no
-                # opacity. Running the identical solver with zeroed optics is
-                # what makes the cloud_rad=True/False pair a clean comparison,
-                # so this writes zeros rather than taking a different branch.
+                # Zero optics, so cloud_rad=False runs the identical solver.
                 tables[name] = np.zeros((self.NBIN, nband, 3))
 
         if not self.cloud_rad and not suppress_output:
@@ -1530,7 +1418,6 @@ class Carma:
                   f"on {nwave} bands")
 
         return nwave
-
 
     # LLM-GENERATED — UNVERIFIED (tier: physics)
     # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
@@ -1611,9 +1498,6 @@ class Carma:
         
         path_end = os.path.basename(path) 
         
-        # Cloud optics for a radiatively coupled run. NWAVE stays 0 otherwise,
-        # which is what leaves the Fortran group optics unallocated and the
-        # whole path inert.
         nwave = self._write_optics(path, suppress_output=suppress_output)
 
         nml = {
@@ -1674,10 +1558,8 @@ class Carma:
                 "imaxntsubsteps_cap":   int(self.maxntsubsteps_cap),
                 "iminsubsteps":         int(self.minsubsteps),
                 "iimplicit_gas":        int(self.implicit_gas),
-                "ikey_swap":            int(self.do_key_swap),
                 "implicit_trigger":     float(self.implicit_trigger),
                 "implicit_rtol":        float(self.implicit_rtol),
-                "implicit_dgmax":       float(self.implicit_dgmax),
                 "gstickl_in":           float(self.gstickl),
                 "igridv":               self.igridv,
                 "iappend":              self.iappend,
@@ -1686,9 +1568,7 @@ class Carma:
                 "itbnd_gc":             _bc2int(self.top_bound_type_gas),
                 "ibbnd_gc":             _bc2int(self.bot_bound_type_gas)
                 },
-            # The Fortran reads this group with iostat and falls back to
-            # do_radiation = 0, so it is written unconditionally: an
-            # uncoupled run just carries an explicit "off".
+            # Written for every run; do_radiation = 0 when uncoupled.
             "radiation": {
                 "do_radiation":         int(self.ck_table_path is not None),
                 "ck_table_file":        (os.path.abspath(self.ck_table_path)
@@ -1699,15 +1579,11 @@ class Carma:
                 "rad_mu0":              self.mu0,
                 "rad_w_surf":           self.w_surf,
                 "rad_accel":            self.rad_accel,
-                "rad_accel_deep":       self.rad_accel_deep,
-                "rad_zone_damp":        self.rad_zone_damp,
-                "rad_dT_max":           self.rad_dT_max,
                 "rad_dT_tol":           self.rad_dT_tol,
                 "rad_dtau_tol":         self.rad_dtau_tol,
                 "rad_gap_max":          self.rad_gap_max,
                 "kzz_mode":             int(self.self_consistent_kzz),
                 "kzz_mixl_scale":       self.kzz_mixl_scale,
-                "kzz_lapse_smooth":     self.kzz_lapse_smooth,
                 "adiabat":              ADIABAT_CODES[self.adiabat],
                 "adiabat_file":         (os.path.abspath(TABLE_FILE)
                                          if self.adiabat == ADIABAT_TABLE
@@ -1715,16 +1591,6 @@ class Carma:
                 "cloud_rad":            int(self.cloud_rad),
                 }
             }
-        if self.gstick_by_group:
-            unknown = set(self.gstick_by_group) - set(self.groups)
-            if unknown:
-                raise ValueError(f"gstick_by_group names unknown groups: {sorted(unknown)}")
-            if len(self.groups) > 50:
-                raise ValueError("gstick_by_group supports at most 50 groups "
-                                 "(the driver's gstick_grp array size)")
-            # In groups.txt order; -1 = the group uses gstickl.
-            nml["input_params"]["gstick_grp"] = [
-                float(self.gstick_by_group.get(name, -1.0)) for name in self.groups]
         nml = f90nml.Namelist(nml)
         nml.write(os.path.join(path, "inputs", "input.nml"), force=True)
         
@@ -2035,7 +1901,6 @@ class Carma:
             "following Ackerman & Marley 2001, as implemented in picaso "
             "(Mukherjee et al. 2023).  ")
 
-
         print(cites)
 
         return cites
@@ -2245,9 +2110,9 @@ class Growth:
         stoichiometrically.
     xref : float, optional
         Reference mass mixing ratio [g/g] of this (secondary) gas implicit in
-        the condensate's vapor-pressure fit.  With ``Carma.do_key_swap`` the
-        condensate's supersaturation scales with this gas's abundance relative
-        to the reference.  By default None, in which case ``Carma.run`` uses
+        the condensate's vapor-pressure fit.  The condensate's
+        supersaturation scales with this gas's abundance relative to the
+        reference.  By default None, in which case ``Carma.run`` uses
         the gas's bottom-boundary abundance.
 
     """

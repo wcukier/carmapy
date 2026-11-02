@@ -1,22 +1,10 @@
-"""Eddy diffusion from mixing length theory -- the reference implementation.
+"""Mixing length Kzz, a Python port of PICASO's ``get_kzz``.
 
-Test-only.  ``rce_kzz`` in ``carma_rce.F90`` is what a radiatively coupled run
-actually mixes with; this is the independent Python transcription it is checked
-against, so a port bug has to be made twice to go unnoticed.
+``test_rce.py`` checks ``rce_kzz`` in ``carma_rce.F90`` against this module, and
+``test_kzz_picaso.py`` checks this module against PICASO.
 
-Both are ports of PICASO's ``get_kzz`` (``picaso/climate.py``), which is the
-other end of the chain: ``test_rce.py`` pins the Fortran to this module, and
-``test_kzz_picaso.py`` pins this module to PICASO.  Neither link alone would
-support the claim that a CARMA column and a PICASO column with the same profile
-mix the same way.
-
-``adiabat`` is imported from the real package rather than duplicated here, so
-the port check exercises the production adiabat rather than a second copy.
-
-Everything here is cgs, matching ``add_kzz`` and the ``kzz_levels`` column of
-``levels.txt``: pressure in barye, Kzz in cm^2/s.  The one exception is
-``fnet_levels``, which is W/m^2 because that is the unit the Fortran carries it
-in and the unit ``Results.flux_net`` reads back.
+Units are cgs (pressure in barye, Kzz in cm^2/s) except ``fnet_levels``, which
+is W/m^2 as the Fortran and ``Results.flux_net`` carry it.
 """
 
 import numpy as np
@@ -25,8 +13,7 @@ from numpy.typing import ArrayLike
 from carmapy.adiabat import ADIABAT_PARMENTIER, ADIABAT_TABLE, grad_ad
 from carmapy.constants import PARMENTIER_A_COEFF, PARMENTIER_B_COEFF
 
-__all__ = ["mixing_length_kzz", "mixing_length_kzz_layers",
-           "smooth_profile"]
+__all__ = ["mixing_length_kzz", "mixing_length_kzz_layers"]
 
 #: Scale factor on the mixing length velocity.
 KZZ_SCALEF = 1.0 / 3.0
@@ -41,9 +28,8 @@ KZZ_CHF_FALL = 1.0 / 3.0
 #: Enters as the fourth power.
 KZZ_TEFF_MIN = 0.05
 #: Specific heat used by the parameterisation, as a multiple of the specific
-#: gas constant -- a diatomic ideal gas.  Deliberately independent of the run's
-#: own Cp: the parameterisation was calibrated with this value, so substituting
-#: another changes the answer without changing the physics behind it.
+#: gas constant (diatomic ideal gas).  Independent of the run's own Cp, as in
+#: PICASO.
 KZZ_CP_OVER_R = 7.0 / 2.0
 
 #: Universal gas constant [erg/mol/K], written as PICASO writes it so the two
@@ -62,11 +48,7 @@ GRAD_AD_MIN = 1e-3
 
 
 def _grad_ad(T, P, adiabat):
-    """The adiabatic gradient of the named model, floored.
-
-    Mirrors ``rce_grad``: the one place that knows how the two adiabats are
-    selected between.
-    """
+    """The adiabatic gradient of the named model, floored, as in ``rce_grad``."""
     if adiabat == ADIABAT_TABLE:
         grad = grad_ad(T, P)
     elif adiabat == ADIABAT_PARMENTIER:
@@ -98,45 +80,6 @@ def _lapse_rate(T, P):
     return dtdp
 
 
-def smooth_profile(values: ArrayLike, half_width: int) -> np.ndarray:
-    """Centred running mean with a symmetrically shrinking window.
-
-    Used on the lapse rate before the mixing length is formed from it; see
-    ``rce_kzz`` in ``carma_rce.F90`` for why that is the term worth smoothing.
-
-    The window shrinks symmetrically towards each end, so both endpoints come
-    back exactly and a symmetric window reproduces a straight line unchanged --
-    a genuine smoother rather than a filter with a bias, so a real gradient in
-    the profile survives it.
-
-    Parameters
-    ----------
-    values : ArrayLike
-        The profile to smooth, bottom to top
-    half_width : int
-        Layers either side.  0 returns the input unchanged.
-
-    Returns
-    -------
-    np.ndarray
-        The smoothed profile, same shape and units as the input.
-    """
-    values = np.asarray(values, dtype=float)
-
-    if half_width < 0:
-        raise ValueError(f"half_width must be non-negative, got {half_width}")
-    if half_width == 0 or values.size <= 2:
-        return values.copy()
-
-    out = np.empty_like(values)
-    n = values.size
-    for i in range(n):
-        k = min(half_width, i, n - 1 - i)
-        out[i] = values[i - k:i + k + 1].mean()
-
-    return out
-
-
 def mixing_length_kzz(P_centers: ArrayLike,
                       T_centers: ArrayLike,
                       P_levels: ArrayLike,
@@ -146,7 +89,6 @@ def mixing_length_kzz(P_centers: ArrayLike,
                       surface_grav: float,
                       adiabat: str = ADIABAT_PARMENTIER,
                       mixl_scale: float = 1.0,
-                      lapse_smooth: int = 0,
                       return_rescale: bool = False):
     """Eddy diffusion implied by a radiative-convective profile.
 
@@ -158,19 +100,13 @@ def mixing_length_kzz(P_centers: ArrayLike,
 
     with ``l = mixl_scale * max(0.1, min(1, dlnT/dlnP / grad_ad)) * H``.
 
-    Evaluated in every layer, not only the convective ones.  The floor on
-    ``l/H`` is what makes that meaningful: a stably stratified layer keeps a
-    small residual Kzz rather than none at all, which keeps the profile
-    continuous across a radiative-convective boundary that moves during a run.
+    Evaluated in every layer; the floor on ``l/H`` leaves stable layers a small
+    residual Kzz.
 
-    The convective flux is whatever the radiation is not carrying: the flux
-    emerging from the top of the column, less the net radiative flux in the
-    layer.  Three pieces of conditioning follow it: an overshoot floor limiting
-    how fast it may fall with height, a rescale putting the internal flux
-    through the base of the column, and an absolute floor at
-    ``sigma*(0.05*t_int)**4``.  The cube root magnifies whatever is left near
-    zero, so a flux that dips negative would otherwise be fatal rather than
-    merely small.
+    The convective flux is the emergent flux less the layer's net radiative
+    flux, then limited by an overshoot floor on how fast it may fall with
+    height, rescaled so the internal flux passes through the base, and floored
+    at ``sigma*(0.05*t_int)**4``.
 
     Parameters
     ----------
@@ -194,22 +130,12 @@ def mixing_length_kzz(P_centers: ArrayLike,
         ``carmapy.adiabat``.  By default the Parmentier fit.
     mixl_scale : float, optional
         Multiplier on the mixing length ``l``, applied after the ``0.1*H``
-        floor so it moves convective and stable layers alike.  This is the
-        scheme's only free parameter -- ``l/H`` is otherwise diagnosed from the
-        profile and cannot exceed 1 -- and it is what a run varies to ask how
-        sensitive its clouds are to the mixing.  Note Kzz goes as ``l**(4/3)``,
-        so a scale of ``f`` moves Kzz by ``f**(4/3)``, not by ``f``.
-        Must be positive.  By default 1, which is PICASO's own value.
-    lapse_smooth : int, optional
-        Half-width, in layers, of a centred running mean applied to the lapse
-        rate ``dlnT/dlnP`` that sets the mixing length.  See
-        :func:`smooth_profile`.  0 reproduces PICASO.  By default 0.
+        floor.  Kzz goes as ``l**(4/3)``, so a scale of ``f`` moves Kzz by
+        ``f**(4/3)``.  Must be positive.  By default 1, as in PICASO.
     return_rescale : bool, optional
-        Also return the factor the convective flux had to be scaled by at the
-        base of the column, ``sigma*t_int**4 / F_TOA``.  One means the column
-        is radiating exactly the effective temperature it was asked for; a
-        large departure means it is not in radiative-convective equilibrium.
-        By default False.
+        Also return the factor the convective flux was scaled by at the base
+        of the column, ``sigma*t_int**4 / F_TOA`` (1 in radiative-convective
+        equilibrium).  By default False.
 
     Returns
     -------
@@ -220,11 +146,8 @@ def mixing_length_kzz(P_centers: ArrayLike,
 
     Notes
     -----
-    With an incident beam this departs from PICASO, which separates the
-    infrared net flux from the shortwave and works with the infrared alone.
-    ``fnet`` as CARMA carries it has the two summed, so a layer that absorbed
-    sunlight shows up as having less left for convection to carry -- the right
-    sign, but not the same decomposition.
+    With an incident beam this departs from PICASO, which uses the infrared
+    net flux alone; ``fnet`` here is infrared plus shortwave.
     """
     p = np.asarray(P_centers, dtype=float)
     pl = np.asarray(P_levels, dtype=float)
@@ -232,11 +155,10 @@ def mixing_length_kzz(P_centers: ArrayLike,
     kz_lay, rescale = mixing_length_kzz_layers(
         P_centers, T_centers, P_levels, fnet_levels,
         t_int=t_int, wt_mol=wt_mol, surface_grav=surface_grav,
-        adiabat=adiabat, mixl_scale=mixl_scale, lapse_smooth=lapse_smooth)
+        adiabat=adiabat, mixl_scale=mixl_scale)
 
     # Linear in (ln Kzz, ln P), held at the end layers' values on the two
-    # boundary levels.  Kzz spans orders of magnitude, so extrapolating off the
-    # end of the column is not defensible even across a single half-layer.
+    # boundary levels.
     kzz = np.empty(p.size + 1)
     kzz[0] = kz_lay[0]
     kzz[-1] = kz_lay[-1]
@@ -258,15 +180,11 @@ def mixing_length_kzz_layers(P_centers: ArrayLike,
                              wt_mol: float,
                              surface_grav: float,
                              adiabat: str = ADIABAT_PARMENTIER,
-                             mixl_scale: float = 1.0,
-                             lapse_smooth: int = 0):
-    """The mixing length Kzz on the *layers*, before it is put onto levels.
+                             mixl_scale: float = 1.0):
+    """The mixing length Kzz on the layers, as PICASO's ``get_kzz`` returns it.
 
-    Where the parameterisation is actually evaluated;
-    :func:`mixing_length_kzz` is this plus an interpolation onto the level grid
-    CARMA mixes on.  Exposed because it is the quantity PICASO's ``get_kzz``
-    returns too, so the two are comparable without the level mapping in the
-    way.  Arguments are :func:`mixing_length_kzz`'s.
+    :func:`mixing_length_kzz` is this plus interpolation onto levels.
+    Arguments are :func:`mixing_length_kzz`'s.
 
     Returns
     -------
@@ -281,9 +199,6 @@ def mixing_length_kzz_layers(P_centers: ArrayLike,
 
     if mixl_scale <= 0:
         raise ValueError(f"mixl_scale must be positive, got {mixl_scale}")
-    if lapse_smooth < 0:
-        raise ValueError(
-            f"lapse_smooth must be non-negative, got {lapse_smooth}")
 
     nz = p.size
     if t.size != nz:
@@ -296,25 +211,21 @@ def mixing_length_kzz_layers(P_centers: ArrayLike,
     r_atmos = RGAS_CGS / wt_mol
     cp = KZZ_CP_OVER_R * r_atmos
 
-    # What the column is actually radiating, against what it is being asked to
-    # radiate.  The two are equal only in equilibrium, and their ratio is the
-    # correction applied to the convective flux below.
+    # Emergent flux against the target; their ratio rescales the convective
+    # flux below.
     f_sum = fnet[-1]
     f_target = SIGMA_SB_CGS * t_int**4
     flx_min = SIGMA_SB_CGS * (KZZ_TEFF_MIN * t_int) ** 4
 
     # ---- convective flux --------------------------------------------------
-    # What the radiation is not carrying.  fnet lives on levels, so it is
-    # averaged onto the layer the divergence is taken across.  The deepest
-    # layer is taken to be carrying the whole flux convectively, which is true
-    # of any well formed column and is what the sweep and the rescale below
-    # both anchor on.
+    # What the radiation is not carrying, with fnet averaged onto layers.  The
+    # deepest layer carries the whole flux convectively.
     chf = f_sum - 0.5 * (fnet[:-1] + fnet[1:])
     chf[0] = f_sum
 
     # Convective overshoot: the flux may not fall faster with height than a
-    # fixed fraction of the pressure ratio.  Sequential, since each layer is
-    # floored against the value the sweep already left below it.
+    # fixed fraction of the pressure ratio.  Swept upward, since each layer is
+    # floored against the one below.
     for iz in range(1, nz):
         chf[iz] = max(chf[iz], KZZ_CHF_FALL * (p[iz] / p[iz - 1]) * chf[iz - 1])
 
@@ -324,15 +235,10 @@ def mixing_length_kzz_layers(P_centers: ArrayLike,
     chf = np.maximum(chf * rescale, flx_min)
 
     # ---- mixing length ----------------------------------------------------
-    # Smoothed before the division rather than after, since grad_ad is smooth
-    # and contributes no noise of its own.
-    dtdp = smooth_profile(_lapse_rate(t, p), lapse_smooth)
-    lapse = np.minimum(1.0, dtdp / _grad_ad(t, p, adiabat))
+    lapse = np.minimum(1.0, _lapse_rate(t, p) / _grad_ad(t, p, adiabat))
 
     scale_h = r_atmos * t / surface_grav
-    # The scale multiplies the mixing length after the floor, so it applies
-    # uniformly to convective and stable layers alike rather than moving the
-    # floor out from under the stable ones.
+    # The scale multiplies the mixing length after the floor.
     mixl = mixl_scale * np.maximum(KZZ_MIXL_MIN, lapse) * scale_h
     rho = p / (r_atmos * t)
 

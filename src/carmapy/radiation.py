@@ -1,23 +1,15 @@
 """ Preparation of the correlated-k opacity tables used by the radiatively
 coupled version of CARMA.
 
-CARMA's Fortran engine solves the radiative transfer itself; it does not link
-against pyHARP.  What it needs is the Sonora 2020 correlated-k data in a form a
-Fortran program can read.  pyHARP owns the download-and-unpack pipeline and
-stores the result in a TorchScript container, so the functions here use pyHARP
-once, up front, to produce a plain binary file that ``carmapy.exe`` reads at
-startup.
-
-``pyharp`` (and therefore ``torch``) is an **optional** dependency, needed only
-by :func:`fetch_sonora_table`.  Once the table has been exported, nothing in the
-run path imports it -- :func:`read_ck_table` and :func:`sonora_bands` read the
-exported file directly.
+pyHARP downloads and unpacks the Sonora 2020 correlated-k data into a
+TorchScript container; the functions here convert that once into a plain
+binary that ``carmapy.exe`` reads at startup.  ``pyharp`` (and ``torch``) are
+optional dependencies, needed only to fetch and export the table.
 
 Notes
 -----
-The layout of the exported file mirrors the contract pyHARP itself uses, which
-was read off ``pyharp/python/sonora/sonora.py`` and
-``pyharp/src/opacity/multiband.cpp`` rather than from documentation:
+The exported layout follows pyHARP's (``pyharp/python/sonora/sonora.py`` and
+``pyharp/src/opacity/multiband.cpp``):
 
 - ``wmin``/``wmax`` are wavenumbers in cm^-1, despite pyHARP's
   ``load_sonora_window`` docstring claiming nm.
@@ -227,9 +219,7 @@ def export_ck_table(pt_path: str, out_path: str = None) -> str:
 def read_ck_table(path: str) -> dict:
     """Read back a table written by :func:`export_ck_table`.
 
-    Used by the validation tests, which compare the Fortran interpolation
-    against the same table interpolated in Python.  Needs neither pyharp nor
-    torch.
+    Needs neither pyharp nor torch.
 
     Parameters
     ----------
@@ -277,10 +267,6 @@ def read_ck_table(path: str) -> dict:
 def sonora_bands(path: str) -> tuple[np.ndarray, np.ndarray]:
     """Return the band edges of an exported table, in wavenumber [cm^-1].
 
-    These are the wavelengths the Mie tables must be regenerated on -- cloud
-    optical properties are evaluated per band, not per g-point, since they vary
-    smoothly across a band.
-
     Parameters
     ----------
     path : str
@@ -298,16 +284,10 @@ def sonora_bands(path: str) -> tuple[np.ndarray, np.ndarray]:
 def band_wavelengths(path: str) -> np.ndarray:
     """Return one representative wavelength per band, in cm.
 
-    Cloud optical properties are evaluated per *band* rather than per g-point:
-    the g-points within a band share a wavelength range, and Mie properties
-    vary smoothly across it.  That is an 8x saving on the dominant cost of the
-    cloud-optics sum and introduces no error the band discretization does not
-    already have.
-
-    The representative point is the band's mean wavenumber, converted to a
-    wavelength.  The returned array is in the table's own band order (ascending
-    wavenumber, hence *descending* wavelength) -- the Fortran indexes it
-    directly, so the order must not be sorted.
+    Cloud optical properties are evaluated per band rather than per g-point,
+    at the band's mean wavenumber.  The array is in the table's band order
+    (descending wavelength), which the Fortran indexes directly, so it must
+    not be sorted.
 
     Parameters
     ----------
@@ -370,16 +350,10 @@ def gen_band_mie_table(group_name: str,
                        overwrite: bool = False) -> np.ndarray:
     """Generate a group's Mie table on the CARMA bin grid and the ck band set.
 
-    Unlike the bundled tables -- which are on their own radius grid and must be
-    resampled with a spline -- this writes the table on *exactly* the radii and
-    wavelengths the run uses, so the Fortran needs no interpolation at all.
-
-    The Sonora band set is much wider than any bundled refractive index file
-    (196 bands span roughly 0.26-325 um), so n and k are clamped at the ends of
-    the index data.  How far that clamping reaches is reported as a warning
-    rather than left implicit: for the far-infrared bands it is harmless, since
-    the grains are deep in the Rayleigh limit and the extinction is collapsing
-    anyway, but it is a real extrapolation and worth seeing.
+    The table is on exactly the radii and wavelengths the run uses, so the
+    Fortran does no interpolation.  The Sonora bands (~0.26-325 um) are wider
+    than any bundled refractive index file, so n and k are held at their
+    endpoint values outside it, with a warning saying how far.
 
     Parameters
     ----------
@@ -442,9 +416,7 @@ def gen_band_mie_table(group_name: str,
                           out_path=out_path,
                           clamp_indices=True)
 
-    # The writer loops radius-major with `lambdas` innermost, in the order
-    # given, so the file can be reshaped without sorting -- which matters,
-    # since band order is not wavelength order.
+    # Rows are radius-major with lambdas innermost, in band order.
     raw = np.genfromtxt(out_path, delimiter="\t", names=True)
     nband = lambdas.size
     if raw.size != nbin * nband:
@@ -473,9 +445,7 @@ def write_optics_file(path: str, tables: dict) -> str:
 
     One row per (group, band, bin), carrying extinction efficiency, single
     scattering albedo and asymmetry factor -- the ``(NWAVE, NBIN)`` arrays
-    ``CARMAGROUP_Create`` already accepts.  Because the tables are on the run's
-    own bin grid and band set, these are static for the whole run; the only
-    per-step work in the Fortran is the number-density-weighted sum over bins.
+    ``CARMAGROUP_Create`` accepts.
 
     Parameters
     ----------
@@ -505,8 +475,7 @@ def write_optics_file(path: str, tables: dict) -> str:
             qext = table[:, :, 0]
             qsca = table[:, :, 1]
             asym = table[:, :, 2]
-            # Q_ext is zero only where the Mie call underflowed; leaving ssa at
-            # zero there is right, since nothing is being scattered either.
+            # ssa = 0 where Q_ext underflowed to zero.
             ssa = np.divide(qsca, qext, out=np.zeros_like(qsca),
                             where=qext > 0.0)
             for iwave in range(nband):

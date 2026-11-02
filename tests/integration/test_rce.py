@@ -1,19 +1,9 @@
-"""Verify the radiative-convective temperature update in ``carma_rce``.
+"""The radiative-convective temperature update in ``carma_rce``.
 
-Three of these are port checks: the Parmentier adiabat, the level-temperature
-reconstruction and the hydrostatic regrid all have Python counterparts, so they
-are compared against those rather than against a hand-picked tolerance.
-
-The energy-conservation checks are the load-bearing ones.  The internal flux
-enters only as the net flux imposed at the base of the column, and nothing
-carries it to the top except the radiative solve and the convective
-adjustment, so relaxing a grey column and confirming the emergent flux reaches
-``sigma*Teff^4`` exercises both end to end.  It is a sharp test: the adjustment
-conserves enthalpy exactly, so any leak in the handoff between the two shows up
-directly in the emergent flux.
-
-Needs ``gfortran`` and numpy only -- no pyharp, no torch.  Run with
-``CARMAPY_RUN_INTEGRATION=1 pytest tests/integration/test_rce.py``.
+The adiabat, level-temperature reconstruction, hydrostatic regrid and Kzz are
+compared against Python counterparts.  The energy-conservation tests relax a
+grey column and require the emergent flux to reach ``sigma*Teff^4``.  Needs
+``gfortran`` and numpy only.
 """
 import subprocess
 import textwrap
@@ -39,9 +29,7 @@ K_B = 1.380649e-23
 M_PROT = 1.67262192369e-27
 R_GAS = 8.31446261815324
 
-# The Fortran holds these as parameters in carma_rce.F90; the Python side of
-# the same pair lives in carmapy.constants. Importing rather than restating
-# them keeps the port check honest.
+# carma_rce.F90 holds its own copy of these.
 from carmapy.constants import (PARMENTIER_A_COEFF as PARMENTIER_A,
                                PARMENTIER_B_COEFF as PARMENTIER_B)
 
@@ -121,8 +109,7 @@ PROBE_ADIABAT = textwrap.dedent("""\
       call rce_load_adiabat(trim(table_path), rce, rc)
       if (rc < 0) stop "    *** FAILED rce_load_adiabat ***"
 
-      ! The gradient itself, so an interpolation difference is distinguishable
-      ! from an integration difference.
+      ! The gradient itself, to separate interpolation from integration.
       do i = 1, n
         temp(i) = rce_grad_ad(rce, t0, pres(i))
       end do
@@ -160,7 +147,7 @@ PROBE_KZZ = textwrap.dedent("""\
       open(unit=32, file='kzz_out.txt', status='replace')
 
       read(31,'(A)') table_path
-      read(31,*) nz, adiabat, rce%t_int, rce%wtmol, grav_cgs, rce%kzz_mixl_scale, rce%kzz_lapse_smooth
+      read(31,*) nz, adiabat, rce%t_int, rce%wtmol, grav_cgs, rce%kzz_mixl_scale
 
       ! rce%grav is SI; the namelist and the Python reference are both cgs.
       rce%grav    = grav_cgs * 1.e-2_f
@@ -200,7 +187,7 @@ PROBE_RUN = textwrap.dedent("""\
       integer :: nz, nbin, ngroup, nband, nelem, igridv, gap_max
       integer :: nstep, istep, iz, rc
       real(kind=f) :: t_int, cp_cgs, grav_cgs, wtmol
-      real(kind=f) :: accel, dt_max, dt_tol, dtau_tol, dtime
+      real(kind=f) :: accel, dt_tol, dtau_tol, dtime
       character(len=256) :: ck_path
       real(kind=f), allocatable :: p(:), pl(:), t(:), zc(:), zl(:)
       real(kind=f), allocatable :: numden(:,:,:), radius(:,:)
@@ -214,7 +201,7 @@ PROBE_RUN = textwrap.dedent("""\
       read(31,'(a)') ck_path
       read(31,*) nz, nbin, ngroup, nband, nelem, igridv, gap_max, nstep
       read(31,*) t_int, cp_cgs, grav_cgs, wtmol
-      read(31,*) accel, dt_max, dt_tol, dtau_tol, dtime
+      read(31,*) accel, dt_tol, dtau_tol, dtime
 
       allocate(p(nz), pl(nz+1), t(nz), zc(nz), zl(nz+1))
       allocate(numden(nz, nelem, nbin), radius(nbin, ngroup))
@@ -240,8 +227,8 @@ PROBE_RUN = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, 0._f, 0._f, 0.5_f, 0._f, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, 0, &
-                    accel, dt_max, dt_tol, dtau_tol, gap_max, rc)
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
+                    accel, dt_tol, dtau_tol, gap_max, rc)
       if (rc < 0) stop "    *** FAILED rce_init ***"
 
       do istep = 1, nstep
@@ -306,8 +293,8 @@ PROBE_JAC = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, 0._f, 0._f, 0.5_f, 0._f, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, 0, &
-                    1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
+                    1._f, 1._f, 0.02_f, 1, rc)
       if (rc < 0) stop 'rce_init failed'
 
       do iz = 1, nz
@@ -412,28 +399,16 @@ def _fmt(arr):
 
 def write_grey_ck(path, kappa_ln, nband=40, ng=4,
                   wn_lo=1.0, wn_hi=30000.0, dlnk_dlnt=0.0):
-    """Write a ck table with a single wavelength-independent absorption cross
-    section, in the byte layout ``carmapy.radiation.export_ck_table`` uses.
+    """Write a ck table with a single wavelength-independent cross section, in
+    the byte layout ``carmapy.radiation.export_ck_table`` uses.
 
-    Grey opacity makes the correlated-k machinery exact rather than
-    approximate, so any discrepancy in the flux is the solver's, not the
-    opacity's.  The bands span 1 to 30000 cm^-1, which holds better than
-    99.99% of the Planck function between 300 and 3000 K -- the emergent flux
-    can therefore be compared against the full ``sigma*T^4`` without a
-    band-coverage correction.
+    The bands span 1 to 30000 cm^-1, over 99.99% of the Planck function
+    between 300 and 3000 K, so the emergent flux can be compared against the
+    full ``sigma*T^4``.
 
-    ``dlnk_dlnt`` makes the cross section vary as ``T**dlnk_dlnt``, and
-    defaults to 0 -- constant in temperature, which is what the energy and
-    cadence tests want.
-
-    **Leaving it at 0 is what made a whole class of bug invisible.** With the
-    opacity independent of temperature, perturbing one layer changes no other
-    layer's absorption, so every off-diagonal term of the heating Jacobian is
-    zero and the column decouples. Three successive stabilisers passed this
-    suite and then failed, oscillated or produced NaN on a real 196-band
-    column for reasons the suite structurally could not see. Any test about
-    how layers couple has to set this non-zero; 2 is a reasonable stand-in for
-    a molecular band.
+    ``dlnk_dlnt`` makes the cross section vary as ``T**dlnk_dlnt``.  At 0 every
+    off-diagonal term of the heating Jacobian vanishes, so any test of how
+    layers couple must set it non-zero.
     """
     edges = np.geomspace(wn_lo, wn_hi, nband + 1)
     wmin, wmax = edges[:-1], edges[1:]
@@ -509,11 +484,8 @@ def test_adiabat_matches_python(units_probe, tmp_path_factory):
 def test_tabulated_adiabat_matches_python(adiabat_probe):
     """``rce_grad_ad`` / ``rce_integrate_adiabat`` vs ``carmapy.adiabat``.
 
-    Both sides read the same shipped table, so the gradient must agree to
-    round-off. The integrated profile is compared more loosely because the two
-    use different schemes -- RK4 with a capped step in Fortran, adaptive RK45
-    in scipy -- and agreement there is the statement that both solve the same
-    ODE, not that they take the same steps.
+    The gradient must agree to round-off.  The integrated profile is compared
+    more loosely: RK4 with a capped step in Fortran, adaptive RK45 in scipy.
     """
     from carmapy.adiabat import TABLE_FILE, grad_ad, tabulated_adiabat
 
@@ -536,10 +508,8 @@ def test_tabulated_adiabat_matches_python(adiabat_probe):
     ref_grad = grad_ad(t0, pres_pa * 10.0)
     np.testing.assert_allclose(got_grad, ref_grad, rtol=1e-12)
 
-    # The two agree to about 1e-6, which is the residual integration error of
-    # the schemes rather than a difference in what they integrate: the
-    # gradient is only C0 (bilinear, so it has kinks at cell edges), which
-    # caps how far either scheme's order of accuracy carries.
+    # ~1e-6 agreement: the bilinear gradient is only C0, which limits both
+    # schemes' order of accuracy.
     ref_temp = tabulated_adiabat(pres_pa * 10.0, t0, p0_pa * 10.0)
     np.testing.assert_allclose(got_temp, ref_temp, rtol=1e-5)
 
@@ -551,17 +521,15 @@ def test_tabulated_adiabat_matches_python(adiabat_probe):
 def _kzz_case(nz=40, t_int=1200.0, wt_mol=2.2, grav=1e5, f_frac=None):
     """A column for the Kzz probe: pressures [Pa], temperatures, net flux.
 
-    The profile is a Parmentier adiabat, and the net flux ramps from nothing at
-    the base to the whole internal flux at the top, so the column has a
-    convective interior under a radiative upper atmosphere -- both branches of
-    the mixing length floor get exercised.
+    A Parmentier adiabat with net flux ramping from zero at the base to the
+    internal flux at the top, so both branches of the mixing length floor are
+    exercised.
     """
     from carmapy.adiabat import parmentier_adiabat
 
     SIGMA = 0.56687e-4
 
-    # Bottom to top, and stopping at 0.01 bar so the tabulated adiabat is
-    # evaluated inside its own grid rather than against its clamped edge.
+    # Bottom to top, stopping at 0.01 bar to stay inside the adiabat table.
     pl_pa = np.geomspace(3e7, 1e3, nz + 1)[::-1]
     p_pa = np.sqrt(pl_pa[1:] * pl_pa[:-1])
     t = parmentier_adiabat(p_pa * 10.0, 2600.0, 3e8)
@@ -575,7 +543,7 @@ def _kzz_case(nz=40, t_int=1200.0, wt_mol=2.2, grav=1e5, f_frac=None):
                 pl_pa=pl_pa, p_pa=p_pa, t=t, fnet=fnet)
 
 
-def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0, lapse_smooth=0):
+def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0):
     """Run the Fortran probe on ``case``, returning ``(kzz, rescale)``."""
     from carmapy.adiabat import ADIABAT_CODES, TABLE_FILE
 
@@ -583,8 +551,7 @@ def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0, lapse_smooth=0):
         f.write(f"{TABLE_FILE}\n")
         f.write(f"{case['nz']} {ADIABAT_CODES[adiabat]} "
                 f"{float(case['t_int'])!r} {float(case['wt_mol'])!r} "
-                f"{float(case['grav'])!r} {float(mixl_scale)!r} "
-                f"{int(lapse_smooth)}\n")
+                f"{float(case['grav'])!r} {float(mixl_scale)!r}\n")
         f.write(_fmt(case["p_pa"]))
         f.write(_fmt(case["pl_pa"]))
         f.write(_fmt(case["t"]))
@@ -597,7 +564,7 @@ def _run_kzz_probe(probe, case, adiabat, mixl_scale=1.0, lapse_smooth=0):
     return got, float(tokens[case["nz"] + 1])
 
 
-def _kzz_reference(case, adiabat, mixl_scale=1.0, lapse_smooth=0):
+def _kzz_reference(case, adiabat, mixl_scale=1.0):
     """The reference implementation on the same column. Pa -> barye at the boundary."""
     from tests.reference.kzz import mixing_length_kzz
 
@@ -605,149 +572,33 @@ def _kzz_reference(case, adiabat, mixl_scale=1.0, lapse_smooth=0):
                              case["pl_pa"] * 10.0, case["fnet"],
                              t_int=case["t_int"], wt_mol=case["wt_mol"],
                              surface_grav=case["grav"], adiabat=adiabat,
-                             mixl_scale=mixl_scale, lapse_smooth=lapse_smooth,
-                             return_rescale=True)
+                             mixl_scale=mixl_scale, return_rescale=True)
 
 
 @pytest.mark.parametrize("adiabat", ["parmentier", "table"])
 @pytest.mark.parametrize("mixl_scale", [1.0, 0.4, 2.5])
-@pytest.mark.parametrize("lapse_smooth", [0, 3])
-def test_kzz_matches_python(kzz_probe, adiabat, mixl_scale, lapse_smooth):
-    """``rce_kzz`` against ``tests.reference.kzz.mixing_length_kzz``.
-
-    A pure port check: both sides evaluate the same closed-form expression on
-    the same column, so the only differences allowed are the ones arithmetic
-    ordering makes. Run against both adiabats because the lapse ratio is where
-    the two models enter, and a gradient wired to the wrong one would only
-    misplace the mixing length by a factor of order unity -- big enough to
-    matter, small enough to look plausible.
-
-    The mixing length scale is swept alongside, above and below 1, because the
-    two sides have to agree on *where* it is applied and not merely that it
-    exists: multiplying before the 0.1*H floor rather than after it gives the
-    same answer wherever the floor is slack and a different one everywhere it
-    binds, which is exactly the stable upper atmosphere.
+def test_kzz_matches_python(kzz_probe, adiabat, mixl_scale):
+    """``rce_kzz`` against ``tests.reference.kzz.mixing_length_kzz``, to
+    round-off, for both adiabats and mixing length scales either side of 1
+    (which distinguishes scaling before the 0.1*H floor from after it).
     """
     case = _kzz_case()
 
-    got, got_rescale = _run_kzz_probe(kzz_probe, case, adiabat, mixl_scale,
-                                      lapse_smooth)
-    ref, ref_rescale = _kzz_reference(case, adiabat, mixl_scale, lapse_smooth)
+    got, got_rescale = _run_kzz_probe(kzz_probe, case, adiabat, mixl_scale)
+    ref, ref_rescale = _kzz_reference(case, adiabat, mixl_scale)
 
     np.testing.assert_allclose(got, ref, rtol=1e-11)
     assert got_rescale == pytest.approx(ref_rescale, rel=1e-12)
 
 
 def test_kzz_mixl_scale_is_a_four_thirds_power(kzz_probe):
-    """Scaling the mixing length by ``f`` scales Kzz by ``f**(4/3)``.
-
-    Kzz goes as ``H*(l/H)**(4/3)`` and nothing else in the expression touches
-    ``l``, so the response is exact rather than approximate. Worth pinning
-    because the 4/3 is the whole reason the knob needs documenting: a user
-    reaching for "twice the mixing" wants 1.68, not 2.
-    """
+    """Scaling the mixing length by ``f`` scales Kzz by exactly ``f**(4/3)``."""
     case = _kzz_case()
 
     base, _ = _run_kzz_probe(kzz_probe, case, "parmentier", 1.0)
     for f in (0.25, 0.5, 2.0, 3.0):
         scaled, _ = _run_kzz_probe(kzz_probe, case, "parmentier", f)
         np.testing.assert_allclose(scaled / base, f ** (4 / 3), rtol=1e-9)
-
-
-def test_lapse_smoothing_reduces_roughness(kzz_probe):
-    """Smoothing the lapse rate must take scatter out of Kzz.
-
-    The column is built with layer-to-layer structure in *temperature*, which
-    is where the real noise lives: the lapse rate is a finite difference of the
-    profile, so a wobble of a few kelvin between neighbours becomes a large
-    wobble in ``dlnT/dlnP`` and, through the mixing length, in Kzz.
-
-    Roughness is the mean absolute level-to-level step in log10 Kzz, which is
-    what "spiky" means for a quantity spanning orders of magnitude.
-
-    Averaged over several noise realisations rather than asserted on one. For
-    any single realisation the improvement is not monotonic in the window
-    width: widening it moves individual layers across the clips downstream,
-    which can add a level-to-level step as easily as remove one. The effect is
-    a reliable fraction, not a reliable ordering.
-    """
-    base = _kzz_case()
-
-    ratios = []
-    for seed in (4, 5, 6, 7, 11):
-        case = dict(base)
-        rng = np.random.default_rng(seed)
-        case["t"] = base["t"] * (1.0 + 0.004 * rng.standard_normal(base["nz"]))
-
-        rough = []
-        for w in (0, 8):
-            kz, _ = _run_kzz_probe(kzz_probe, case, "parmentier", 1.0, w)
-            rough.append(float(np.abs(np.diff(np.log10(kz))).mean()))
-
-        assert rough[1] < rough[0], (seed, rough)
-        ratios.append(rough[1] / rough[0])
-
-    assert np.mean(ratios) < 0.9, ratios
-
-
-def test_lapse_smoothing_cannot_beat_the_clips():
-    """Why the knob helps but cannot finish the job: the clips are downstream.
-
-    ``min(1, .)`` and ``max(0.1, .)`` are applied after the smoothing, so a
-    layer that crosses one of them puts a kink into the mixing length however
-    smooth the lapse rate feeding it was. Widening the window moves layers off
-    the clip -- most of them, on this column -- but never empties it, which is
-    why the roughness above improves by a fraction rather than vanishing.
-    """
-    from tests.reference.kzz import _grad_ad, _lapse_rate, smooth_profile
-
-    case = _kzz_case()
-    rng = np.random.default_rng(5)
-    t = case["t"] * (1.0 + 0.004 * rng.standard_normal(case["nz"]))
-    p = case["p_pa"] * 10.0
-    grad = _grad_ad(t, p, "parmentier")
-
-    clipped = []
-    for w in (0, 4, 16):
-        lapse = smooth_profile(_lapse_rate(t, p), w) / grad
-        clipped.append(int((lapse >= 1.0).sum()))
-
-    assert clipped[0] > 0, "column does not reach the clip; test says nothing"
-    assert clipped[-1] < clipped[0], clipped
-    assert clipped[-1] > 0, clipped
-
-
-def test_smooth_profile_properties():
-    """The three properties the running mean is relied on for.
-
-    Endpoints exact, so the one-sided end derivatives of the lapse rate come
-    back unchanged. Linear profiles untouched, which is what makes this a
-    smoother rather than a filter with a bias -- a symmetric window reproduces
-    a straight line exactly, so a real gradient survives it. And noise about a
-    level suppressed without moving the level.
-
-    Note it is deliberately *not* asserted that the sum is conserved: a running
-    mean over a convex profile raises it, which is a property of the operator
-    and not a defect.
-    """
-    from tests.reference.kzz import smooth_profile
-
-    ramp = 3.0 + 0.5 * np.arange(40)
-    for w in (1, 4, 9):
-        np.testing.assert_allclose(smooth_profile(ramp, w), ramp, rtol=1e-13)
-
-    rng = np.random.default_rng(1)
-    noisy = 1e6 + 1e5 * rng.standard_normal(200)
-    for w in (1, 3, 10):
-        out = smooth_profile(noisy, w)
-        assert out[0] == noisy[0]
-        assert out[-1] == noisy[-1]
-        assert out.std() < noisy.std()
-        assert out.mean() == pytest.approx(noisy.mean(), rel=0.01)
-
-    np.testing.assert_array_equal(smooth_profile(noisy, 0), noisy)
-    with pytest.raises(ValueError, match="non-negative"):
-        smooth_profile(noisy, -1)
 
 
 def test_kzz_mixl_scale_must_be_positive():
@@ -764,14 +615,8 @@ def test_kzz_mixl_scale_must_be_positive():
 
 
 def test_kzz_floors_a_radiative_column(kzz_probe):
-    """A column carrying its whole flux radiatively sits on the flux floor.
-
-    With ``fnet`` already equal to the internal flux everywhere there is no
-    convective flux left to drive mixing, so ``chf`` collapses onto
-    ``sigma*(0.05*Teff)^4``. What is being checked is that the result is a
-    small positive number rather than a NaN: the cube root in the mixing
-    length velocity is what makes the floor load-bearing rather than cosmetic.
-    """
+    """A column carrying its whole flux radiatively sits on the
+    ``sigma*(0.05*Teff)^4`` flux floor and gives a finite positive Kzz."""
     case = _kzz_case(f_frac=np.ones(41))
 
     got, _ = _run_kzz_probe(kzz_probe, case, "parmentier")
@@ -781,25 +626,16 @@ def test_kzz_floors_a_radiative_column(kzz_probe):
     assert np.all(got > 0.0)
     np.testing.assert_allclose(got, ref, rtol=1e-11)
 
-    # Floored at 0.05^4 of the flux, and the velocity goes as its cube root, so
-    # the column sits well below the convective case.
-    #
-    # The bottom level is excluded, and equal between the two by construction:
-    # the deepest layer is *defined* to carry the whole flux convectively, so
-    # no amount of radiative transport above it changes what it mixes with.
+    # Below the convective case everywhere except the bottom level, where the
+    # deepest layer carries the whole flux convectively in both.
     convective, _ = _run_kzz_probe(kzz_probe, _kzz_case(), "parmentier")
     assert got[0] == pytest.approx(convective[0])
     assert np.all(got[1:-5] < convective[1:-5])
 
 
 def test_kzz_rises_with_internal_flux(kzz_probe):
-    """Kzz goes as the cube root of the convective flux.
-
-    Doubling the internal flux at fixed profile multiplies ``chf`` by four and
-    Kzz by ``4**(1/3)`` -- everything else in the expression depends only on
-    the temperature profile, which is held. A sharper statement than a
-    monotonicity check, and it pins the exponent.
-    """
+    """Kzz goes as the cube root of the convective flux: 4x the internal flux
+    at fixed profile gives ``4**(1/3)`` in Kzz."""
     lo = _kzz_case(t_int=1200.0)
     hi = _kzz_case(t_int=1200.0 * np.sqrt(2.0))   # sigma*T^4 doubles twice over
 
@@ -811,12 +647,8 @@ def test_kzz_rises_with_internal_flux(kzz_probe):
 
 def test_level_temps_and_regrid(units_probe):
     """Level reconstruction and the hydrostatic regrid vs numpy references.
-
-    The regrid reference is ``Carma.calculate_z``'s ``I_CART`` branch,
-    transcribed here so the test does not need the rest of the Python package
-    (and so a change to either side shows up as a failure rather than as two
-    matching bugs).
-    """
+    The regrid reference is a transcription of ``Carma.calculate_z``'s
+    ``I_CART`` branch."""
     # rce_regrid_z takes gravity in m/s^2; only rce_init does the cgs
     # conversion. 316 m/s^2 is log g = 4.5 cgs, a typical brown dwarf.
     nz_g, igridv, wtmol, grav = 6, I_CART, 2.3, 316.0
@@ -856,11 +688,7 @@ def test_level_temps_and_regrid(units_probe):
 
 
 def test_logp_grid_is_not_regridded(units_probe):
-    """``I_LOGP`` altitudes do not depend on T, so the regrid must be a no-op.
-
-    Silently moving them would put sedimentation and eddy diffusion on a grid
-    inconsistent with the one CARMA was configured with.
-    """
+    """``I_LOGP`` altitudes do not depend on T, so the regrid is a no-op."""
     nz_g, wtmol, grav = 6, 2.3, 316.0
     p = np.geomspace(1e7, 1e2, nz_g)
     pl = np.geomspace(2e7, 5e1, nz_g + 1)
@@ -898,13 +726,9 @@ def _adiabat(p, t0, p0):
 
 
 def _relax(probe, kappa_ln=-57.0, t_int=1000.0, nstep=16000, accel=20.0,
-           dt_max=5.0, gap_max=1, nz=40, grav_cgs=31600.0,
+           gap_max=1, nz=40, grav_cgs=31600.0,
            wtmol=2.3, cp_cgs=1.3e8, dtime=250.0, isothermal=False):
-    """Relax a clear grey column and return its final state.
-
-    ``accel`` and ``dt_max`` are chosen so the step stays inside the local
-    radiative time constant; see the note in ``test_energy_conservation``.
-    """
+    """Relax a clear grey column and return its final state."""
     nband = write_grey_ck(probe / "grey.ck", kappa_ln)
 
     pl = np.geomspace(1e7, 1.0, nz + 1)
@@ -921,7 +745,7 @@ def _relax(probe, kappa_ln=-57.0, t_int=1000.0, nstep=16000, accel=20.0,
         f.write("grey.ck\n")
         f.write(f"{nz} 1 1 {nband} 1 {I_CART} {gap_max} {nstep}\n")
         f.write(f"{t_int!r} {cp_cgs!r} {grav_cgs!r} {wtmol!r}\n")
-        f.write(f"{accel!r} {dt_max!r} 1.0 0.02 {dtime!r}\n")
+        f.write(f"{accel!r} 1.0 0.02 {dtime!r}\n")
         for arr in (p, pl, t, zl, zc):
             f.write(_fmt(arr))
 
@@ -948,18 +772,8 @@ def _pfact(t_bar, p_lo, p_hi):
 
 
 def test_energy_conservation(run_probe):
-    """A clear grey column must relax so that F_TOA -> sigma*Teff^4.
-
-    The internal flux is imposed as the net flux through the base of the
-    column, and nothing carries it upward except the radiative solve and the
-    convective adjustment, so reaching ``sigma*Teff^4`` at the top is an
-    end-to-end check on both.
-
-    ``accel`` is set so the effective step stays inside the local radiative
-    time constant. Pushing it far beyond that leaves the update clamp-limited:
-    it stays bounded, but it orbits equilibrium instead of reaching it, which
-    is exactly what a rising ``nclamp`` is there to reveal.
-    """
+    """A clear grey column relaxes so that F_TOA -> sigma*Teff^4, with the
+    net flux constant across the radiative zone."""
     r = _relax(run_probe)
     target = SIGMA_SB * 1000.0 ** 4
 
@@ -967,8 +781,6 @@ def test_energy_conservation(run_probe):
     assert abs(ratio - 1.0) < 1e-4, \
         f"F_TOA is {ratio:.8f} of sigma*Teff^4"
 
-    # In radiative equilibrium the net flux is height-independent above the
-    # convective boundary -- every layer passes on exactly what it receives.
     radiative = r["fnet"][r["nz_rcb"]:]
     spread = radiative.max() - radiative.min()
     assert spread / target < 1e-4, \
@@ -979,12 +791,8 @@ def test_energy_conservation(run_probe):
 
 
 def test_convective_zone_is_neutral_and_the_rest_is_not(run_probe):
-    """The adjustment must leave exactly the layers it marks on the adiabat.
-
-    The mask is the run's only statement about where convection is, so it has
-    to agree with the profile it hands back: neutral inside a zone, strictly
-    subadiabatic outside one.
-    """
+    """Interfaces the convective mask marks are on the adiabat; unmarked ones
+    are strictly subadiabatic."""
     r = _relax(run_probe)
     p, t, mask = r["p"], r["t"], r["is_conv"]
 
@@ -998,7 +806,6 @@ def test_convective_zone_is_neutral_and_the_rest_is_not(run_probe):
     assert np.abs(ratio[inside] - 1.0).max() < 1e-4, \
         f"a marked interface is off the adiabat by {np.abs(ratio[inside]-1).max():.2e}"
 
-    # Anything not marked must be genuinely stable, not merely unconverged.
     outside = ~(mask[:-1] | mask[1:])
     if outside.any():
         assert ratio[outside].max() < 1.0
@@ -1008,12 +815,8 @@ def test_convective_zone_is_neutral_and_the_rest_is_not(run_probe):
 
 
 def test_isothermal_start_finds_its_own_interior(run_probe):
-    """Relaxation from an isothermal start must find the interior itself.
-
-    Starting far from equilibrium with no boundary supplied is the case the
-    fixed-``p_rcb`` scheme could not handle: the convective zone has to be
-    located, not assumed.
-    """
+    """Relaxation from an isothermal start reaches equilibrium and develops a
+    convective interior."""
     r = _relax(run_probe, isothermal=True, nstep=20000)
     target = SIGMA_SB * 1000.0 ** 4
 
@@ -1023,21 +826,15 @@ def test_isothermal_start_finds_its_own_interior(run_probe):
 
 
 def test_adaptive_cadence_matches_every_step(run_probe):
-    """The adaptive solve cadence must not change the answer it converges to.
-
-    Holding ``dTdt`` between solves is the whole reason a full radiative
-    transfer solve is affordable, so the triggers have to be tight enough that
-    skipping solves costs accuracy no larger than the ``rad_dT_tol`` budget
-    they are set from.
-    """
+    """The adaptive solve cadence skips solves without moving the converged
+    profile by more than a few times ``rad_dT_tol``."""
     every = _relax(run_probe, gap_max=1)
     adaptive = _relax(run_probe, gap_max=50)
 
     assert adaptive["nsolve"] < every["nsolve"], \
         "adaptive cadence did not skip any solves"
 
-    # dt_tol is 1.0 K in _relax; allow a small multiple of it for drift that
-    # accumulates across the run.
+    # dt_tol is 1.0 K in _relax.
     dt = np.abs(adaptive["t"] - every["t"]).max()
     assert dt < 3.0, f"adaptive cadence moved the profile by {dt:.3f} K"
 
@@ -1060,11 +857,7 @@ def jac_probe(tmp_path_factory):
 def _jacobian(probe, dt_in, dlnk_dlnt=2.0, kappa_ln=-57.0, nz=40,
               grav_cgs=31600.0, wtmol=2.3, cp_cgs=1.3e8):
     """Measure the Jacobian on a grey column, plus J*dT against the real change.
-
-    ``dlnk_dlnt`` defaults non-zero here: with the opacity independent of
-    temperature every off-diagonal term is identically zero and the test would
-    be vacuous.
-    """
+    ``dlnk_dlnt`` is non-zero so the off-diagonal terms are too."""
     nband = write_grey_ck(probe / "grey.ck", kappa_ln, dlnk_dlnt=dlnk_dlnt)
 
     pl = np.geomspace(1e7, 1.0, nz + 1)
@@ -1095,28 +888,11 @@ def _jacobian(probe, dt_in, dlnk_dlnt=2.0, kappa_ln=-57.0, nz=40,
 
 
 def test_jacobian_predicts_a_real_step(jac_probe):
-    """``J*dT`` must match what the solver actually does for that ``dT``.
+    """``J*dT`` matches the flux solver's own response to a perturbed profile.
 
-    This is the check that the Jacobian is *right*, as opposed to merely
-    self-consistent: re-running the same finite differences would agree with
-    itself no matter what it measured. Here the prediction is compared against
-    an independent evaluation of the real flux solver on a perturbed profile,
-    so a wrong sign, a transposed index or a missed temperature dependence all
-    show up.
-
-    The residual is checked for first-order convergence rather than against a
-    fixed tolerance. What is left over after ``J*dT`` is the linearisation
-    remainder, second order in the step, so measured against a first-order
-    signal it must fall in proportion to the step. A Jacobian that is simply
-    wrong leaves a residual that does not shrink at all.
-
-    The steps are large on purpose. Measured on this column, the relative
-    residual falls cleanly from 0.38 at 18 K to 0.038 at 2.3 K -- halving with
-    each halving of the step -- and then stops falling below about 0.5 K, where
-    the flux difference reaches the solver's own reproducibility floor and the
-    signal is no longer above the noise. Testing in that regime would measure
-    round-off. It is also why ``JAC_DT`` is 2 K rather than something smaller:
-    the perturbation used to build the Jacobian has to sit above the same floor.
+    The relative residual is the linearisation remainder, so it must fall in
+    proportion to the step.  Steps stay large because below ~0.5 K the flux
+    difference reaches the solver's reproducibility floor.
     """
     rng = np.random.default_rng(4)
     nz = 40
@@ -1134,24 +910,11 @@ def test_jacobian_predicts_a_real_step(jac_probe):
 
 
 def test_jacobian_is_not_tridiagonal(jac_probe):
-    """A tridiagonal truncation misses most of the operator, which is why the
-    implicit step solves a dense system.
+    """In the optically thick lower column a tridiagonal band captures under
+    70% of each Jacobian column, and the diagonal is negative at depth.
 
-    A standing measurement rather than an assumption. The bandwidth is a
-    property of the vertical discretisation -- of the layer-to-level
-    reconstruction the Planck source is built from -- so a change there could
-    make a banded solve legitimate and much cheaper. This is how you would find
-    out.
-
-    **This column understates the case.** A grey table gives every band the
-    same optical depth, so a layer either exchanges with its neighbours or
-    radiates to space, and the upper column here comes out almost perfectly
-    tridiagonal. Long-range coupling needs spectral diversity -- opaque bands
-    reaching distant layers while windows do not -- which only a real table
-    has. On the 196-band Sonora column ``captured(1)`` is 0.47-0.58 at *every*
-    depth and ``captured(16)`` still only 0.94 in the optically thin middle.
-    Those numbers are what motivated the dense solve; what is asserted below is
-    the part this table can actually show.
+    A grey table understates the off-band coupling, since every band has the
+    same optical depth.
     """
     nz = 40
     jac, _, _ = _jacobian(jac_probe, np.zeros(nz))
@@ -1161,23 +924,12 @@ def test_jacobian_is_not_tridiagonal(jac_probe):
         lo, hi = max(k - w, 0), min(k + w + 1, nz)
         return col[lo:hi].sum() / col.sum()
 
-    # The optically thick lower column, where even grey opacity couples a layer
-    # to more than its immediate neighbours.
+    # The optically thick lower column.
     for k in (2, 5, 10, 15):
         c1 = captured(k, 1)
         assert c1 < 0.7, \
             f"layer {k}: a tridiagonal captures {c1:.2f}; a banded solve may now be viable"
 
-    # Cooling to space has to dominate a layer's response to its own
-    # temperature: warm it and it loses more than it gains back.
+    # Warming a layer lowers its own heating rate.
     for k in (2, 5, 10, 15, 25, 35):
         assert jac[k, k] < 0.0, f"layer {k} has a positive diagonal at depth"
-
-    # Not asserted, but the reason a banded fit cannot be rescued: on the real
-    # 196-band column the near-neighbour terms come out with the *same* sign as
-    # the diagonal (measured around layer 51:
-    # +1.1e-4 +2.3e-4 -2.4e-4 [-9.2e-4] -2.5e-4 +1.9e-4 +8.9e-5). That is the
-    # shared-level reconstruction showing through -- perturbing a layer raises
-    # the levels it shares with its neighbours, so their Planck source rises
-    # and they cool, where genuine exchange would warm them. The pattern is not
-    # asserted here because it is not robust across depth on a grey column.

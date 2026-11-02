@@ -107,8 +107,7 @@ def test_gcomp_unique():
 @pytest.mark.unit
 def test_silicates_share_sio_reservoir():
     """SiO2 and MgSiO3 draw from the SiO reservoir; Mg2SiO4 is keyed to Mg but
-    also depletes SiO — the configuration the competitive-condensation upgrade
-    (FINESST Task 1) requires."""
+    also depletes SiO."""
     assert group_dict["SiO2"]["gas_phase"] == "SiO"
     assert group_dict["MgSiO3"]["gas_phase"] == "SiO"
     assert group_dict["Mg2SiO4"]["gas_phase"] == "Mg"

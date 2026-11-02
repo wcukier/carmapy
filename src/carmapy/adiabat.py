@@ -46,7 +46,7 @@ def _load_grad_table():
     tuple
         ``(log10 T [K], log10 P [bar], grad)`` with shapes ``(nt,)``,
         ``(np,)`` and ``(nt, np)``.  The specific heat block that follows the
-        gradient in the file is not returned; nothing needs it yet.
+        gradient in the file is not returned.
     """
     with open(TABLE_FILE) as f:
         rows = [line for line in f if not line.lstrip().startswith("#")]
@@ -213,9 +213,7 @@ def tabulated_adiabat(P, t0, p0):
     x = np.log(np.atleast_1d(P).ravel())
     x0 = np.log(p0)
 
-    # Points at the anchor keep t0 exactly; the rest are integrated away from
-    # it in both directions, each branch starting from the anchor so the
-    # integration error never accumulates across it.
+    # Integrate outward from the anchor in each direction separately.
     log_t = np.full(x.shape, np.log(t0))
     excursion = {}
 
@@ -231,9 +229,7 @@ def tabulated_adiabat(P, t0, p0):
 
         branch = branch[np.argsort(direction * x[branch])]
 
-        # rtol=1e-8 leaves a few parts in 1e6 of integration error, which is
-        # enough to show up against the Fortran port. The whole integration
-        # costs milliseconds, so there is no reason not to ask for more.
+        # Tight tolerances are cheap here: the whole sweep takes milliseconds.
         solution = solve_ivp(gradient, (x0, x[branch[-1]]), [np.log(t0)],
                              t_eval=x[branch], rtol=1e-10, atol=1e-12)
         if not solution.success:
@@ -246,7 +242,7 @@ def tabulated_adiabat(P, t0, p0):
 
     _warn_excursion(excursion)
 
-    # exp(log(t0)) is not always t0, and the anchor is worth having exact.
+    # Pin the anchor exactly; exp(log(t0)) can round away from t0.
     temperature = np.exp(log_t)
     temperature[x == x0] = t0
 

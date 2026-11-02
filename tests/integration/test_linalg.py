@@ -1,11 +1,4 @@
-"""``carma_linalg``'s dense solver, against numpy.
-
-This build links no LAPACK, so the LU used by the implicit temperature step is
-written out by hand. It is checked here on its own rather than only through the
-physics that consumes it: a solver that is subtly wrong shows up in a coupled
-run as a profile that drifts, which is indistinguishable from a dozen other
-things. Here it is either right or it is not.
-"""
+"""``carma_linalg``'s hand-written LU solver (no LAPACK), against numpy."""
 import shutil
 import subprocess
 import textwrap
@@ -104,7 +97,7 @@ def _solve(probe, A, rhs):
 
 
 def test_random_matrices_match_numpy(probe):
-    """The bread-and-butter case, over a range of sizes."""
+    """Random dense systems over a range of sizes."""
     rng = np.random.default_rng(20260813)
 
     for n in (1, 2, 5, 17, 64, 105):        # 105 is the production column
@@ -151,14 +144,14 @@ def test_singular_matrix_is_reported_not_silently_wrong(probe):
 
 
 def test_matrix_shaped_like_the_implicit_step(probe):
-    """(I/dt - J) with a dense J: diagonally dominant, non-symmetric, and with
-    the mixed signs the measured Jacobian actually has."""
+    """(I/dt - J) with a dense J: diagonally dominant, non-symmetric, mixed
+    signs."""
     rng = np.random.default_rng(99)
     n = 105
 
     J = rng.normal(scale=1e-4, size=(n, n))
     J[np.diag_indices(n)] = -np.abs(rng.normal(scale=1e-2, size=n))
-    J[0, 0] = +4.8e-2          # a positive diagonal entry, as measured up top
+    J[0, 0] = +4.8e-2          # one positive diagonal entry
 
     A = np.eye(n) / 5000.0 - J
     b = rng.normal(scale=1e-3, size=n)

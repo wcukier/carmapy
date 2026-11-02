@@ -1,22 +1,10 @@
-"""Verify the Fortran radiative-transfer port against pyHARP.
+"""The Fortran RT port (``carma_planck``, ``carma_ckopacity``,
+``carma_rtsolve``) against pyHARP, to round-off.
 
-The RT modules added for radiative coupling (``carma_planck``,
-``carma_ckopacity``, ``carma_rtsolve``) are transliterations of pyHARP's C++,
-so they can be checked against pyHARP itself rather than against a tolerance
-pulled from thin air. Agreement should be at round-off; anything larger is a
-port bug.
-
-Skipped unless both ``gfortran`` and ``pyharp`` are available -- ``pyharp`` is
-an optional extra (``pip install carmapy[radiation]``).
-
-Note on the gas-giant bottom boundary: older pyHARP releases shadowed the
-``hard_surface`` parameter in their longwave dispatch and always took the
-terrestrial branch, since fixed upstream. ``_pyharp_supports_gas_giant``
-detects which build is installed; against an affected one these tests compare
-on ``hard_surface=true``, which every release implements identically. The
-gas-giant branch is what a brown dwarf actually needs, and is covered there
-instead by the energy-conservation check (net upward flux at the base ==
-sigma*Teff^4).
+Skipped unless ``gfortran`` and ``pyharp`` (``pip install carmapy[radiation]``)
+are available.  Some pyHARP releases always take the terrestrial longwave
+branch; ``_pyharp_supports_gas_giant`` detects them, and the gas-giant branch is
+then compared only through ``hard_surface=true``.
 """
 import math
 import shutil
@@ -34,16 +22,11 @@ RT_SRC = REPO_ROOT / "src" / "CARMA" / "source" / "base"
 RT_MODULES = ["carma_precision_mod", "carma_planck", "carma_ckopacity",
               "carma_rtsolve"]
 
+
 @pytest.fixture(scope="module")
 def torch():
-    """Import torch lazily, and only for tests that actually need it.
-
-    Importing torch at module scope would pull it in during *collection*, i.e.
-    in every run of the suite including ones that skip these tests. That is not
-    merely wasteful: torch and PyFastChem each load their own OpenMP runtime,
-    and having both in one process aborts the interpreter partway through the
-    chemistry tests.
-    """
+    """Torch behind a fixture, never at collection time: its OpenMP runtime
+    clashes with PyFastChem's and aborts the interpreter mid-suite."""
     torch = pytest.importorskip("torch", reason="pyharp extra not installed")
     pytest.importorskip("pyharp", reason="pyharp extra not installed")
 
@@ -139,7 +122,7 @@ def _pyharp_supports_gas_giant(torch):
             albedo=torch.zeros((1, 1)))
         out.append(flx[0, 0, 0, 0].item())
 
-    # If the two surface types give the same base upward flux, the gas-giant
+    # Identical base upward flux for both surface types means the gas-giant
     # branch is not implemented in this build.
     return not math.isclose(out[0], out[1], rel_tol=1e-12)
 

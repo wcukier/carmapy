@@ -1,10 +1,5 @@
-"""Unit tests for condensates sharing a gas reservoir.
-
-The competitive-condensation configuration is Mg2SiO4 (keyed to Mg), MgSiO3
-and SiO2 (both keyed to SiO): one gas reservoir must be shared by several
-condensates, and growth.txt must carry a per-pathway stoichiometric
-coefficient (v2 format: ielem igas nu is_key).  No Fortran binary is executed
--- subprocess is mocked.
+"""Condensates sharing a gas reservoir: Mg2SiO4 (keyed to Mg), MgSiO3 and SiO2
+(both keyed to SiO). subprocess is mocked, so no Fortran binary runs.
 """
 import os
 import filecmp
@@ -31,7 +26,10 @@ def _silicate_carma(name):
     c = Carma(name)
     c.set_physical_params(surface_grav=31600, wt_mol=float(np.mean(mu)))
     c.set_atmospheric_parameters_from_defaults("Pure H2")
-    c.add_P(P); c.add_T(T); c.add_kzz(kzz); c.calculate_z(mu)
+    c.add_P(P)
+    c.add_T(T)
+    c.add_kzz(kzz)
+    c.calculate_z(mu)
     c.add_hom_group("TiO2", 1e-8)
     r_het = 1e-8 * 2 ** (1 / 3)
     c.add_het_group("Mg2SiO4", "TiO2", r_het)
@@ -71,8 +69,8 @@ def test_growth_pathways_share_igas():
 
     rows = {(g.elem.group.material, g.gas.name): (g.nu, g.is_key)
             for g in c.growth}
-    # The FINESST worked example: SiO2 limited by SiO; Mg2SiO4 limited by Mg
-    # but also depleting SiO; MgSiO3 limited by SiO but also depleting Mg.
+    # SiO2 limited by SiO; Mg2SiO4 limited by Mg but also depleting SiO;
+    # MgSiO3 limited by SiO but also depleting Mg.
     assert rows[("Mg2SiO4", "Mg")] == (2, True)
     assert rows[("Mg2SiO4", "SiO")] == (1, False)
     assert rows[("MgSiO3", "SiO")] == (1, True)
@@ -84,7 +82,7 @@ def test_growth_pathways_share_igas():
 
 @pytest.mark.unit
 def test_growth_file_v3_format(tmp_path):
-    """growth.txt is written in v3 format with nu, is_key and xref columns."""
+    """growth.txt carries ielem, igas, nu, is_key and xref columns."""
     c = _silicate_carma(str(tmp_path / "silicates"))
     with patch("subprocess.Popen", _mock_popen()), patch("shutil.copy"):
         c.run(suppress_output=True)
@@ -176,8 +174,8 @@ def test_cloud_base_uses_deepest_condensate(tmp_path):
 
 @pytest.mark.unit
 def test_legacy_growth_file_still_loads(tmp_path):
-    """A 2-column (pre-v2) growth.txt loads with nu = group stofact, is_key
-    True."""
+    """The 2-column growth.txt written by released carmapy loads with
+    nu = group stofact and is_key True."""
     dir1 = str(tmp_path / "legacy")
     c1 = _silicate_carma(dir1)
     with patch("subprocess.Popen", _mock_popen()), patch("shutil.copy"):

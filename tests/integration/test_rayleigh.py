@@ -1,15 +1,5 @@
-"""``carma_rayleigh``'s cross-section, against published values.
-
-Rayleigh scattering is the one piece of the shortwave that is new physics
-rather than a port, so it has no reference implementation inside this project
-to check against. It is checked here against measured/tabulated H2 and He
-cross-sections instead, plus the two structural properties the rest of the
-shortwave depends on: the lambda^-4 scaling, and that a mixture is the
-number-fraction weighted sum.
-
-The mixture case matters more than it looks. The only composition shipped is
-solar H/He, so a single-species bug would be invisible in every production run
-while still being wrong the moment anyone supplies a different mixture.
+"""``carma_rayleigh``'s cross-sections against tabulated H2 and He values,
+plus the lambda^-4 scaling and the number-fraction weighted mixture sum.
 """
 import shutil
 import subprocess
@@ -87,12 +77,9 @@ def _sigma(probe, cases):
 
 
 def test_h2_against_published_cross_sections(probe):
-    """H2 Rayleigh cross-section at optical wavelengths.
-
-    Reference values from the Dalgarno & Williams (1962) series, which is the
-    standard tabulation. The module deliberately uses the polarizability form
-    instead -- it generalises to other species -- so a few percent of
-    disagreement is expected and is the documented cost of that choice.
+    """H2 cross-section at optical wavelengths against the Dalgarno & Williams
+    (1962) series.  The module uses the polarizability form, so a few percent
+    of disagreement is expected.
     """
     def dalgarno(lam_cm):
         a = lam_cm * 1e8                      # cm -> Angstrom
@@ -123,20 +110,18 @@ def test_lambda_to_the_minus_fourth(probe):
 
 
 def test_mixture_is_the_weighted_sum(probe):
-    """The composition sum, which the shipped H/He default alone would not
-    distinguish from a hard-coded H2 cross-section."""
+    """A mixture's cross-section is the number-fraction weighted sum."""
     x_h2, x_he = 0.86, 0.14
     got = _sigma(probe, [(0.5e-4, x_h2, x_he)])[0]
     s_h2, s_he, s_mix = got
 
     assert s_mix == pytest.approx(x_h2 * s_h2 + x_he * s_he, rel=1e-12)
-    # And it must actually differ from pure H2, or the test proves nothing.
+    # It must also differ from pure H2.
     assert abs(s_mix - s_h2) / s_h2 > 0.10
 
 
 def test_pure_helium_is_not_hydrogen(probe):
-    """A composition with no H2 at all must return helium's cross-section --
-    the case a hard-coded H2 assumption would get badly wrong."""
+    """A composition with no H2 returns helium's cross-section."""
     got = _sigma(probe, [(0.5e-4, 0.0, 1.0)])[0]
     assert got[2] == pytest.approx(got[1], rel=1e-12)
 

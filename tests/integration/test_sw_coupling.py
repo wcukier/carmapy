@@ -1,15 +1,6 @@
-"""The shortwave, once it is wired into ``carma_rce``.
-
-``test_swsolve`` checks the solver in isolation against pyHARP. This checks the
-things that only exist after it is coupled: that the incident flux entering the
-column is what the ``mu0`` convention says it is, that every watt of it is
-either absorbed or reflected, and that turning irradiation off leaves the
-longwave answer exactly where it was.
-
-The ``mu0`` convention is the reason this file exists. Getting it wrong -- by a
-factor of mu0, or by folding redistribution in twice -- produces a converged,
-entirely plausible-looking profile at the wrong temperature, which no
-smoke test would catch.
+"""The shortwave as coupled into ``carma_rce``: the incident flux follows the
+``mu0`` convention, every watt of it is absorbed or reflected, and
+``t_irr = 0`` turns the shortwave off.  ``test_swsolve`` checks the solver alone.
 """
 import struct
 import subprocess
@@ -67,8 +58,8 @@ PROBE_SW = textwrap.dedent("""\
       call rce_init(rce, nz, nbin, ngroup, nband, igridv, trim(ck_path), &
                     t_int, t_irr, t_star, mu0, w_surf, &
                     cp_cgs, grav_cgs, wtmol, &
-                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, 0, &
-                    1._f, 1.e30_f, 1._f, 0.02_f, 1, rc)
+                    I_ADIABAT_PARMENTIER, "", I_KZZ_STATIC, 1._f, &
+                    1._f, 1._f, 0.02_f, 1, rc)
       if (rc < 0) stop '    *** FAILED rce_init ***'
 
       ! No clouds, and a hydrostatic thickness consistent with the profile.
@@ -125,12 +116,8 @@ def _run(probe, ck, *, t_int=500.0, t_irr=0.0, t_star=0.0, mu0=0.5,
 
 
 def test_incident_budget_closes(sw_probe, tmp_path_factory):
-    """Every watt entering the top is either absorbed or reflected.
-
-    This is the ``mu0`` test. The incident flux is ``mu0 * sigma * t_irr**4``,
-    not ``sigma * t_irr**4``, and it is checked at two angles so the factor
-    cannot cancel out of both.
-    """
+    """Every watt entering the top, ``mu0 * sigma * t_irr**4``, is either
+    absorbed or reflected, at several angles."""
     d = tmp_path_factory.mktemp("ckbudget")
     ck = str(d / "grey.ck")
     # Thick enough that nothing reaches the bottom, so the budget is closed by
@@ -150,8 +137,7 @@ def test_incident_budget_closes(sw_probe, tmp_path_factory):
 
 
 def test_f0_carries_exactly_sigma_t_irr_4(sw_probe, tmp_path_factory):
-    """The per-band incident spectrum must sum to the flux t_irr names --
-    the normalisation that separates the beam's colour from its magnitude."""
+    """The per-band incident spectrum sums to ``sigma * t_irr**4``."""
     d = tmp_path_factory.mktemp("ckf0")
     ck = str(d / "grey.ck")
     write_grey_ck(ck, kappa_ln=-50.0)
@@ -163,13 +149,10 @@ def test_f0_carries_exactly_sigma_t_irr_4(sw_probe, tmp_path_factory):
 
 
 def test_t_star_changes_colour_not_magnitude(sw_probe, tmp_path_factory):
-    """Two very different stellar colours at the same t_irr deliver the same
-    total energy, but not the same absorbed fraction -- which is the whole
-    point of separating them."""
+    """Two stellar colours at the same t_irr deliver the same total energy but
+    not the same reflected fraction."""
     d = tmp_path_factory.mktemp("ckcolour")
     ck = str(d / "grey.ck")
-    # A temperature-dependent grey opacity would confuse this; a plain one
-    # isolates the spectral placement of the beam against Rayleigh.
     write_grey_ck(ck, kappa_ln=-50.0)
 
     hot = _run(sw_probe, ck, t_irr=1000.0, t_star=8000.0)
@@ -185,8 +168,7 @@ def test_t_star_changes_colour_not_magnitude(sw_probe, tmp_path_factory):
 
 
 def test_irradiation_off_is_inert(sw_probe, tmp_path_factory):
-    """t_irr = 0 must leave the longwave answer exactly as it was, with no
-    shortwave budget and no Rayleigh in the optical properties."""
+    """t_irr = 0 gives a zero shortwave budget and a finite longwave flux."""
     d = tmp_path_factory.mktemp("ckoff")
     ck = str(d / "grey.ck")
     write_grey_ck(ck, kappa_ln=-50.0)
@@ -200,9 +182,8 @@ def test_irradiation_off_is_inert(sw_probe, tmp_path_factory):
 
 
 def test_more_irradiation_means_more_absorbed(sw_probe, tmp_path_factory):
-    """Absorbed flux must scale with the beam, and the emergent net flux must
-    respond -- a shortwave that is computed but not coupled would pass every
-    test above and fail this one."""
+    """Absorbed flux scales with the beam, and the emergent net flux
+    responds."""
     d = tmp_path_factory.mktemp("ckscale")
     ck = str(d / "grey.ck")
     write_grey_ck(ck, kappa_ln=-50.0)
