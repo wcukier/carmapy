@@ -770,13 +770,8 @@ subroutine test_day()
     end if
 
     if (nu_dep > 0) then
-      call CARMA_AddGasDepletion(carma, elem2group(ito), igas, nu_dep, rc)
+      call CARMA_AddGasDepletion(carma, elem2group(ito), igas, nu_dep, rc, xref=xref_dep)
       if (rc < 0) stop "    *** FAILED CARMA_AddGasDepletion ***"
-    end if
-
-    if (xref_dep > 0._f) then
-      call CARMA_SetGasReference(carma, elem2group(ito), igas, xref_dep, rc)
-      if (rc < 0) stop "    *** FAILED CARMA_SetGasReference ***"
     end if
 
   enddo
