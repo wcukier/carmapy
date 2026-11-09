@@ -26,8 +26,10 @@ The exported layout follows pyHARP's (``pyharp/python/sonora/sonora.py`` and
   ``carma_ckopacity.F90``.
 """
 
+import hashlib
 import os
 import re
+import shutil
 import warnings
 
 import numpy as np
@@ -341,6 +343,36 @@ def _species_of(group_name: str) -> str:
     return parts[-1] if parts[0] == "Pure" else parts[0]
 
 
+# LLM-GENERATED — UNVERIFIED (tier: simulation)
+# Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+def _mie_cache_path(species: str, radii: np.ndarray, lambdas: np.ndarray,
+                    indices_path: str) -> str:
+    """Path of the shared cached Mie table for these inputs.
+
+    The key hashes everything the table depends on: the species, the radii,
+    the wavelengths and the contents of the refractive index file.  The cache
+    directory is ``$CARMAPY_MIE_CACHE``, by default ``~/.cache/carmapy/mie``.
+    """
+    key = hashlib.sha256()
+    key.update(species.encode())
+    key.update(np.ascontiguousarray(radii, dtype=np.float64).tobytes())
+    key.update(np.ascontiguousarray(lambdas, dtype=np.float64).tobytes())
+    with open(indices_path, "rb") as f:
+        key.update(f.read())
+    cache_dir = os.environ.get(
+        "CARMAPY_MIE_CACHE",
+        os.path.join(os.path.expanduser("~"), ".cache", "carmapy", "mie"))
+    return os.path.join(cache_dir, f"{species}_{key.hexdigest()[:16]}.dat")
+
+
+def _copy_atomic(src: str, dst: str) -> None:
+    """Copy ``src`` to ``dst`` through a temporary file, so concurrent runs
+    never read a partly written table."""
+    tmp = f"{dst}.{os.getpid()}.tmp"
+    shutil.copyfile(src, tmp)
+    os.replace(tmp, dst)
+
+
 def gen_band_mie_table(group_name: str,
                        rmin: float,
                        nbin: int,
@@ -348,13 +380,18 @@ def gen_band_mie_table(group_name: str,
                        out_path: str,
                        rmrat: float = 2.0,
                        indices_path: str = None,
-                       overwrite: bool = False) -> np.ndarray:
+                       overwrite: bool = False,
+                       use_cache: bool = True) -> np.ndarray:
     """Generate a group's Mie table on the CARMA bin grid and the ck band set.
 
     The table is on exactly the radii and wavelengths the run uses, so the
     Fortran does no interpolation.  The Sonora bands (~0.26-325 um) are wider
     than any bundled refractive index file, so n and k are held at their
     endpoint values outside it, with a warning saying how far.
+
+    Computed tables are also kept in a shared cache (see
+    :func:`_mie_cache_path`), so a new run on the same species, bins, bands
+    and refractive indices copies the table instead of recomputing it.
 
     Parameters
     ----------
@@ -369,8 +406,11 @@ def gen_band_mie_table(group_name: str,
     indices_path : str, optional
         Override the bundled refractive index file.
     overwrite : bool, optional
-        Recompute even if ``out_path`` already exists.  Defaults to False, so
-        repeated runs reuse the table.
+        Recompute even if ``out_path`` or a cached table already exists, and
+        refresh the cache.  Defaults to False, so repeated runs reuse the
+        table.
+    use_cache : bool, optional
+        Read and write the shared cache.  Defaults to True.
 
     Returns
     -------
@@ -407,15 +447,29 @@ def gen_band_mie_table(group_name: str,
             stacklevel=2)
 
     if overwrite or not os.path.exists(out_path):
-        # gen_mie_table's `ratio` is a radius ratio; rmrat is a volume ratio.
-        mie.gen_mie_table(species,
-                          min_r=rmin,
-                          ratio=rmrat ** (1.0 / 3.0),
-                          n_r=nbin,
-                          lambdas=lambdas,
-                          indices_path=indices_path,
-                          out_path=out_path,
-                          clamp_indices=True)
+        cached = (_mie_cache_path(species, radii, lambdas, indices_path)
+                  if use_cache else None)
+        if cached and not overwrite and os.path.exists(cached):
+            _copy_atomic(cached, out_path)
+        else:
+            tmp = f"{out_path}.{os.getpid()}.tmp"
+            # gen_mie_table's `ratio` is a radius ratio; rmrat is a volume ratio.
+            mie.gen_mie_table(species,
+                              min_r=rmin,
+                              ratio=rmrat ** (1.0 / 3.0),
+                              n_r=nbin,
+                              lambdas=lambdas,
+                              indices_path=indices_path,
+                              out_path=tmp,
+                              clamp_indices=True)
+            os.replace(tmp, out_path)
+            if cached:
+                try:
+                    os.makedirs(os.path.dirname(cached), exist_ok=True)
+                    _copy_atomic(out_path, cached)
+                except OSError as err:
+                    warnings.warn(f"could not cache the Mie table at "
+                                  f"{cached}: {err}", stacklevel=2)
 
     # Rows are radius-major with lambdas innermost, in band order.
     raw = np.genfromtxt(out_path, delimiter="\t", names=True)

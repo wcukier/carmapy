@@ -479,10 +479,7 @@ class Carma:
     
     def add_growth(self, elem: "Element", gas: "Gas") -> "Growth":
         """Adds a growth pathway: ``gas`` condenses onto and evaporates from
-        ``elem``, and its supersaturation drives the growth rate.  It is
-        depleted by the group's ``nu_key``; any other gas the condensate
-        consumes is added with :meth:`add_gas_depletion`.  Mirrors
-        ``CARMA_AddGrowth``.
+        ``elem``, and its supersaturation drives the growth rate.
 
         Parameters
         ----------
@@ -510,11 +507,7 @@ class Carma:
                           xref: Optional[float] = None) -> "Depletion":
         """Adds a secondary reactant of a condensate: ``nu`` moles of ``gas``
         are consumed per mole of ``group`` condensed, without ``gas`` driving
-        the growth rate.  Mirrors ``CARMA_AddGasDepletion``.
-
-        ``add_het_group`` and ``add_hom_group`` call this for every secondary
-        gas in the group's ``stofact`` dict unless ``do_secondary_depletion``
-        is False.
+        the growth rate. 
 
         Parameters
         ----------
@@ -959,8 +952,6 @@ class Carma:
 
             P_new[:n] = self.P_levels[0] * ratio ** (n - np.arange(n))
 
-            # One call per column; the tabulated adiabat integrates the whole
-            # grid at once.
             if not self.is_2d:
                 T_new[:n] = adiabat_of(P_new[:n], self.T_levels[0],
                                        self.P_levels[0])
@@ -1281,12 +1272,9 @@ class Carma:
 
         The keyword arguments are passed to :class:`carmapy.Radiation`, which
         documents the coupling, and the result is stored as
-        ``self.radiation``.  The ck table must exist.
-
-        Sets ``t_evolves`` to True; otherwise CARMA would hold fall
-        velocities, diffusion coefficients and growth kernels at their
-        initial values.
+        ``self.radiation``.  
         """
+        
         radiation = Radiation(**kwargs)
 
         if not os.path.exists(radiation.ck_table_path):
@@ -1305,7 +1293,8 @@ class Carma:
         """Generate the per-group cloud optics for a radiatively coupled run.
 
         The Mie tables are on exactly the run's bin grid and the ck table's
-        band set, and are cached in the run's ``inputs/`` directory.
+        band set.  They are kept in the run's ``inputs/`` directory and in a
+        shared cache (see :func:`carmapy.radiation.gen_band_mie_table`).
 
         Returns NWAVE, which is 0 when radiation is off.
         """
