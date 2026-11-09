@@ -83,6 +83,7 @@ def test_run_nml_has_correct_stepping(ready_carma):
     "inputs/elements.txt",
     "inputs/nucleation.txt",
     "inputs/growth.txt",
+    "inputs/depletion.txt",
     "inputs/coagulation.txt",
     "inputs/centers.txt",
     "inputs/levels.txt",

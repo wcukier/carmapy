@@ -17,6 +17,7 @@ DETERMINISTIC_FILES = [
     "inputs/elements.txt",
     "inputs/nucleation.txt",
     "inputs/growth.txt",
+    "inputs/depletion.txt",
     "inputs/coagulation.txt",
     "inputs/centers.txt",
     "inputs/levels.txt",

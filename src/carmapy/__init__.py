@@ -1,4 +1,4 @@
-from .carmapy import Carma, Gas, Group, Element, Coag, Growth, Nuc
+from .carmapy import Carma, Gas, Group, Element, Coag, Growth, Depletion, Nuc
 from .radiation import Radiation
 
 

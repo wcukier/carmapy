@@ -142,7 +142,8 @@ def test_custom_condensate_roundtrip(tmp_path):
         c2.run(suppress_output=True)
 
     for fname in ["groups.txt", "gases.txt", "elements.txt",
-                  "nucleation.txt", "growth.txt", "coagulation.txt"]:
+                  "nucleation.txt", "growth.txt", "depletion.txt",
+                  "coagulation.txt"]:
         f1 = os.path.join(dir1, "inputs", fname)
         f2 = os.path.join(dir2, "inputs", fname)
         assert filecmp.cmp(f1, f2, shallow=False), \

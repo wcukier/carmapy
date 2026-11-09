@@ -12,6 +12,7 @@ Classes
     carmapy.Results
     carmapy.Nuc
     carmapy.Growth
+    carmapy.Depletion
     carmapy.Group
     carmapy.Gas
     carmapy.Element

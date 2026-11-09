@@ -2,10 +2,11 @@
     is_2d = 0
     nbin = 80
     ncoag = 0
+    ndepletion = 2
     nelem = 6
     ngas = 4
     ngroup = 4
-    ngrowth = 6
+    ngrowth = 4
     nlongitude = -1
     nnuc = 4
     nsolute = 1
@@ -35,6 +36,7 @@
 &io_files
     centers_file = 'inputs/centers.txt'
     coag_file = 'inputs/coagulation.txt'
+    depletion_file = 'inputs/depletion.txt'
     elements_file = 'inputs/elements.txt'
     filename = 'run'
     filename_restart = 'run_restart'

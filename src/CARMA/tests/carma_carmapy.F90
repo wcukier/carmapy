@@ -38,7 +38,7 @@ subroutine test_day()
   integer   :: NGAS        
   integer    :: NWAVE  
   integer    :: NLONGITUDE 
-  integer   :: NGROWTH, NNUC, NCOAG
+  integer   :: NGROWTH, NDEPLETION, NNUC, NCOAG
   integer   :: IS_2D
   integer   :: t_evolves
   integer   :: ido_cons_evap
@@ -163,8 +163,7 @@ subroutine test_day()
   integer               :: ibinm
   integer               :: iz
   integer               :: icomposition, iroutine
-  integer               :: nu_dep, is_key, ios
-  character(len=256)    :: linebuf
+  integer               :: nu_dep
   integer, parameter    :: lunerr = 48
   integer, parameter    :: lun = 42
   integer, parameter    :: lunp = 43
@@ -237,6 +236,7 @@ subroutine test_day()
   character(len=100)  :: elements_file
   character(len=100)  :: gases_file
   character(len=100)  :: growth_file
+  character(len=100)  :: depletion_file
   character(len=100)  :: nuc_file
   character(len=100)  :: coag_file
   character(len=100)  :: winds_file
@@ -255,7 +255,7 @@ subroutine test_day()
 
   namelist / io_files / filename, filename_restart, fileprefix, gas_input_file,&
          centers_file, levels_file,temps_file, groups_file, elements_file, &
-         gases_file, growth_file, nuc_file, coag_file, winds_file, &
+         gases_file, growth_file, depletion_file, nuc_file, coag_file, winds_file, &
          g_boundary_file, p_boundary_file, optics_file
   
   namelist / physical_params / wtmol_air_set, grav_set, rplanet, velocity_avg,&
@@ -287,7 +287,7 @@ subroutine test_day()
          rad_gap_max, adiabat, adiabat_file, kzz_mode, kzz_mixl_scale, cloud_rad
 
   namelist / input_params / NZ, NELEM, NGROUP, NGAS, NBIN, NSOLUTE, NWAVE, &
-         NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NNUC, &
+         NLONGITUDE, irestart, idiag, iskip, nstep, dtime, NGROWTH, NDEPLETION, NNUC, &
          NCOAG, IS_2D, t_evolves, ido_cons_evap, imaxntsubsteps_cap, iminsubsteps, iimplicit_gas, implicit_trigger, implicit_rtol, gstickl_in, igridv, iappend, idocoag, itbnd_pc, ibbnd_pc, itbnd_gc, &
          ibbnd_gc
 
@@ -338,6 +338,8 @@ subroutine test_day()
   implicit_trigger = 0.1_f    ! relative gas change in one substep that triggers the implicit solve
   implicit_rtol = 1.e-6_f     ! relative tolerance on the implicit gas fixed point
   optics_file = ""            ! only read when NWAVE > 0
+  NDEPLETION = 0              ! secondary reactants in depletion_file
+  depletion_file = ""         ! only read when NDEPLETION > 0
 
   do_radiation  = 0         ! 0 = fixed T,P; the radiation group is inert
   ck_table_file = ""
@@ -746,36 +748,28 @@ subroutine test_day()
   open(10, file=growth_file)
   read(10, *)
   do i = 1, NGROWTH
-    ! Rows are (ielem, igas, nu, is_key, xref), xref being the reference mass
-    ! mixing ratio of a secondary reactant in the vapor-pressure fit (0 =
-    ! none). Rows may omit xref, or be (ielem, igas): a key pathway whose
-    ! depletion defaults to the group's stofact. Key rows set the growth
-    ! kinetics; nu > 0 registers the stoichiometric depletion of igas.
-    read(10, '(a)') linebuf
-    read(linebuf, *, iostat=ios) ito, igas, nu_dep, is_key, xref_dep
-    if (ios /= 0) then
-      xref_dep = 0._f
-      read(linebuf, *, iostat=ios) ito, igas, nu_dep, is_key
-      if (ios /= 0) then
-        read(linebuf, *) ito, igas
-        nu_dep = 0
-        is_key = 1
-      end if
-    end if
+    read(10, *) ito, igas
 
-    if (is_key == 1) then
-      call CARMA_AddGrowth(carma, ito, igas, rc)
-      if (rc < 0) stop "    *** FAILED ***"
-      grpgas(elem2group(ito)) = igas
-    end if
-
-    if (nu_dep > 0) then
-      call CARMA_AddGasDepletion(carma, elem2group(ito), igas, nu_dep, rc, xref=xref_dep)
-      if (rc < 0) stop "    *** FAILED CARMA_AddGasDepletion ***"
-    end if
-
+    call CARMA_AddGrowth(carma, ito, igas, rc)
+    if (rc < 0) stop "    *** FAILED ***"
+    grpgas(elem2group(ito)) = igas
   enddo
   close(10)
+
+  ! Rows are (igroup, igas, nu, xref): a gas the group consumes nu of per
+  ! formula unit without it driving the growth, and its reference mass mixing
+  ! ratio in the vapor-pressure fit (0 = none).
+  if (NDEPLETION > 0) then
+    open(10, file=depletion_file)
+    read(10, *)
+    do i = 1, NDEPLETION
+      read(10, *) igroup, igas, nu_dep, xref_dep
+
+      call CARMA_AddGasDepletion(carma, igroup, igas, nu_dep, rc, xref=xref_dep)
+      if (rc < 0) stop "    *** FAILED CARMA_AddGasDepletion ***"
+    enddo
+    close(10)
+  end if
 
  write(*,*) "  Add Coagulation ..."
  open(10, file=coag_file)

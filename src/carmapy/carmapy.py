@@ -145,6 +145,9 @@ class Carma:
     growth: list["Growth"]
     """ List of the microphysical growth pathways enabled in the sim """
 
+    depletions: list["Depletion"]
+    """ List of the secondary gases condensates consume without them driving growth """
+
     elems: dict[str, "Element"]
     """ Dictionary of the element objects indexed by elem name used in the sim """
 
@@ -176,7 +179,7 @@ class Carma:
         self.adiabat:       str         = ADIABAT_PARMENTIER
 
         # Microphysics
-        self.do_secondary_depletion: bool   = True   # add non-key growth pathways from each group's stoich
+        self.do_secondary_depletion: bool   = True   # add a Depletion for each secondary gas in a group's stoich
         self.do_cons_evap:      bool        = False  # bound evaporation production by the donor bin's loss
         self.maxntsubsteps_cap: int         = 16384  # cap on the substep count a retry may request
         self.minsubsteps:       int         = 1      # starting substep count; above 10 it is fixed
@@ -187,6 +190,7 @@ class Carma:
 
         self.groups:    dict[str, "Group"]      = {}      # dictionary of carma Group objects
         self.growth:    list["Growth"]          = []      # list of carma Growth objects
+        self.depletions: list["Depletion"]      = []      # list of carma Depletion objects
         self.elems:     dict[str, "Element"]    = {}      # dictionary of carma Element objects
         self.gases:    dict[str, "Gas"]    = {}      # dictionary of carma Gas objects
         self.nucs:      list["Nuc"]             = []      # list of carma Nuc objecs
@@ -478,32 +482,84 @@ class Carma:
         self.winds = np.asarray(wind_centers, dtype=float)
 
     
-    def _add_secondary_depletion(self, group: "Group", elem: "Element") -> None:
-        """Register non-key growth pathways for the secondary gases of a
-        multi-educt condensation reaction (e.g. Mg for MgSiO3, whose key gas
-        is SiO).  Secondary pathways deplete their gas stoichiometrically but
-        do not drive the growth kinetics.  Gas reservoirs are created (or
-        reused) by gas-phase name, so e.g. Mg2SiO4 and MgSiO3 share one Mg
-        reservoir.
+    def add_growth(self, elem: "Element", gas: "Gas") -> "Growth":
+        """Adds a growth pathway: ``gas`` condenses onto and evaporates from
+        ``elem``, and its supersaturation drives the growth rate.  It is
+        depleted by the group's ``stofact``; any other gas the condensate
+        consumes is added with :meth:`add_gas_depletion`.  Mirrors
+        ``CARMA_AddGrowth``.
 
         Parameters
         ----------
-        group : Group
-            The condensate group whose ``stoich`` vector is being registered.
         elem : Element
             The volatile element of the group (the mantle for heterogeneous
             groups).
+        gas : Gas
+            The key gas.
+
+        Returns
+        -------
+        Growth
+            The pathway added.
         """
+        growth = Growth(elem, gas)
+        self.growth.append(growth)
+        return growth
+
+    # LLM-GENERATED — UNVERIFIED (tier: simulation)
+    # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+    def add_gas_depletion(self,
+                          group: Union[str, "Group"],
+                          gas: Union[str, "Gas"],
+                          nu: int,
+                          xref: Optional[float] = None) -> "Depletion":
+        """Adds a secondary reactant of a condensate: ``nu`` moles of ``gas``
+        are consumed per mole of ``group`` condensed, without ``gas`` driving
+        the growth rate.  Mirrors ``CARMA_AddGasDepletion``.
+
+        ``add_het_group`` and ``add_hom_group`` call this for every secondary
+        gas in the group's ``stoich`` unless ``do_secondary_depletion`` is
+        False.
+
+        Parameters
+        ----------
+        group : Group or str
+            The condensate group, or its name.
+        gas : Gas or str
+            The gas reservoir, or its name; a reservoir that does not exist
+            yet is created.
+        nu : int
+            Moles of ``gas`` consumed per mole of condensate.
+        xref : float, optional
+            See :class:`Depletion`.
+
+        Returns
+        -------
+        Depletion
+            The depletion added.
+        """
+        if isinstance(group, str):
+            group = self.groups[group]
+        if isinstance(gas, str):
+            if gas not in self.gases:
+                self.gases[gas] = Gas(gas, len(self.gases) + 1)
+            gas = self.gases[gas]
+        if gas is group.gas:
+            raise ValueError(f"{gas.name} is the key gas of {group.name}; its "
+                             "depletion is set by the group's stofact")
+
+        depletion = Depletion(group, gas, nu, xref=xref)
+        self.depletions.append(depletion)
+        return depletion
+
+    def _add_stoich_depletions(self, group: "Group") -> None:
+        """Adds a depletion for each gas in the group's ``stoich`` other than
+        its key gas (e.g. Mg for MgSiO3, whose key gas is SiO)."""
         if not self.do_secondary_depletion:
             return
-        stoich = group.stoich or {}
-        for gas_name, nu in stoich.items():
-            if gas_name == group.gas.name:
-                continue
-            if gas_name not in self.gases:
-                self.gases[gas_name] = Gas(gas_name, len(self.gases) + 1)
-            self.growth.append(Growth(elem, self.gases[gas_name], nu=nu,
-                                      is_key=False))
+        for gas_name, nu in (group.stoich or {}).items():
+            if gas_name != group.gas.name:
+                self.add_gas_depletion(group, gas_name, nu)
 
     def add_het_group(self, 
                       mantle_group: Union[str, "Group"],
@@ -616,9 +672,8 @@ class Carma:
         self.elems[core_elem.name] = core_elem
         group.core = core_elem
         
-        growth = Growth(mantle_elem, gas, nu=group.stofact)
-        self.growth.append(growth)
-        self._add_secondary_depletion(group, mantle_elem)
+        self.add_growth(mantle_elem, gas)
+        self._add_stoich_depletions(group)
         
         if add_coag:
             self.add_coag(group)
@@ -686,8 +741,8 @@ class Carma:
                             self.gases[gas.name].igas)
         group.core = elem
         self.elems[elem.name] = elem
-        self.growth.append(Growth(elem, gas, nu=group.stofact))
-        self._add_secondary_depletion(group, elem)
+        self.add_growth(elem, gas)
+        self._add_stoich_depletions(group)
 
         if add_coag:
             self.add_coag(group)
@@ -1298,24 +1353,21 @@ class Carma:
 
     # LLM-GENERATED — UNVERIFIED (tier: physics)
     # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
-    def _growth_xref(self, g: "Growth") -> float:
-        """Reference mass mixing ratio of a secondary reactant for growth.txt.
-
-        Key pathways carry none (0).  A secondary pathway uses ``g.xref`` if
-        given, otherwise the gas's bottom-boundary abundance (``bot_conc`` when
-        set, else the deepest ``nmr``) as a placeholder for the abundance
-        assumed by the condensate's vapor-pressure fit.
+    def _depletion_xref(self, d: "Depletion") -> float:
+        """Reference mass mixing ratio of a secondary reactant for
+        depletion.txt: ``d.xref`` if given, otherwise the gas's bottom-boundary
+        abundance (``bot_conc`` when set, else the deepest ``nmr``) as a
+        placeholder for the abundance assumed by the condensate's
+        vapor-pressure fit, and 0 (no scaling) if neither is set.
         """
-        if g.is_key:
-            return 0.0
-        if g.xref is not None:
-            return float(g.xref)
-        nmr = g.gas.boundary.get("bot_conc", -1)
+        if d.xref is not None:
+            return float(d.xref)
+        nmr = d.gas.boundary.get("bot_conc", -1)
         if nmr is None or nmr <= 0:
-            nmr = g.gas.nmr[0] if np.ndim(g.gas.nmr) > 0 else g.gas.nmr
+            nmr = d.gas.nmr[0] if np.ndim(d.gas.nmr) > 0 else d.gas.nmr
         if nmr is None or nmr <= 0:
             return 0.0
-        return float(nmr) * g.gas.wtmol_dif / self.wt_mol
+        return float(nmr) * d.gas.wtmol_dif / self.wt_mol
 
     def run(self,
             suppress_output=False,
@@ -1390,6 +1442,7 @@ class Carma:
                 "elements_file":       os.path.join("inputs", "elements.txt"),
                 "gases_file":          os.path.join("inputs", "gases.txt"),
                 "growth_file":         os.path.join("inputs", "growth.txt"),
+                "depletion_file":      os.path.join("inputs", "depletion.txt"),
                 "nuc_file":            os.path.join("inputs", "nucleation.txt"),
                 "coag_file":           os.path.join("inputs", "coagulation.txt"),
                 "winds_file":          os.path.join("inputs", "winds.txt"),
@@ -1427,6 +1480,7 @@ class Carma:
                 "nstep":                self.n_tstep,
                 "dtime":                self.dt,
                 "NGROWTH":              len(self.growth),
+                "NDEPLETION":           len(self.depletions),
                 "NNUC":                 len(self.nucs),
                 "NCOAG":                len(self.coags),
                 "IS_2D":                int(self.is_2d),
@@ -1546,13 +1600,18 @@ class Carma:
                     f.write(f'{ele_from:3d}\t{ele_to:3d}\t0\t{igas:3d}\t'
                             f'{0:3d}\t{0:1.8f}\n')
         
+        with open(os.path.join(path, io["growth_file"]), "w+") as f:
+            f.write("ielem\tigas\n")
+            for g in self.growth:
+                f.write(f"{g.elem.ielem}\t {g.gas.igas}\n")
+
         # LLM-GENERATED — UNVERIFIED (tier: simulation)
         # Remove this line only after completing the checks in Assistant/POLICY.md §2.
-        with open(os.path.join(path, io["growth_file"]), "w+") as f:
-            f.write("ielem\tigas\tnu\tis_key\txref\n")
-            for g in self.growth:
-                f.write(f"{g.elem.ielem}\t {g.gas.igas}\t {g.nu}\t "
-                        f"{int(g.is_key)}\t {self._growth_xref(g):.10e}\n")
+        with open(os.path.join(path, io["depletion_file"]), "w+") as f:
+            f.write("igroup\tigas\tnu\txref\n")
+            for d in self.depletions:
+                f.write(f"{d.group.igroup}\t {d.gas.igas}\t {d.nu}\t "
+                        f"{self._depletion_xref(d):.10e}\n")
         
         with open (os.path.join(path, io["coag_file"]), "w+") as f:
             f.write("igroup\n")
@@ -1966,31 +2025,47 @@ class Growth:
         The element upon which the gas condenses/evaportates from
     gas : Gas
         The gas resevoir from/to which the gas condenses/evaportates
-    nu : int, optional
-        Stoichiometric coefficient of this gas in the condensation reaction
-        (moles of gas consumed per mole of condensate formed), by default 1.
-        For the key gas this equals the group's ``stofact``.
-    is_key : bool, optional
-        True if this gas is the kinetically limiting ("key") species whose
-        supersaturation drives the growth rate, by default True.  Each element
-        has exactly one key pathway; non-key pathways only deplete their gas
-        stoichiometrically.
-    xref : float, optional
-        Reference mass mixing ratio [g/g] of this (secondary) gas implicit in
-        the condensate's vapor-pressure fit.  The condensate's
-        supersaturation scales with this gas's abundance relative to the
-        reference.  By default None, in which case ``Carma.run`` uses
-        the gas's bottom-boundary abundance.
 
     """
-    def __init__(self, elem: "Element", gas: "Gas", nu: int = 1,
-                 is_key: bool = True, xref: Optional[float] = None) -> None:
+    def __init__(self, elem: "Element", gas: "Gas") -> None:
         self.elem = elem
         self.gas = gas
+
+
+# LLM-GENERATED — UNVERIFIED (tier: simulation)
+# Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+class Depletion:
+    """A secondary reactant of a condensate: a gas consumed stoichiometrically
+    as the group grows, which does not drive the growth rate (e.g. Mg for
+    MgSiO3, whose key gas is SiO).  Added with ``Carma.add_gas_depletion``.
+
+    Parameters
+    ----------
+    group : Group
+        The condensate group.
+    gas : Gas
+        The gas reservoir consumed.
+    nu : int
+        Moles of ``gas`` consumed per mole of condensate.
+    xref : float, optional
+        Reference mass mixing ratio [g/g] of ``gas`` implicit in the
+        condensate's vapor-pressure fit.  The condensate's supersaturation
+        scales with this gas's abundance relative to the reference.  By
+        default None, in which case ``Carma.run`` uses the gas's
+        bottom-boundary abundance.
+    """
+    def __init__(self, group: "Group", gas: "Gas", nu: int,
+                 xref: Optional[float] = None) -> None:
+        if nu <= 0:
+            raise ValueError(f"nu must be positive, got {nu}")
+        if xref is not None and xref < 0:
+            raise ValueError(f"xref must be non-negative, got {xref}")
+        self.group = group
+        self.gas = gas
         self.nu = nu
-        self.is_key = is_key
         self.xref = xref
-    
+
+
 class Group:
     """An object representing a cloud species
         

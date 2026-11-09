@@ -191,23 +191,27 @@ def load_carma(path: str, restart: int =0) -> Carma:
             gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
             carma.nucs.append(Nuc(group_core, group_mantle, is_het, gas, float(mucos)))
             
-    # LLM-GENERATED — UNVERIFIED (tier: simulation)
-    # Remove this line only after completing the checks in Assistant/POLICY.md §2.
     with open(os.path.join(path, io["growth_file"])) as f:
         f.readline()
         for line in f:
-            # Rows are (ielem, igas, nu, is_key[, xref]), or just (ielem, igas)
-            # for a single key pathway per element with nu = stofact.
-            fields = shlex.split(line[:-1])
-            ielem, igas = fields[0], fields[1]
+            ielem, igas = shlex.split(line[:-1])
             elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]
             gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
-            if len(fields) == 2:
-                nu, is_key, xref = elem.group.stofact, True, None
-            else:
-                nu, is_key = int(fields[2]), bool(int(fields[3]))
-                xref = float(fields[4]) if len(fields) > 4 and not is_key else None
-            carma.growth.append(Growth(elem, gas, nu=nu, is_key=is_key, xref=xref))
+            carma.growth.append(Growth(elem, gas))
+
+    # LLM-GENERATED — UNVERIFIED (tier: simulation)
+    # Remove this line only after completing the checks in Assistant/POLICY.md §2.
+    # Runs written on main have no depletion file, and no secondary reactants.
+    depletion_path = os.path.join(path, io.get("depletion_file",
+                                               os.path.join("inputs", "depletion.txt")))
+    if os.path.exists(depletion_path):
+        with open(depletion_path) as f:
+            f.readline()
+            for line in f:
+                igroup, igas, nu, xref = shlex.split(line[:-1])
+                group = list(carma.groups.values())[int(igroup)-1]
+                gas = carma.gases[list(carma.gases.keys())[int(igas)-1]]
+                carma.depletions.append(Depletion(group, gas, int(nu), float(xref)))
             
     with open(os.path.join(path, io["coag_file"])) as f:
         f.readline()

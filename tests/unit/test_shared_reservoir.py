@@ -58,9 +58,9 @@ def test_shared_gas_deduplicated():
 
 
 @pytest.mark.unit
-def test_growth_pathways_share_igas():
-    """Each condensate gets one key growth pathway; the SiO-keyed pathways
-    point at the same Gas object and carry the group's stofact as nu."""
+def test_growth_and_depletions_follow_stoich():
+    """Each condensate gets one growth pathway from its key gas, and a
+    depletion for every other gas in its stoich."""
     c = Carma("_t")
     c.add_hom_group("TiO2", 1e-8)
     r_het = 1e-8 * 2 ** (1 / 3)
@@ -68,51 +68,48 @@ def test_growth_pathways_share_igas():
     c.add_het_group("MgSiO3", "TiO2", r_het)
     c.add_hom_group("SiO", 1e-8)
 
-    rows = {(g.elem.group.material, g.gas.name): (g.nu, g.is_key)
-            for g in c.growth}
-    # SiO limited by SiO; Mg2SiO4 limited by Mg but also depleting SiO;
-    # MgSiO3 limited by SiO but also depleting Mg.
-    assert rows[("Mg2SiO4", "Mg")] == (2, True)
-    assert rows[("Mg2SiO4", "SiO")] == (1, False)
-    assert rows[("MgSiO3", "SiO")] == (1, True)
-    assert rows[("MgSiO3", "Mg")] == (1, False)
-    assert rows[("SiO", "SiO")] == (1, True)
-    key_rows = [g for g in c.growth if g.is_key]
-    assert len(key_rows) == 4  # one per condensate incl. TiO2
+    growth = {(g.elem.group.material, g.gas.name) for g in c.growth}
+    assert growth == {("TiO2", "TiO2"), ("Mg2SiO4", "Mg"),
+                      ("MgSiO3", "SiO"), ("SiO", "SiO")}
+    # Mg2SiO4 limited by Mg but also depleting SiO; MgSiO3 limited by SiO but
+    # also depleting Mg.
+    depletions = {(d.group.material, d.gas.name): d.nu for d in c.depletions}
+    assert depletions == {("Mg2SiO4", "SiO"): 1, ("MgSiO3", "Mg"): 1}
 
 
 @pytest.mark.unit
-def test_growth_file_v3_format(tmp_path):
-    """growth.txt carries ielem, igas, nu, is_key and xref columns."""
+def test_input_files_split_growth_and_depletion(tmp_path):
+    """growth.txt carries (ielem, igas) per key pathway and depletion.txt
+    (igroup, igas, nu, xref) per secondary reactant."""
+    import f90nml
+
     c = _silicate_carma(str(tmp_path / "silicates"))
     with patch("subprocess.Popen", _mock_popen()), patch("shutil.copy"):
         c.run(suppress_output=True)
 
-    with open(os.path.join(c.name, "inputs", "growth.txt")) as f:
-        header = f.readline().split()
-        rows = [line.split() for line in f if line.strip()]
+    def rows(fname):
+        with open(os.path.join(c.name, "inputs", fname)) as f:
+            header = f.readline().split()
+            return header, [line.split() for line in f if line.strip()]
 
-    assert header == ["ielem", "igas", "nu", "is_key", "xref"]
-    assert all(len(r) == 5 for r in rows)
-    # One key row per volatile element (TiO2, Mg2SiO4, MgSiO3, SiO) plus the
-    # two secondary depletion rows (Mg2SiO4->SiO, MgSiO3->Mg).
-    assert len(rows) == 6
-    key_rows = [r for r in rows if int(r[3]) == 1]
-    sec_rows = [r for r in rows if int(r[3]) == 0]
-    assert len(key_rows) == 4
-    assert len(sec_rows) == 2
-    # Each element has exactly one key pathway.
-    assert len({int(r[0]) for r in key_rows}) == 4
-    # Forsterite's key pathway carries nu = 2.
-    assert sorted(int(r[2]) for r in key_rows) == [1, 1, 1, 2]
-    assert sorted(int(r[2]) for r in sec_rows) == [1, 1]
-    # Key rows carry no reference abundance; each secondary row carries its
-    # gas's bottom abundance as a mass mixing ratio (nmr 1e-5 in this deck).
-    assert all(float(r[4]) == 0.0 for r in key_rows)
+    header, growth = rows("growth.txt")
+    assert header == ["ielem", "igas"]
+    assert len(growth) == 4
+    assert len({int(r[0]) for r in growth}) == 4
+
+    header, depletion = rows("depletion.txt")
+    assert header == ["igroup", "igas", "nu", "xref"]
+    assert sorted(int(r[2]) for r in depletion) == [1, 1]
+    # Each secondary row carries its gas's bottom abundance as a mass mixing
+    # ratio (nmr 1e-5 in this deck).
     gas_by_igas = {g.igas: g for g in c.gases.values()}
-    for r in sec_rows:
+    for r in depletion:
         g = gas_by_igas[int(r[1])]
-        assert float(r[4]) == pytest.approx(1e-5 * g.wtmol_dif / c.wt_mol, rel=1e-8)
+        assert float(r[3]) == pytest.approx(1e-5 * g.wtmol_dif / c.wt_mol, rel=1e-8)
+
+    nml = f90nml.read(os.path.join(c.name, "inputs", "input.nml"))
+    assert nml["input_params"]["NGROWTH"] == 4
+    assert nml["input_params"]["NDEPLETION"] == 2
 
 
 @pytest.mark.unit
@@ -133,8 +130,8 @@ def test_shared_reservoir_roundtrip(tmp_path):
         c2.run(suppress_output=True)
 
     for fname in ["groups.txt", "gases.txt", "elements.txt",
-                  "nucleation.txt", "growth.txt", "coagulation.txt",
-                  "gas_input.txt"]:
+                  "nucleation.txt", "growth.txt", "depletion.txt",
+                  "coagulation.txt", "gas_input.txt"]:
         f1 = os.path.join(dir1, "inputs", fname)
         f2 = os.path.join(dir2, "inputs", fname)
         assert filecmp.cmp(f1, f2, shallow=False), \
@@ -175,30 +172,50 @@ def test_cloud_base_uses_deepest_condensate(tmp_path):
 
 
 @pytest.mark.unit
-def test_legacy_growth_file_still_loads(tmp_path):
-    """The 2-column growth.txt written by released carmapy loads with
-    nu = group stofact and is_key True."""
-    dir1 = str(tmp_path / "legacy")
+def test_run_without_depletion_file_loads(tmp_path):
+    """A run written on main has a growth.txt but no depletion.txt or
+    depletion_file entry; it loads with no secondary reactants."""
+    import f90nml
+    from carmapy.base import load_carma
+
+    dir1 = str(tmp_path / "main")
     c1 = _silicate_carma(dir1)
     with patch("subprocess.Popen", _mock_popen()), patch("shutil.copy"):
         c1.run(suppress_output=True)
 
-    growth_path = os.path.join(dir1, "inputs", "growth.txt")
-    with open(growth_path) as f:
-        f.readline()
-        rows = [line.split() for line in f if line.strip()]
-    with open(growth_path, "w") as f:
-        f.write("ielem\tigas\n")
-        for r in rows:
-            f.write(f"{r[0]}\t {r[1]}\n")
+    os.remove(os.path.join(dir1, "inputs", "depletion.txt"))
+    nml_path = os.path.join(dir1, "inputs", "input.nml")
+    nml = f90nml.read(nml_path)
+    del nml["io_files"]["depletion_file"]
+    del nml["input_params"]["NDEPLETION"]
+    nml.write(nml_path, force=True)
 
-    from carmapy.base import load_carma
     c2 = load_carma(dir1)
-    # load_carma does not reconstruct group.material; key by element name.
-    by_name = {g.elem.name: g for g in c2.growth}
-    assert by_name["Mg2SiO4 Mantle (TiO2)"].nu == 2
-    assert by_name["Pure SiO"].nu == 1
-    assert all(g.is_key for g in c2.growth)
+    assert len(c2.growth) == len(c1.growth)
+    assert c2.depletions == []
+
+
+@pytest.mark.unit
+def test_add_gas_depletion():
+    """add_gas_depletion creates a missing reservoir, and refuses the group's
+    key gas and a non-positive nu."""
+    c = Carma("_t")
+    c.do_secondary_depletion = False
+    c.add_hom_group("TiO2", 1e-8)
+    c.add_het_group("MgSiO3", "TiO2", 1e-8 * 2 ** (1 / 3))
+    assert c.depletions == []
+
+    d = c.add_gas_depletion("MgSiO3 on TiO2", "Mg", 1, xref=3e-5)
+    assert d.gas is c.gases["Mg"]
+    assert (d.nu, d.xref) == (1, 3e-5)
+    assert c.depletions == [d]
+
+    with pytest.raises(ValueError):
+        c.add_gas_depletion("MgSiO3 on TiO2", "SiO", 1)
+    with pytest.raises(ValueError):
+        c.add_gas_depletion("MgSiO3 on TiO2", "Mg", 0)
+    with pytest.raises(ValueError):
+        c.add_gas_depletion("MgSiO3 on TiO2", "Mg", 1, xref=-1.0)
 
 
 @pytest.mark.unit

@@ -259,12 +259,14 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
   # Cache each group's cloud base; several pathways may share a group.
   base_cache = {}
 
-  # Iterate over the growth pathways rather than the groups: a gas may be
-  # depleted by several condensates (as a key or a secondary educt), and its
-  # reservoir abundance is set at the deepest cloud base among all of them.
-  for pathway in carma.growth:
-    group = pathway.elem.group
-    gas = pathway.gas.name
+  # Iterate over every (condensate, gas) it consumes rather than the groups:
+  # a gas may be depleted by several condensates (as the key gas or a
+  # secondary reactant), and its reservoir abundance is set at the deepest
+  # cloud base among all of them.
+  consumers = ([(g.elem.group, g.gas) for g in carma.growth]
+               + [(d.group, d.gas) for d in carma.depletions])
+  for group, gas_obj in consumers:
+    gas = gas_obj.name
 
     if group.name not in base_cache:
       base_cache[group.name] = find_cloud_base(carma, group)
@@ -272,7 +274,7 @@ def populate_abundances_at_cloud_base(carma: "Carma") -> None:
 
     if P_int > P_dict.get(gas, 0):
 
-      fast_chem_gas = pathway.gas.hill_formula
+      fast_chem_gas = gas_obj.hill_formula
 
       if fast_chem_gas == -1:
         raise ValueError(f"{gas} is not currently supported by "
