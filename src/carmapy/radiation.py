@@ -509,9 +509,12 @@ class Radiation:
         As in :meth:`carmapy.Carma.set_radiation`.
     self_consistent_kzz, kzz_mixl_scale, accel : optional
         As in :meth:`carmapy.Carma.set_radiation`.
-    gap_max, dT_tol, dtau_tol : optional
-        ``rad_gap_max``, ``rad_dT_tol`` and ``rad_dtau_tol`` of
-        :meth:`carmapy.Carma.set_radiation`.
+    gap_max : int, optional
+        ``rad_gap_max`` of :meth:`carmapy.Carma.set_radiation`.
+    dT_tol : float, optional
+        ``rad_dT_tol`` of :meth:`carmapy.Carma.set_radiation`.
+    dtau_tol : float, optional
+        ``rad_dtau_tol`` of :meth:`carmapy.Carma.set_radiation`.
     """
 
     ck_table_path: str
