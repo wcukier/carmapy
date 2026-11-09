@@ -11,7 +11,7 @@ GROUP_FIELDS = [
     "rho_cond", "wtmol",
     "vp_offset", "vp_tcoeff", "vp_metcoeff", "vp_logpcoeff",
     "surften_0", "surften_slope", "is_typeIII", "stofact",
-    "mucos_dict", "gas_phase", "stoich",
+    "mucos_dict", "gas_phase",
 ]
 
 # Gas-phase properties stay on the gas (gas_dict), keyed by the gas-phase name.
@@ -83,19 +83,19 @@ def test_mucos_dict_is_dict():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("species", KNOWN_SPECIES)
-def test_stoich_schema(species):
-    """stoich is the full depletion vector; its key-gas entry equals stofact
-    and every gas it names is a defined gas reservoir."""
+def test_stofact_schema(species):
+    """stofact is a positive int, or a dict of positive ints that includes the
+    key gas and names only defined gas reservoirs."""
     entry = group_dict[species]
-    stoich = entry["stoich"]
-    assert isinstance(stoich, dict) and len(stoich) >= 1
-    assert entry["gas_phase"] in stoich, \
-        f"{species}: key gas '{entry['gas_phase']}' missing from stoich"
-    assert stoich[entry["gas_phase"]] == entry["stofact"], \
-        f"{species}: stoich[key gas] != stofact"
-    for gas, nu in stoich.items():
-        assert gas in gas_dict, f"{species}: stoich names unknown gas '{gas}'"
-        assert isinstance(nu, int) and nu > 0
+    stofact = entry["stofact"]
+    if isinstance(stofact, dict):
+        assert entry["gas_phase"] in stofact, \
+            f"{species}: key gas '{entry['gas_phase']}' missing from stofact"
+        for gas, nu in stofact.items():
+            assert gas in gas_dict, f"{species}: stofact names unknown gas '{gas}'"
+            assert isinstance(nu, int) and nu > 0
+    else:
+        assert isinstance(stofact, int) and stofact > 0
 
 
 @pytest.mark.unit
@@ -111,5 +111,5 @@ def test_silicates_share_sio_reservoir():
     depletes SiO."""
     assert group_dict["MgSiO3"]["gas_phase"] == "SiO"
     assert group_dict["Mg2SiO4"]["gas_phase"] == "Mg"
-    assert group_dict["Mg2SiO4"]["stoich"] == {"Mg": 2, "SiO": 1}
-    assert group_dict["MgSiO3"]["stoich"] == {"SiO": 1, "Mg": 1}
+    assert group_dict["Mg2SiO4"]["stofact"] == {"Mg": 2, "SiO": 1}
+    assert group_dict["MgSiO3"]["stofact"] == {"SiO": 1, "Mg": 1}

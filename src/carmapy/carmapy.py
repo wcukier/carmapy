@@ -179,7 +179,7 @@ class Carma:
         self.adiabat:       str         = ADIABAT_PARMENTIER
 
         # Microphysics
-        self.do_secondary_depletion: bool   = True   # add a Depletion for each secondary gas in a group's stoich
+        self.do_secondary_depletion: bool   = True   # add a Depletion for each secondary gas in a group's stofact
         self.do_cons_evap:      bool        = False  # bound evaporation production by the donor bin's loss
         self.maxntsubsteps_cap: int         = 16384  # cap on the substep count a retry may request
         self.minsubsteps:       int         = 1      # starting substep count; above 10 it is fixed
@@ -485,7 +485,7 @@ class Carma:
     def add_growth(self, elem: "Element", gas: "Gas") -> "Growth":
         """Adds a growth pathway: ``gas`` condenses onto and evaporates from
         ``elem``, and its supersaturation drives the growth rate.  It is
-        depleted by the group's ``stofact``; any other gas the condensate
+        depleted by the group's ``nu_key``; any other gas the condensate
         consumes is added with :meth:`add_gas_depletion`.  Mirrors
         ``CARMA_AddGrowth``.
 
@@ -518,8 +518,8 @@ class Carma:
         the growth rate.  Mirrors ``CARMA_AddGasDepletion``.
 
         ``add_het_group`` and ``add_hom_group`` call this for every secondary
-        gas in the group's ``stoich`` unless ``do_secondary_depletion`` is
-        False.
+        gas in the group's ``stofact`` dict unless ``do_secondary_depletion``
+        is False.
 
         Parameters
         ----------
@@ -553,11 +553,12 @@ class Carma:
         return depletion
 
     def _add_stoich_depletions(self, group: "Group") -> None:
-        """Adds a depletion for each gas in the group's ``stoich`` other than
-        its key gas (e.g. Mg for MgSiO3, whose key gas is SiO)."""
-        if not self.do_secondary_depletion:
+        """Adds a depletion for each gas in the group's ``stofact`` dict other
+        than its key gas (e.g. Mg for MgSiO3, whose key gas is SiO).  An int
+        ``stofact`` adds none."""
+        if not self.do_secondary_depletion or not isinstance(group.stofact, dict):
             return
-        for gas_name, nu in (group.stoich or {}).items():
+        for gas_name, nu in group.stofact.items():
             if gas_name != group.gas.name:
                 self.add_gas_depletion(group, gas_name, nu)
 
@@ -1554,7 +1555,7 @@ class Carma:
                         f'{group.vp_logpcoeff:<.18e}\t'
                         f'{group.lat_heat_e:<.18e}\t'
                         f'{group.desorption:<.18e}\t'
-                        f'{group.stofact:2d}\t'
+                        f'{group.nu_key:2d}\t'
                         f'{group.wtmol_core:<.18e}\n'
                         )
         
@@ -2129,6 +2130,11 @@ class Group:
     5. All parameters refer to the mantle element of the group unless otherwise
        noted.
 
+    6. An int ``stofact`` applies to the key gas alone.  A dict gives every gas
+       the condensate consumes and must include the key gas (ie
+       ``{"Mg": 2, "SiO": 1}`` for Mg2SiO4); its other gases become secondary
+       depletions.
+
     References
     ----------
     .. [1] Helling, C., & Woitke, P. 2006, Astronomy and Astrophysics, 
@@ -2171,8 +2177,8 @@ class Group:
     lat_heat_e: float = -1
     """ Latent heat of evaporation, if not provided derived from other inputs (see note 4) """
 
-    stofact: int
-    """ The stoichiometry factor between the gas phase and the condensate """
+    stofact: Union[int, dict[str, int]]
+    """ Moles of gas consumed per mole of condensate, for the key gas only or per gas (see note 6) """
 
     core : "Element"
     """ The element which represents the original seed particle. """
@@ -2231,9 +2237,27 @@ class Group:
         self.stofact        = kwargs.get("stofact",       defaults["stofact"])
         self.lat_heat_e     = kwargs.get("lat_heat_e",    defaults.get("lat_heat_e", -1))
         self.desorption     = kwargs.get("desorption",    defaults.get("desorption", -1))
-        self.stoich         = kwargs.get("stoich",        defaults.get("stoich", None))
 
+        # LLM-GENERATED — UNVERIFIED (tier: simulation)
+        # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+        factors = (self.stofact.values() if isinstance(self.stofact, dict)
+                   else [self.stofact])
+        if not all(isinstance(nu, (int, np.integer)) and nu > 0 for nu in factors):
+            raise ValueError(f"{name}: stofact factors must be positive "
+                             f"integers, got {self.stofact}")
+        if isinstance(self.stofact, dict) and gas.name not in self.stofact:
+            raise ValueError(f"{name}: stofact {self.stofact} does not "
+                             f"include the key gas {gas.name}")
 
+    # LLM-GENERATED — UNVERIFIED (tier: simulation)
+    # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+    @property
+    def nu_key(self) -> int:
+        """Moles of the key gas consumed per mole of condensate (the
+        ``stofact`` column of groups.txt)."""
+        if isinstance(self.stofact, dict):
+            return self.stofact[self.gas.name]
+        return self.stofact
 
 
 

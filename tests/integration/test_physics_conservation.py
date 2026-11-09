@@ -197,7 +197,7 @@ def _reservoir_columns(c):
     own reservoir.  The dump's air density carries a constant factor, which
     cancels in relative drift."""
     import os
-    from carmapy.constants import group_dict, gas_dict
+    from carmapy.constants import gas_dict
     name = os.path.basename(c.name.rstrip("/"))
     path = os.path.join(c.name, f"fullprec_{name}.txt")
     if not os.path.exists(path):
@@ -233,7 +233,9 @@ def _reservoir_columns(c):
                     continue
                 if seed == gas:
                     tot = tot + me[:, :, ce].sum(axis=0) * rho / c.groups["Pure " + seed].wtmol
-                nu = group_dict[gname.split(" on ")[0]]["stoich"].get(gas, 0)
+                stofact = grp.stofact
+                nu = (stofact.get(gas, 0) if isinstance(stofact, dict)
+                      else stofact * (grp.gas.name == gas))
                 if nu:
                     mantle = (me[:, :, grp.mantle.ielem - 1] - me[:, :, ce]).sum(axis=0)
                     tot = tot + nu * mantle * rho / grp.wtmol

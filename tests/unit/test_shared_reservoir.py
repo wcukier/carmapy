@@ -58,9 +58,9 @@ def test_shared_gas_deduplicated():
 
 
 @pytest.mark.unit
-def test_growth_and_depletions_follow_stoich():
+def test_growth_and_depletions_follow_stofact():
     """Each condensate gets one growth pathway from its key gas, and a
-    depletion for every other gas in its stoich."""
+    depletion for every other gas in its stofact."""
     c = Carma("_t")
     c.add_hom_group("TiO2", 1e-8)
     r_het = 1e-8 * 2 ** (1 / 3)
@@ -236,3 +236,24 @@ def test_gas_boundary_dicts_not_aliased():
     assert c.gases["Mg"].boundary["bot_conc"] == 6.8e-5
     assert c.gases["SiO"].boundary["bot_conc"] == 5.1e-5
     assert c.gases["TiO2"].boundary.get("bot_conc") in (None, -1)
+
+
+@pytest.mark.unit
+def test_stofact_int_or_dict():
+    """An int stofact is the key gas's factor and adds no depletions; a dict
+    adds one for each non-key gas, and must include the key gas."""
+    c = Carma("_t")
+    c.add_hom_group("TiO2", 1e-8)
+    r_het = 1e-8 * 2 ** (1 / 3)
+    g = c.add_het_group("MgSiO3", "TiO2", r_het, stofact=1)
+    assert g.nu_key == 1
+    assert c.depletions == []
+
+    g = c.add_het_group("Mg2SiO4", "TiO2", r_het)
+    assert g.nu_key == 2
+    assert [(d.gas.name, d.nu) for d in c.depletions] == [("SiO", 1)]
+
+    with pytest.raises(ValueError):
+        c.add_hom_group("Fe", 1e-8, stofact={"Mg": 1})
+    with pytest.raises(ValueError):
+        c.add_hom_group("Fe", 1e-8, stofact=0)

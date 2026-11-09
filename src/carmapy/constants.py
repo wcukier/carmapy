@@ -340,8 +340,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": np.nan, # ignored
         "stofact": 1,
-        "gas_phase": "H2O",
-        "stoich": {"H2O": 1}
+        "gas_phase": "H2O"
 
     },
         "KCl": {
@@ -360,8 +359,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "KCl",
-        "stoich": {"KCl": 1}
+        "gas_phase": "KCl"
     },
         "ZnS": {
         "cond_rho": RHO_ZNS,
@@ -379,8 +377,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Zn",
-        "stoich": {"Zn": 1}
+        "gas_phase": "Zn"
     },
         "Na2S": {
         "cond_rho": RHO_NA2S,
@@ -398,8 +395,7 @@ group_dict = {
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
-        "gas_phase": "Na",
-        "stoich": {"Na": 2}
+        "gas_phase": "Na"
     },
         "MnS": {
         "cond_rho": RHO_MNS,
@@ -417,8 +413,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Mn",
-        "stoich": {"Mn": 1}
+        "gas_phase": "Mn"
     },
         "Cr": {
         "cond_rho": RHO_CR,
@@ -436,8 +431,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Cr",
-        "stoich": {"Cr": 1}
+        "gas_phase": "Cr"
     },
         "Mg2SiO4": {
         "cond_rho": RHO_MG2SIO4,
@@ -454,9 +448,8 @@ group_dict = {
         "surften_slope": 0,
         "is_typeIII": True,
         "lat_heat_e": -1,
-        "stofact": 2,
-        "gas_phase": "Mg",
-        "stoich": {"Mg": 2, "SiO": 1}
+        "stofact": {"Mg": 2, "SiO": 1},
+        "gas_phase": "Mg"
     },
         "Fe": {
         "cond_rho": RHO_FE,
@@ -474,8 +467,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "Fe",
-        "stoich": {"Fe": 1}
+        "gas_phase": "Fe"
     },
         "TiO2": {
         "cond_rho": RHO_TIO2,
@@ -493,8 +485,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "TiO2",
-        "stoich": {"TiO2": 1}
+        "gas_phase": "TiO2"
     },
         "Al2O3": {
         "cond_rho": RHO_AL2O3,
@@ -512,8 +503,7 @@ group_dict = {
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
-        "gas_phase": "Al",
-        "stoich": {"Al": 2}
+        "gas_phase": "Al"
     },
         "SiO": { 
         "cond_rho": 2.13,
@@ -531,8 +521,7 @@ group_dict = {
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
-        "gas_phase": "SiO",
-        "stoich": {"SiO": 1}
+        "gas_phase": "SiO"
     },
     "MgSiO3": {
         "cond_rho": RHO_MGSIO3,
@@ -549,9 +538,8 @@ group_dict = {
         "surften_slope": 0,
         "is_typeIII": False,
         "lat_heat_e": -1,
-        "stofact": 1,
-        "gas_phase": "SiO",
-        "stoich": {"SiO": 1, "Mg": 1}
+        "stofact": {"SiO": 1, "Mg": 1},
+        "gas_phase": "SiO"
     }
 }
 
