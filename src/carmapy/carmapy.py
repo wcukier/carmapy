@@ -1230,116 +1230,28 @@ class Carma:
         if bot_flux is not None:
             gas.boundary["bot_flux"] = bot_flux
 
-    def set_radiation(self,
-                      t_int: float,
-                      ck_table_path: str,
-                      t_irr: float = 0.0,
-                      t_star: float = 0.0,
-                      mu0: float = 0.5,
-                      w_surf: float = 0.0,
-                      cloud_rad: bool = True,
-                      self_consistent_kzz: bool = True,
-                      kzz_mixl_scale: float = 1.0,
-                      accel: float = 1.0,
-                      rad_gap_max: int = 100,
-                      rad_dT_tol: float = 1.0,
-                      rad_dtau_tol: float = 0.02) -> None:
+    def set_radiation(self, **kwargs) -> None:
         """Couples the temperature profile to radiative transfer.
 
-        Each layer evolves under the radiative heating of the gas and clouds,
-        followed by a dry convective adjustment to the adiabat selected by
-        ``self.adiabat``.  Convective zones are diagnosed every step and there
-        may be more than one; see ``Results.convective_zones``.
+        The keyword arguments are passed to :class:`carmapy.Radiation`, which
+        documents the coupling, and the result is stored as
+        ``self.radiation``.  The ck table must exist.
 
-        The full radiative transfer runs on an adaptive cadence, but its
-        heating rate is applied every timestep.  By default Kzz is recomputed
-        from mixing length theory (PICASO's parameterisation; see ``rce_kzz``
-        in ``carma_rce.F90``) on the same cadence, so ``add_kzz`` only sets
-        the starting profile.
-
-        Parameters
-        ----------
-        t_int : float
-            Internal temperature [K], imposed as the net flux
-            ``sigma * t_int**4`` through the base of the column.
-        ck_table_path : str
-            Correlated-k table written by
-            ``carmapy.radiation.export_ck_table``.
-        t_irr : float, optional
-            Irradiation temperature [K]; the flux normal to the beam is
-            ``sigma * t_irr**4``.  By default 0, an isolated object with the
-            shortwave off.
-        t_star : float, optional
-            Blackbody temperature [K] setting the spectral shape, not the
-            magnitude, of the incident beam.  By default 0, which uses
-            ``t_irr``.
-        mu0 : float, optional
-            Cosine of the incidence angle, in (0, 1].  0.5 is a dayside
-            average and 0.25 full redistribution.  By default 0.5
-        w_surf : float, optional
-            Surface albedo, in [0, 1).  By default 0
-        cloud_rad : bool, optional
-            If False the clouds are simulated but contribute no opacity.
-            By default True
-        self_consistent_kzz : bool, optional
-            Recompute Kzz from mixing length theory on each radiative solve.
-            If False the ``add_kzz`` profile is held for the whole run.
-            By default True
-        kzz_mixl_scale : float, optional
-            Multiplier on the mixing length; Kzz scales as its 4/3 power.
-            By default 1
-        accel : float, optional
-            Speed-up of the radiative clock relative to the microphysical one,
-            for spin-up.  Use 1 for a physical time history.  By default 1
-        rad_gap_max : int, optional
-            Maximum number of timesteps between full radiative solves.
-            By default 100
-        rad_dT_tol : float, optional
-            Force a solve once the accumulated ``max|dT|`` since the last one
-            exceeds this [K].  By default 1
-        rad_dtau_tol : float, optional
-            Force a solve once the column cloud cross section changes by this
-            fraction.  By default 0.02
-
-        Notes
-        -----
-        ``T_eq`` and ``T_eff`` are outputs, reported by ``Results``, since the
-        Bond albedo that connects them to ``t_irr`` is set by the clouds::
-
-            sigma * T_eq**4  = mu0 * sigma * t_irr**4 * (1 - A)
-            sigma * T_eff**4 = emergent longwave
-
-        In equilibrium ``T_eff**4 == t_int**4 + T_eq**4``.
-
-        Composition is fixed at solar H/He: the Rayleigh cross section, the
-        adiabat table and the ck table all assume it.
-
-        The settings are stored as a :class:`carmapy.Radiation` in
-        ``self.radiation``.  Sets ``t_evolves`` to True; otherwise CARMA would
-        hold fall velocities, diffusion coefficients and growth kernels at
-        their initial values.
+        Sets ``t_evolves`` to True; otherwise CARMA would hold fall
+        velocities, diffusion coefficients and growth kernels at their
+        initial values.
         """
-        radiation = Radiation(ck_table_path, t_int,
-                              t_irr=t_irr,
-                              t_star=t_star,
-                              mu0=mu0,
-                              w_surf=w_surf,
-                              cloud_rad=cloud_rad,
-                              self_consistent_kzz=self_consistent_kzz,
-                              kzz_mixl_scale=kzz_mixl_scale,
-                              accel=accel,
-                              gap_max=rad_gap_max,
-                              dT_tol=rad_dT_tol,
-                              dtau_tol=rad_dtau_tol)
+        radiation = Radiation(**kwargs)
 
-        if not os.path.exists(ck_table_path):
-            raise FileNotFoundError(f"ck table not found: {ck_table_path}")
+        if not os.path.exists(radiation.ck_table_path):
+            raise FileNotFoundError(
+                f"ck table not found: {radiation.ck_table_path}")
 
         self.radiation = radiation
         self.t_evolves = True
 
         self._citation["radiation"] = True
-        if self_consistent_kzz:
+        if radiation.self_consistent_kzz:
             self._citation["kzz_mixing_length"] = True
 
 

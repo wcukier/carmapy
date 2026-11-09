@@ -20,7 +20,7 @@ def test_namelist_round_trip(tmp_path):
     """to_nml -> f90nml file -> from_nml rebuilds every setting; f90nml
     lower-cases the keys on the way."""
     ck = str(tmp_path / "table.ck")
-    rad = Radiation(ck, 400.0, **SETTINGS)
+    rad = Radiation(400.0, ck, **SETTINGS)
 
     path = str(tmp_path / "input.nml")
     f90nml.Namelist({"radiation": rad.to_nml()}).write(path)
@@ -39,7 +39,7 @@ def test_uncoupled_namelist_reads_as_none():
 def test_uncoupled_namelist_carries_the_defaults():
     """Apart from switching radiation off, the uncoupled entries are a
     default coupling's."""
-    on = Radiation("table.ck", 1000.0).to_nml()
+    on = Radiation(1000.0, "table.ck").to_nml()
     off = Radiation.UNCOUPLED_NML
     assert on.keys() == off.keys()
     differ = {k for k in on if on[k] != off[k]}
@@ -60,7 +60,7 @@ def test_uncoupled_namelist_carries_the_defaults():
 def test_out_of_range_settings_raise(bad):
     kwargs = {"t_int": 1000.0, **bad}
     with pytest.raises(ValueError):
-        Radiation("table.ck", **kwargs)
+        Radiation(ck_table_path="table.ck", **kwargs)
 
 
 @pytest.mark.unit
@@ -68,7 +68,7 @@ def test_missing_table_loads_but_cannot_be_set(tmp_path):
     """A run whose ck table has moved still rebuilds from its namelist, but
     set_radiation refuses a table that is not there."""
     missing = str(tmp_path / "moved.ck")
-    nml = Radiation(missing, 1000.0).to_nml()
+    nml = Radiation(1000.0, missing).to_nml()
     assert Radiation.from_nml(nml).ck_table_path == missing
 
     with pytest.raises(FileNotFoundError):
@@ -83,13 +83,22 @@ def test_set_radiation_stores_the_settings(tmp_path):
     assert c.radiation is None
 
     c.set_radiation(t_int=1000.0, ck_table_path=str(ck), accel=20.0,
-                    rad_gap_max=7, rad_dT_tol=0.5, rad_dtau_tol=0.05)
+                    gap_max=7, dT_tol=0.5, dtau_tol=0.05)
 
     rad = c.radiation
     assert isinstance(rad, Radiation)
     assert (rad.accel, rad.gap_max, rad.dT_tol, rad.dtau_tol) == (20.0, 7, 0.5, 0.05)
     assert c.t_evolves is True
     assert c._citation["radiation"] and c._citation["kzz_mixing_length"]
+
+
+@pytest.mark.unit
+def test_set_radiation_rejects_unknown_settings(tmp_path):
+    ck = tmp_path / "table.ck"
+    ck.touch()
+    with pytest.raises(TypeError):
+        Carma("_t").set_radiation(t_int=1000.0, ck_table_path=str(ck),
+                                  rad_gap_max=7)
 
 
 @pytest.mark.unit

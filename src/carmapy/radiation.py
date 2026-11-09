@@ -494,67 +494,78 @@ def write_optics_file(path: str, tables: dict) -> str:
 class Radiation:
     """Settings for a radiatively coupled temperature profile.
 
-    Built by :meth:`carmapy.Carma.set_radiation`, which documents the
-    physics, and held as ``Carma.radiation``; ``None`` there is a
-    fixed-temperature run.  The constructor checks the ranges but not that
-    the ck table exists, so a run whose table has since moved still loads.
+    Each layer evolves under the radiative heating of the gas and clouds,
+    followed by a dry convective adjustment to the adiabat selected by
+    ``Carma.adiabat``.  Convective zones are diagnosed every step and there
+    may be more than one; see ``Results.convective_zones``.
+
+    The full radiative transfer runs on an adaptive cadence, but its heating
+    rate is applied every timestep.  By default Kzz is recomputed from mixing
+    length theory (PICASO's parameterisation; see ``rce_kzz`` in
+    ``carma_rce.F90``) on the same cadence, so ``Carma.add_kzz`` only sets the
+    starting profile.
+
+    Built by :meth:`carmapy.Carma.set_radiation`, which forwards its keyword
+    arguments here, and held as ``Carma.radiation``; ``None`` there is a
+    fixed-temperature run.  Each parameter is stored as the attribute of the
+    same name.  The constructor checks the ranges but not that the ck table
+    exists, so a run whose table has since moved still loads.
 
     Parameters
     ----------
+    t_int : float
+        Internal temperature [K], imposed as the net flux
+        ``sigma * t_int**4`` through the base of the column.
     ck_table_path : str
         Correlated-k table written by :func:`export_ck_table`.
-    t_int : float
-        Internal temperature [K].
-    t_irr, t_star, mu0, w_surf, cloud_rad : optional
-        As in :meth:`carmapy.Carma.set_radiation`.
-    self_consistent_kzz, kzz_mixl_scale, accel : optional
-        As in :meth:`carmapy.Carma.set_radiation`.
+    t_irr : float, optional
+        Irradiation temperature [K]; the flux normal to the beam is
+        ``sigma * t_irr**4``.  By default 0, an isolated object with the
+        shortwave off.
+    t_star : float, optional
+        Blackbody temperature [K] setting the spectral shape, not the
+        magnitude, of the incident beam.  By default 0, which uses ``t_irr``.
+    mu0 : float, optional
+        Cosine of the incidence angle, in (0, 1].  0.5 is a dayside average
+        and 0.25 full redistribution.  By default 0.5
+    w_surf : float, optional
+        Surface albedo, in [0, 1).  By default 0
+    cloud_rad : bool, optional
+        If False the clouds are simulated but contribute no opacity.
+        By default True
+    self_consistent_kzz : bool, optional
+        Recompute Kzz from mixing length theory on each radiative solve.
+        If False the ``Carma.add_kzz`` profile is held for the whole run.
+        By default True
+    kzz_mixl_scale : float, optional
+        Multiplier on the mixing length; Kzz scales as its 4/3 power.
+        By default 1
+    accel : float, optional
+        Speed-up of the radiative clock relative to the microphysical one,
+        for spin-up.  Use 1 for a physical time history.  By default 1
     gap_max : int, optional
-        ``rad_gap_max`` of :meth:`carmapy.Carma.set_radiation`.
+        Maximum number of timesteps between full radiative solves.
+        By default 100
     dT_tol : float, optional
-        ``rad_dT_tol`` of :meth:`carmapy.Carma.set_radiation`.
+        Force a solve once the accumulated ``max|dT|`` since the last one
+        exceeds this [K].  By default 1
     dtau_tol : float, optional
-        ``rad_dtau_tol`` of :meth:`carmapy.Carma.set_radiation`.
+        Force a solve once the column cloud cross section changes by this
+        fraction.  By default 0.02
+
+    Notes
+    -----
+    ``T_eq`` and ``T_eff`` are outputs, reported by ``Results``, since the
+    Bond albedo that connects them to ``t_irr`` is set by the clouds::
+
+        sigma * T_eq**4  = mu0 * sigma * t_irr**4 * (1 - A)
+        sigma * T_eff**4 = emergent longwave
+
+    In equilibrium ``T_eff**4 == t_int**4 + T_eq**4``.
+
+    Composition is fixed at solar H/He: the Rayleigh cross section, the
+    adiabat table and the ck table all assume it.
     """
-
-    ck_table_path: str
-    """ Correlated-k table read by the radiative transfer """
-
-    t_int: float
-    """ Internal temperature [K] """
-
-    t_irr: float
-    """ Irradiation temperature [K]; 0 is an isolated object """
-
-    t_star: float
-    """ Blackbody temperature setting the incident spectrum [K]; 0 uses t_irr """
-
-    mu0: float
-    """ Cosine of the incidence angle """
-
-    w_surf: float
-    """ Surface albedo """
-
-    cloud_rad: bool
-    """ Whether the clouds contribute opacity """
-
-    self_consistent_kzz: bool
-    """ Whether Kzz is recomputed from mixing length theory on each solve """
-
-    kzz_mixl_scale: float
-    """ Multiplier on the mixing length """
-
-    accel: float
-    """ Speed-up of the radiative clock relative to the microphysical one """
-
-    gap_max: int
-    """ Maximum number of timesteps between full radiative solves """
-
-    dT_tol: float
-    """ Accumulated max|dT| since the last solve that forces a new one [K] """
-
-    dtau_tol: float
-    """ Fractional change in column cloud cross section that forces a solve """
 
     #: The &radiation entries written for an uncoupled run.
     UNCOUPLED_NML = {
@@ -575,8 +586,8 @@ class Radiation:
     }
 
     def __init__(self,
-                 ck_table_path: str,
                  t_int: float,
+                 ck_table_path: str,
                  t_irr: float = 0.0,
                  t_star: float = 0.0,
                  mu0: float = 0.5,
@@ -651,8 +662,8 @@ class Radiation:
         rad = {k.lower(): v for k, v in rad.items()}
         if not rad.get("do_radiation", 0):
             return None
-        return cls(rad["ck_table_file"],
-                   rad["t_int"],
+        return cls(rad["t_int"],
+                   rad["ck_table_file"],
                    t_irr=rad["t_irr"],
                    t_star=rad["t_star"],
                    mu0=rad["rad_mu0"],
