@@ -879,8 +879,7 @@ class Carma:
 
     def extend_atmosphere(self, max_P: float, #TODO: See if can do non-iteratively b/c now calculating z later
                           wt_mol=None,
-                          method="adiabatic",
-                          adiabat: str = None) -> None:
+                          method="adiabatic") -> None:
         """Extends the atmospheric structure to deeper pressures.  Modifies the
         pressure, temperature, and eddy diffusion levels and requires
         that they have previously been set.  If ``max_P`` is less than the
@@ -897,19 +896,16 @@ class Carma:
         method : string, optional
             The method to extend the atmosphere.  Options are "adiabatic"
             and "isothermal"
-        adiabat : string, optional
-            Which adiabat ``method="adiabatic"`` follows, overriding
-            ``self.adiabat`` for this call only.  See ``carmapy.adiabat``.
 
         Notes
         -------
-        The adiabatic extension follows either the fit from Parmentier et al.
-        (2015) [1]_ to the equation of state described in Saumon (1995) [2]_,
-        or the tabulated gradient of [2]_ itself.  The fit is the default and
-        is accurate below ~1500 K, but it misses the flattening of the adiabat
-        by H2 dissociation, so it runs too hot wherever the extension reaches
-        past ~2000 K.  k_zz is assumed to be proportional to the cube root of
-        the scale height
+        The adiabatic extension follows ``self.adiabat``: either the fit from
+        Parmentier et al. (2015) [1]_ to the equation of state described in
+        Saumon (1995) [2]_, or the tabulated gradient of [2]_ itself.  The fit
+        is the default and is accurate below ~1500 K, but it misses the
+        flattening of the adiabat by H2 dissociation, so it runs too hot
+        wherever the extension reaches past ~2000 K.  k_zz is assumed to be
+        proportional to the cube root of the scale height
 
 
         References
@@ -956,10 +952,9 @@ class Carma:
                         / (self.wt_mol * PROTON_MASS * self.surface_grav))
 
         if method == "adiabatic":
-            model = self.adiabat if adiabat is None else adiabat
-            adiabat_of = get_adiabat(model)
+            adiabat_of = get_adiabat(self.adiabat)
 
-            if model == ADIABAT_TABLE:
+            if self.adiabat == ADIABAT_TABLE:
                 self._citation["adiabat_table"] = True
 
             P_new[:n] = self.P_levels[0] * ratio ** (n - np.arange(n))

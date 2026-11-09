@@ -160,5 +160,6 @@ def test_extend_atmosphere_table_tracks_the_fit_when_cool(isothermal_carma):
 
 @pytest.mark.unit
 def test_extend_atmosphere_rejects_unknown_adiabat(isothermal_carma):
+    isothermal_carma.adiabat = "saumon"
     with pytest.raises(ValueError, match="unknown adiabat"):
-        isothermal_carma.extend_atmosphere(max_P=1e11, adiabat="saumon")
+        isothermal_carma.extend_atmosphere(max_P=1e11)
