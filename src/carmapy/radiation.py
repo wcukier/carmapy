@@ -41,6 +41,7 @@ __all__ = [
     "gen_band_mie_table",
     "write_optics_file",
     "SONORA_2020_SOLAR",
+    "Radiation",
 ]
 
 #: Default Sonora 2020 correlated-k dataset: solar metallicity, solar C/O,
@@ -486,3 +487,177 @@ def write_optics_file(path: str, tables: dict) -> str:
                             f"{asym[ibin, iwave]:.17e}\n")
 
     return path
+
+
+# LLM-GENERATED — UNVERIFIED (tier: simulation)
+# Remove this banner only after completing the checks in Assistant/POLICY.md §2.
+class Radiation:
+    """Settings for a radiatively coupled temperature profile.
+
+    Built by :meth:`carmapy.Carma.set_radiation`, which documents the
+    physics, and held as ``Carma.radiation``; ``None`` there is a
+    fixed-temperature run.  The constructor checks the ranges but not that
+    the ck table exists, so a run whose table has since moved still loads.
+
+    Parameters
+    ----------
+    ck_table_path : str
+        Correlated-k table written by :func:`export_ck_table`.
+    t_int : float
+        Internal temperature [K].
+    t_irr, t_star, mu0, w_surf, cloud_rad : optional
+        As in :meth:`carmapy.Carma.set_radiation`.
+    self_consistent_kzz, kzz_mixl_scale, accel : optional
+        As in :meth:`carmapy.Carma.set_radiation`.
+    gap_max, dT_tol, dtau_tol : optional
+        ``rad_gap_max``, ``rad_dT_tol`` and ``rad_dtau_tol`` of
+        :meth:`carmapy.Carma.set_radiation`.
+    """
+
+    ck_table_path: str
+    """ Correlated-k table read by the radiative transfer """
+
+    t_int: float
+    """ Internal temperature [K] """
+
+    t_irr: float
+    """ Irradiation temperature [K]; 0 is an isolated object """
+
+    t_star: float
+    """ Blackbody temperature setting the incident spectrum [K]; 0 uses t_irr """
+
+    mu0: float
+    """ Cosine of the incidence angle """
+
+    w_surf: float
+    """ Surface albedo """
+
+    cloud_rad: bool
+    """ Whether the clouds contribute opacity """
+
+    self_consistent_kzz: bool
+    """ Whether Kzz is recomputed from mixing length theory on each solve """
+
+    kzz_mixl_scale: float
+    """ Multiplier on the mixing length """
+
+    accel: float
+    """ Speed-up of the radiative clock relative to the microphysical one """
+
+    gap_max: int
+    """ Maximum number of timesteps between full radiative solves """
+
+    dT_tol: float
+    """ Accumulated max|dT| since the last solve that forces a new one [K] """
+
+    dtau_tol: float
+    """ Fractional change in column cloud cross section that forces a solve """
+
+    #: The &radiation entries written for an uncoupled run.
+    UNCOUPLED_NML = {
+        "do_radiation":         0,
+        "ck_table_file":        "",
+        "t_int":                0.,
+        "t_irr":                0.,
+        "t_star":               0.,
+        "rad_mu0":              0.5,
+        "rad_w_surf":           0.,
+        "rad_accel":            1.,
+        "rad_dT_tol":           1.,
+        "rad_dtau_tol":         0.02,
+        "rad_gap_max":          100,
+        "kzz_mode":             1,
+        "kzz_mixl_scale":       1.,
+        "cloud_rad":            1,
+    }
+
+    def __init__(self,
+                 ck_table_path: str,
+                 t_int: float,
+                 t_irr: float = 0.0,
+                 t_star: float = 0.0,
+                 mu0: float = 0.5,
+                 w_surf: float = 0.0,
+                 cloud_rad: bool = True,
+                 self_consistent_kzz: bool = True,
+                 kzz_mixl_scale: float = 1.0,
+                 accel: float = 1.0,
+                 gap_max: int = 100,
+                 dT_tol: float = 1.0,
+                 dtau_tol: float = 0.02):
+        if t_int <= 0:
+            raise ValueError("t_int must be positive")
+
+        if t_irr < 0:
+            raise ValueError("t_irr must be non-negative (0 = isolated object)")
+
+        if t_star < 0:
+            raise ValueError("t_star must be non-negative (0 = shape like t_irr)")
+
+        if not 0 < mu0 <= 1:
+            raise ValueError("mu0 is a cosine and must be in (0, 1]")
+
+        if not 0 <= w_surf < 1:
+            raise ValueError("w_surf is an albedo and must be in [0, 1)")
+
+        if gap_max < 1:
+            raise ValueError("gap_max must be at least 1")
+
+        if kzz_mixl_scale <= 0:
+            raise ValueError("kzz_mixl_scale must be positive, got "
+                             f"{kzz_mixl_scale}")
+
+        self.ck_table_path = ck_table_path
+        self.t_int = t_int
+        self.t_irr = t_irr
+        self.t_star = t_star
+        self.mu0 = mu0
+        self.w_surf = w_surf
+        self.cloud_rad = cloud_rad
+        self.self_consistent_kzz = self_consistent_kzz
+        self.kzz_mixl_scale = kzz_mixl_scale
+        self.accel = accel
+        self.gap_max = gap_max
+        self.dT_tol = dT_tol
+        self.dtau_tol = dtau_tol
+
+    def to_nml(self) -> dict:
+        """The &radiation entries for this coupling, without the adiabat's."""
+        return {
+            "do_radiation":         1,
+            "ck_table_file":        os.path.abspath(self.ck_table_path),
+            "t_int":                self.t_int,
+            "t_irr":                self.t_irr,
+            "t_star":               self.t_star,
+            "rad_mu0":              self.mu0,
+            "rad_w_surf":           self.w_surf,
+            "rad_accel":            self.accel,
+            "rad_dT_tol":           self.dT_tol,
+            "rad_dtau_tol":         self.dtau_tol,
+            "rad_gap_max":          self.gap_max,
+            "kzz_mode":             int(self.self_consistent_kzz),
+            "kzz_mixl_scale":       self.kzz_mixl_scale,
+            "cloud_rad":            int(self.cloud_rad),
+        }
+
+    @classmethod
+    def from_nml(cls, rad) -> "Radiation":
+        """Rebuild from a parsed &radiation group, or return None when it has
+        radiation off.  Keys are matched case-insensitively, as f90nml reads
+        them."""
+        rad = {k.lower(): v for k, v in rad.items()}
+        if not rad.get("do_radiation", 0):
+            return None
+        return cls(rad["ck_table_file"],
+                   rad["t_int"],
+                   t_irr=rad["t_irr"],
+                   t_star=rad["t_star"],
+                   mu0=rad["rad_mu0"],
+                   w_surf=rad["rad_w_surf"],
+                   cloud_rad=bool(rad["cloud_rad"]),
+                   self_consistent_kzz=bool(rad["kzz_mode"]),
+                   kzz_mixl_scale=rad["kzz_mixl_scale"],
+                   accel=rad["rad_accel"],
+                   gap_max=int(rad["rad_gap_max"]),
+                   dT_tol=rad["rad_dt_tol"],
+                   dtau_tol=rad["rad_dtau_tol"])

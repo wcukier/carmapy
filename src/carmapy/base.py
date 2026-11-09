@@ -9,6 +9,7 @@ words you can access them like ``carmapy.load_carma(...)`` instead of
 from carmapy.constants import *
 from carmapy.results import *
 from carmapy.carmapy import *
+from carmapy.radiation import Radiation
 import os
 import shutil
 import f90nml
@@ -95,25 +96,12 @@ def load_carma(path: str, restart: int =0) -> Carma:
         "CP" : nml["physical_params"]["CP"]
     }
 
-    # Inputs without a &radiation group leave the Carma defaults (uncoupled).
-    # The adiabat is restored either way, since extend_atmosphere uses it.
+    # Inputs without a &radiation group, or with do_radiation = 0, are
+    # uncoupled.  The adiabat is restored either way, since extend_atmosphere
+    # uses it.
     rad = nml.get("radiation", {})
     carma.adiabat = _int2adiabat[rad.get("adiabat", ADIABAT_CODES[ADIABAT_PARMENTIER])]
-
-    if rad.get("do_radiation", 0):
-        carma.ck_table_path = rad["ck_table_file"]
-        carma.t_int = rad["t_int"]
-        carma.t_irr = rad["t_irr"]
-        carma.t_star = rad["t_star"]
-        carma.mu0 = rad["rad_mu0"]
-        carma.w_surf = rad["rad_w_surf"]
-        carma.rad_accel = rad["rad_accel"]
-        carma.rad_dT_tol = rad["rad_dt_tol"]
-        carma.rad_dtau_tol = rad["rad_dtau_tol"]
-        carma.rad_gap_max = rad["rad_gap_max"]
-        carma.cloud_rad = bool(rad["cloud_rad"])
-        carma.self_consistent_kzz = bool(rad["kzz_mode"])
-        carma.kzz_mixl_scale = rad["kzz_mixl_scale"]
+    carma.radiation = Radiation.from_nml(rad)
 
     io = nml["io_files"]
 

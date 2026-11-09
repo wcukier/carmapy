@@ -16,6 +16,7 @@ Classes
     carmapy.Gas
     carmapy.Element
     carmapy.Coag
+    carmapy.Radiation
 
 
 Submodules

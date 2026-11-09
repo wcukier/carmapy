@@ -69,18 +69,18 @@ def test_radiation_survives_load_carma(coupled_carma):
     coupled_carma.run(suppress_output=True)
     reloaded = load_carma(coupled_carma.name, restart=1)
 
-    assert reloaded.t_int == pytest.approx(T_INT)
-    assert not hasattr(reloaded, "p_rcb")
-    assert reloaded.rad_accel == pytest.approx(20.0)
-    assert reloaded.cloud_rad is True
+    rad, configured = reloaded.radiation, coupled_carma.radiation
+    assert rad.t_int == pytest.approx(T_INT)
+    assert not hasattr(rad, "p_rcb")
+    assert rad.accel == pytest.approx(20.0)
+    assert rad.cloud_rad is True
     assert reloaded.t_evolves is True
-    assert os.path.exists(reloaded.ck_table_path)
+    assert os.path.exists(rad.ck_table_path)
 
-    assert reloaded.self_consistent_kzz == coupled_carma.self_consistent_kzz
-    assert reloaded.kzz_mixl_scale == pytest.approx(
-        coupled_carma.kzz_mixl_scale)
+    assert rad.self_consistent_kzz == configured.self_consistent_kzz
+    assert rad.kzz_mixl_scale == pytest.approx(configured.kzz_mixl_scale)
     assert reloaded.adiabat == coupled_carma.adiabat
-    assert reloaded.rad_gap_max == coupled_carma.rad_gap_max
+    assert rad.gap_max == configured.gap_max
 
 
 def test_temperature_output_parses(coupled_carma):
@@ -166,7 +166,7 @@ def test_cadence_is_reported(coupled_carma):
 
     assert r.rad_interval.shape == r.F_TOA.shape
     assert np.all(r.rad_interval >= 1)
-    assert np.all(r.rad_interval <= coupled_carma.rad_gap_max)
+    assert np.all(r.rad_interval <= coupled_carma.radiation.gap_max)
 
 
 def test_kzz_follows_the_profile(coupled_carma):
@@ -223,8 +223,8 @@ def test_self_consistent_kzz_survives_load_carma(coupled_carma):
 
     coupled_carma.run(suppress_output=True)
     reloaded = load_carma(coupled_carma.name, restart=1)
-    assert reloaded.self_consistent_kzz is True
-    assert reloaded.kzz_mixl_scale == pytest.approx(1.0)
+    assert reloaded.radiation.self_consistent_kzz is True
+    assert reloaded.radiation.kzz_mixl_scale == pytest.approx(1.0)
 
 
 def test_kzz_mixl_scale_reaches_the_fortran(tmp_path, example_levels, ck_table):
@@ -260,7 +260,7 @@ def test_kzz_mixl_scale_reaches_the_fortran(tmp_path, example_levels, ck_table):
 
     np.testing.assert_allclose(scaled.kzz_history[:, 0] / base.kzz_history[:, 0],
                                f ** (4 / 3), rtol=1e-9)
-    assert load_carma(str(tmp_path / "mixl_2")).kzz_mixl_scale == pytest.approx(f)
+    assert load_carma(str(tmp_path / "mixl_2")).radiation.kzz_mixl_scale == pytest.approx(f)
 
 
 def test_final_profiles_track_the_coupled_run(coupled_carma):

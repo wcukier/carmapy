@@ -1,6 +1,7 @@
 from carmapy.constants import *
 from carmapy.results import *
 from carmapy.chemistry import calculate_mucos
+from carmapy.radiation import Radiation
 from carmapy.adiabat import (ADIABAT_CODES, ADIABAT_PARMENTIER, ADIABAT_TABLE,
                              TABLE_FILE, get_adiabat)
 import os
@@ -167,24 +168,8 @@ class Carma:
         self.iappend:       int         = 0
         self.t_evolves:     bool        = False
 
-        # Radiative coupling, set by set_radiation. ck_table_path = None is a
-        # fixed-T run.
-        self.ck_table_path: str         = None
-        self.cloud_rad:     bool        = True
-        self.t_int:         float       = 0.
-        self.t_irr:         float       = 0.
-        self.t_star:        float       = 0.
-        self.mu0:           float       = 0.5
-        self.w_surf:        float       = 0.
-        self.rad_accel:     float       = 1.
-        self.rad_dT_tol:    float       = 1.
-        self.rad_dtau_tol:  float       = 0.02
-        self.rad_gap_max:   int         = 100
-
-        # Kzz from mixing length theory on each radiative solve (coupled runs
-        # only); see rce_kzz in carma_rce.F90.
-        self.self_consistent_kzz: bool  = True
-        self.kzz_mixl_scale: float      = 1.0
+        # Radiative coupling, set by set_radiation. None is a fixed-T run.
+        self.radiation:     Radiation   = None
 
         # Adiabat for the convective adjustment and extend_atmosphere; see
         # carmapy.adiabat.
@@ -1329,49 +1314,28 @@ class Carma:
         Composition is fixed at solar H/He: the Rayleigh cross section, the
         adiabat table and the ck table all assume it.
 
-        Sets ``t_evolves`` to True; otherwise CARMA would hold fall
-        velocities, diffusion coefficients and growth kernels at their
-        initial values.
+        The settings are stored as a :class:`carmapy.Radiation` in
+        ``self.radiation``.  Sets ``t_evolves`` to True; otherwise CARMA would
+        hold fall velocities, diffusion coefficients and growth kernels at
+        their initial values.
         """
-        if t_int <= 0:
-            raise ValueError("t_int must be positive")
-
-        if t_irr < 0:
-            raise ValueError("t_irr must be non-negative (0 = isolated object)")
-
-        if t_star < 0:
-            raise ValueError("t_star must be non-negative (0 = shape like t_irr)")
-
-        if not 0 < mu0 <= 1:
-            raise ValueError("mu0 is a cosine and must be in (0, 1]")
-
-        if not 0 <= w_surf < 1:
-            raise ValueError("w_surf is an albedo and must be in [0, 1)")
+        radiation = Radiation(ck_table_path, t_int,
+                              t_irr=t_irr,
+                              t_star=t_star,
+                              mu0=mu0,
+                              w_surf=w_surf,
+                              cloud_rad=cloud_rad,
+                              self_consistent_kzz=self_consistent_kzz,
+                              kzz_mixl_scale=kzz_mixl_scale,
+                              accel=accel,
+                              gap_max=rad_gap_max,
+                              dT_tol=rad_dT_tol,
+                              dtau_tol=rad_dtau_tol)
 
         if not os.path.exists(ck_table_path):
             raise FileNotFoundError(f"ck table not found: {ck_table_path}")
 
-        if rad_gap_max < 1:
-            raise ValueError("rad_gap_max must be at least 1")
-
-        if kzz_mixl_scale <= 0:
-            raise ValueError("kzz_mixl_scale must be positive, got "
-                             f"{kzz_mixl_scale}")
-
-        self.t_int = t_int
-        self.t_irr = t_irr
-        self.t_star = t_star
-        self.mu0 = mu0
-        self.w_surf = w_surf
-        self.ck_table_path = ck_table_path
-        self.cloud_rad = cloud_rad
-        self.self_consistent_kzz = self_consistent_kzz
-        self.kzz_mixl_scale = kzz_mixl_scale
-        self.rad_accel = accel
-        self.rad_gap_max = rad_gap_max
-        self.rad_dT_tol = rad_dT_tol
-        self.rad_dtau_tol = rad_dtau_tol
-
+        self.radiation = radiation
         self.t_evolves = True
 
         self._citation["radiation"] = True
@@ -1387,26 +1351,27 @@ class Carma:
 
         Returns NWAVE, which is 0 when radiation is off.
         """
-        if self.ck_table_path is None:
+        rad = self.radiation
+        if rad is None:
             return 0
 
         from . import radiation
 
-        nband = radiation.band_wavelengths(self.ck_table_path).size
+        nband = radiation.band_wavelengths(rad.ck_table_path).size
 
         tables = {}
         for name, group in self.groups.items():
-            if self.cloud_rad:
+            if rad.cloud_rad:
                 table_path = os.path.join(
                     path, "inputs", f"mie_{name.replace(' ', '_')}.dat")
                 tables[name] = radiation.gen_band_mie_table(
-                    name, group.rmin, self.NBIN, self.ck_table_path,
+                    name, group.rmin, self.NBIN, rad.ck_table_path,
                     table_path)
             else:
                 # Zero optics, so cloud_rad=False runs the identical solver.
                 tables[name] = np.zeros((self.NBIN, nband, 3))
 
-        if not self.cloud_rad and not suppress_output:
+        if not rad.cloud_rad and not suppress_output:
             print("Radiation: cloud opacity disabled (cloud_rad=False)")
 
         radiation.write_optics_file(
@@ -1570,25 +1535,12 @@ class Carma:
                 },
             # Written for every run; do_radiation = 0 when uncoupled.
             "radiation": {
-                "do_radiation":         int(self.ck_table_path is not None),
-                "ck_table_file":        (os.path.abspath(self.ck_table_path)
-                                         if self.ck_table_path else ""),
-                "t_int":                self.t_int,
-                "t_irr":                self.t_irr,
-                "t_star":               self.t_star,
-                "rad_mu0":              self.mu0,
-                "rad_w_surf":           self.w_surf,
-                "rad_accel":            self.rad_accel,
-                "rad_dT_tol":           self.rad_dT_tol,
-                "rad_dtau_tol":         self.rad_dtau_tol,
-                "rad_gap_max":          self.rad_gap_max,
-                "kzz_mode":             int(self.self_consistent_kzz),
-                "kzz_mixl_scale":       self.kzz_mixl_scale,
+                **(self.radiation.to_nml() if self.radiation is not None
+                   else Radiation.UNCOUPLED_NML),
                 "adiabat":              ADIABAT_CODES[self.adiabat],
                 "adiabat_file":         (os.path.abspath(TABLE_FILE)
                                          if self.adiabat == ADIABAT_TABLE
                                          else ""),
-                "cloud_rad":            int(self.cloud_rad),
                 }
             }
         nml = f90nml.Namelist(nml)
