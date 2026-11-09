@@ -301,7 +301,7 @@ subroutine test_day()
   integer, allocatable :: elem2group(:)
 
   ! Per-group condensate properties from groups_file, passed to CARMAGROUP_Create.
-  real(kind=f), allocatable :: grp_wtmol(:), grp_rho_cond(:), grp_surften_0(:), grp_coldia(:)
+  real(kind=f), allocatable :: grp_wtmol(:), grp_rho_cond(:), grp_surften_0(:)
   real(kind=f), allocatable :: grp_vp_offset(:), grp_vp_tcoeff(:), grp_surften_slope(:)
   real(kind=f), allocatable :: grp_vp_metcoeff(:), grp_vp_logpcoeff(:), grp_lat_heat_e(:)
   real(kind=f), allocatable :: grp_desorption(:), grp_wtmol_core(:)
@@ -403,7 +403,7 @@ subroutine test_day()
   allocate(tempr(NZ), pre(NZ), prel(NZP1), alt(NZ), altl(NZP1), wtmol_air(NZ), grav(NZ), ekz(NZP1), ekzl(NZP1), wtmol_gas(NGAS))
   allocate(temp_equator(NZ, NLONGITUDE), p_equator_center(NZ), p_equator_level(NZP1), velocity(NLONGITUDE), longitudes(NLONGITUDE))
   allocate(elem2group(NELEM), elem_is_number(NELEM), grp_r(NBIN, NGROUP))
-  allocate(grp_wtmol(NGROUP), grp_rho_cond(NGROUP), grp_surften_0(NGROUP), grp_coldia(NGROUP))
+  allocate(grp_wtmol(NGROUP), grp_rho_cond(NGROUP), grp_surften_0(NGROUP))
   allocate(grp_vp_offset(NGROUP), grp_vp_tcoeff(NGROUP), grp_surften_slope(NGROUP))
   allocate(grp_vp_metcoeff(NGROUP), grp_vp_logpcoeff(NGROUP), grp_lat_heat_e(NGROUP))
   allocate(grp_desorption(NGROUP), grp_wtmol_core(NGROUP))
@@ -620,7 +620,7 @@ subroutine test_day()
   do i = 1, NGROUP
     ! The group file carries the condensate properties.
     read(10, *) name, rmin, grp_wtmol(i), grp_iroutine(i), grp_rho_cond(i), &
-     grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), grp_vp_tcoeff(i), &
+     grp_surften_0(i), grp_vp_offset(i), grp_vp_tcoeff(i), &
      grp_is_type3(i), grp_surften_slope(i), grp_vp_metcoeff(i), grp_vp_logpcoeff(i), &
      grp_lat_heat_e(i), grp_desorption(i), grp_stofact(i), grp_wtmol_core(i)
 
@@ -628,7 +628,7 @@ subroutine test_day()
 
     if (NWAVE > 0) then
       call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
-      .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), &
+      .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_vp_offset(i), &
       grp_vp_tcoeff(i), INT(grp_iroutine(i)), rc, &
       wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
       surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
@@ -638,7 +638,7 @@ subroutine test_day()
       qext=grp_qext(:,:,i), ssa=grp_ssa(:,:,i), asym=grp_asym(:,:,i))
     else
       call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
-      .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_coldia(i), grp_vp_offset(i), &
+      .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_vp_offset(i), &
       grp_vp_tcoeff(i), INT(grp_iroutine(i)), rc, &
       wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
       surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
@@ -711,10 +711,10 @@ subroutine test_day()
 
     ! Gas-phase properties only. hill_formula is a Python-side fastchem label,
     ! unused here.
-    read(10, *) name, wtmol_dif, icomposition, hill_formula
+    read(10, *) name, wtmol_dif, icomposition, hill_formula, coldia
 
     write(*,*) "Add "//trim(name) //" ..."
-    call CARMAGAS_Create(carma, i, name, wtmol_dif, icomposition, rc)
+    call CARMAGAS_Create(carma, i, name, wtmol_dif, icomposition, coldia, rc)
 
     if (rc < 0) stop "    *** FAILED ***"
 

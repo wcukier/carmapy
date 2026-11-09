@@ -55,12 +55,12 @@ def _build_pathway(name, path, example_levels):
 
     elif name == "silicate_comp":
         # Competitive condensation: Mg2SiO4 (key Mg, secondary SiO), MgSiO3
-        # (key SiO, secondary Mg), and SiO2 (key SiO) share the Mg and SiO
+        # (key SiO, secondary Mg), and SiO (key SiO) share the Mg and SiO
         # reservoirs.
         c.add_hom_group("TiO2", 1e-8)
         c.add_het_group("Mg2SiO4", "TiO2", 1e-8 * 2 ** (1 / 3))
         c.add_het_group("MgSiO3", "TiO2", 1e-8 * 2 ** (1 / 3))
-        c.add_het_group("SiO2", "TiO2", 1e-8 * 2 ** (1 / 3))
+        c.add_hom_group("SiO", 1e-8)
 
     elif name == "multispecies":
         c.add_gas("TiO2")

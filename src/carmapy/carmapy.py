@@ -575,8 +575,8 @@ class Carma:
             # Resolve the reservoir gas. Built-in condensates look it up in
             # group_dict; a custom condensate (not in group_dict) may supply a
             # `gas_phase` kwarg naming the gas, otherwise the condensate name is
-            # used. The gas (and its gas-phase properties: wtmol_dif, hill_formula,
-            # gcomp) should be created beforehand with add_gas(); it is reused
+            # used. The gas (and its gas-phase properties: wtmol_dif, coldia,
+            # hill_formula, gcomp) should be created beforehand with add_gas(); it is reused
             # here. The kwargs to this method are condensate (group) properties.
             gas_phase = kwargs.pop("gas_phase", None)
             if mantle_group in group_dict:
@@ -1603,7 +1603,6 @@ class Carma:
                     "iroutine\t"
                     "rho_cond\t"
                     "surften_0\t"
-                    "coldia\t"
                     "vp_offset\t"
                     "vp_tcoeff\t"
                     "is_type3\t"
@@ -1629,7 +1628,6 @@ class Carma:
                         f'{I_VAPRTN_USER:2d}\t' 
                         f'{group.rho_cond:<.18e}\t'
                         f'{group.surften_0:<.18e}\t'
-                        f'{group.coldia:<.18e}\t'
                         f'{group.vp_offset:<.18e}\t'
                         f'{group.vp_tcoeff:<.18e}\t'
                         f'{int(group.is_typeIII):1d}\t'
@@ -1644,7 +1642,7 @@ class Carma:
         
         with open(os.path.join(path, io["gases_file"]), "w+") as f:
 
-            f.write("name\twtmol_dif\ticomp\thill_formula\n")
+            f.write("name\twtmol_dif\ticomp\thill_formula\tcoldia\n")
 
             for key in self.gases.keys():
                 gas : "Gas" = self.gases[key]
@@ -1652,7 +1650,8 @@ class Carma:
 
                 f.write(f'{name:24s}{gas.wtmol_dif:<.6e}\t'
                         f'{gas.gcomp:2d}\t'
-                        f'{gas.hill_formula}'
+                        f'{gas.hill_formula}\t'
+                        f'{gas.coldia:<.6e}'
                         '\n')
         
         # TODO: check for names which are too long
@@ -2025,6 +2024,9 @@ class Gas:
     wtmol_dif: float
     """ Molar mass of the gas phase of the gas [g/mol] """
 
+    coldia: float
+    """ Collision diameter of the gas molecule, for its diffusivity in air [cm] """
+
     hill_formula: str
     """ The chemical formula of the condensate in hill notation"""
 
@@ -2042,7 +2044,7 @@ class Gas:
 
         defaults = gas_dict.get(name, kwargs)
         if name not in gas_dict:
-            required = {"wtmol_dif", "hill_formula"}
+            required = {"wtmol_dif", "coldia", "hill_formula"}
             missing = required - kwargs.keys()
             if missing:
                 raise ValueError(
@@ -2052,6 +2054,7 @@ class Gas:
                 )
 
         self.wtmol_dif      = kwargs.get("wtmol_dif",     defaults["wtmol_dif"])
+        self.coldia         = kwargs.get("coldia",        defaults["coldia"])
         self.gcomp          = kwargs.get("gcomp",         defaults.get("gcomp", 0))
         self.hill_formula   = kwargs.get("hill_formula",  defaults["hill_formula"])
         self.boundary       = kwargs.get("boundary",      dict(_DEFAULT_GAS_BC))
@@ -2211,9 +2214,6 @@ class Group:
     surften_slope: float = 0
     """ Slope of surface tension with temperature (see note 3) [dyne/cm/K]"""
 
-    coldia: float 
-    """ Collisional diameter of the condensate [cm] """
-
     vp_offset: float 
     """ Constant term in vapor pressure equation (see note 2)"""
 
@@ -2259,10 +2259,14 @@ class Group:
         self.material = material
 
 
+        if "coldia" in kwargs:
+            raise ValueError("coldia belongs to the gas, not the group; "
+                             "pass it to the Gas")
+
         defaults = group_dict.get(material, kwargs)
         if material and material not in group_dict:
             required = {
-                "wtmol", "rho_cond", "surften_0", "surften_slope", "coldia",
+                "wtmol", "rho_cond", "surften_0", "surften_slope",
                 "vp_offset", "vp_tcoeff", "vp_metcoeff", "vp_logpcoeff",
                 "is_typeIII", "stofact",
             }
@@ -2280,7 +2284,6 @@ class Group:
         self.rho_cond       = kwargs.get("rho_cond",      defaults["rho_cond"])
         self.surften_0      = kwargs.get("surften_0",     defaults["surften_0"])
         self.surften_slope  = kwargs.get("surften_slope", defaults["surften_slope"])
-        self.coldia         = kwargs.get("coldia",        defaults["coldia"])
         self.vp_offset      = kwargs.get("vp_offset",     defaults["vp_offset"])
         self.vp_tcoeff      = kwargs.get("vp_tcoeff",     defaults["vp_tcoeff"])
         self.vp_metcoeff    = kwargs.get("vp_metcoeff",   defaults["vp_metcoeff"])

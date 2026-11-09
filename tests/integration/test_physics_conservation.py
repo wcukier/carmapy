@@ -88,8 +88,8 @@ def test_grow_and_evap_not_simultaneously_large(tmp_path, example_levels):
 
 
 def _build_silicate_closed_box(path, example_levels):
-    """Mg2SiO4, MgSiO3 and SiO2 on TiO2 sharing the Mg and SiO reservoirs,
-    with zero-flux boundaries for gas and particles."""
+    """Mg2SiO4 and MgSiO3 on TiO2 and homogeneous SiO sharing the Mg and SiO
+    reservoirs, with zero-flux boundaries for gas and particles."""
     from carmapy.carmapy import Carma
     from carmapy.chemistry import populate_abundances_at_cloud_base
     P, T, kzz, mu = example_levels
@@ -105,7 +105,7 @@ def _build_silicate_closed_box(path, example_levels):
     r_het = 1e-8 * 2 ** (1 / 3)
     c.add_het_group("Mg2SiO4", "TiO2", r_het)
     c.add_het_group("MgSiO3", "TiO2", r_het)
-    c.add_het_group("SiO2", "TiO2", r_het)
+    c.add_hom_group("SiO", 1e-8)
     c.set_gas_boundary_type("fixed_flux", "fixed_flux")
     c.set_cloud_boundary_type("fixed_flux", "fixed_flux")
     populate_abundances_at_cloud_base(c)
@@ -135,29 +135,31 @@ def test_silicate_elemental_conservation(tmp_path, example_levels):
     igas = {name: i for i, name in enumerate(r.gas_names)}
     igrp = {name: i for i, name in enumerate(r.group_names)}
 
-    # Moles (atoms) of the element per cm3 in each condensate: mantle mass /
-    # condensate molar mass * (atoms of element per formula unit).
+    # Moles of formula units per cm3 in each condensate: condensate mass /
+    # condensate molar mass.  For a heterogeneous group the condensate is the
+    # mantle, so the seed core's mass is excluded.
     groups = c.groups
     wtmol = {name: groups[name].wtmol for name in r.group_names}
     NT = r.numden.shape[-1]
 
-    def mantle_moles(name, t):
+    def condensate_moles(name, t):
         g = igrp[name]
         mass = r.numden[:, g, :, t] * r.rmass[:, g][None, :]
-        frac = 1.0 - r.clouds[r.group_names[g]]["coremass_frac"][:, :, t]
-        return (mass * frac).sum(axis=1) / wtmol[name]
+        if groups[name].mantle is not None:
+            mass = mass * (1.0 - r.clouds[name]["coremass_frac"][:, :, t])
+        return mass.sum(axis=1) / wtmol[name]
 
     totals = {"Mg": [], "Si": []}
     for t in range(NT):
         n_mg_gas = r.gas_abund[:, igas["Mg"], t] * 1e-6 * n_air
         n_sio_gas = r.gas_abund[:, igas["SiO"], t] * 1e-6 * n_air
 
-        m_fo = mantle_moles("Mg2SiO4 on TiO2", t)
-        m_en = mantle_moles("MgSiO3 on TiO2", t)
-        m_qz = mantle_moles("SiO2 on TiO2", t)
+        m_fo = condensate_moles("Mg2SiO4 on TiO2", t)
+        m_en = condensate_moles("MgSiO3 on TiO2", t)
+        m_sio = condensate_moles("Pure SiO", t)
 
         mg = (n_mg_gas / AVOG + 2 * m_fo + 1 * m_en)
-        si = (n_sio_gas / AVOG + 1 * m_fo + 1 * m_en + 1 * m_qz)
+        si = (n_sio_gas / AVOG + 1 * m_fo + 1 * m_en + 1 * m_sio)
         totals["Mg"].append(float((mg * dz).sum()))
         totals["Si"].append(float((si * dz).sum()))
 
@@ -260,8 +262,7 @@ def _floor_clamps(c):
 def test_silicate_reservoirs_conserved_full_precision(tmp_path, example_levels):
     """With implicit_gas, every reservoir in the closed
     silicate box (gas + stoichiometric condensate + seed) holds to round-off
-    at full precision, with no floor clamp of consumed gas.  At the cloud base
-    Mg2SiO4 drains SiO while the SiO-keyed condensates are subsaturated."""
+    at full precision, with no floor clamp of consumed gas."""
     c = _build_silicate_closed_box(str(tmp_path / "fpcons"), example_levels)
     c.implicit_gas = True
     c.run(suppress_output=True)

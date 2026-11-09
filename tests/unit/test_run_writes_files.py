@@ -107,11 +107,11 @@ def test_run_gases_file_has_header(ready_carma):
     # Gas-phase properties live in gases.txt; condensate properties moved to groups.txt.
     with open(os.path.join(c.name, "inputs", "gases.txt")) as f:
         gas_header = f.readline()
-    for col in ["name", "wtmol_dif", "icomp"]:
+    for col in ["name", "wtmol_dif", "icomp", "coldia"]:
         assert col in gas_header, f"Column '{col}' missing from gases.txt header"
     with open(os.path.join(c.name, "inputs", "groups.txt")) as f:
         grp_header = f.readline()
-    for col in ["name", "rmin", "wtmol", "rho_cond", "coldia", "vp_offset", "vp_tcoeff"]:
+    for col in ["name", "rmin", "wtmol", "rho_cond", "vp_offset", "vp_tcoeff"]:
         assert col in grp_header, f"Column '{col}' missing from groups.txt header"
 
 

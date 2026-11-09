@@ -2,7 +2,7 @@
     is_2d = 0
     nbin = 80
     ncoag = 0
-    nelem = 7
+    nelem = 6
     ngas = 4
     ngroup = 4
     ngrowth = 6
@@ -12,11 +12,18 @@
     nwave = 0
     nz = 90
     dtime = 250
+    gstickl_in = 1.0
     iappend = 0
     ibbnd_gc = 1
     ibbnd_pc = 1
     idiag = 0
+    ido_cons_evap = 0
     igridv = 1
+    iimplicit_gas = 1
+    imaxntsubsteps_cap = 16384
+    iminsubsteps = 1
+    implicit_rtol = 1e-06
+    implicit_trigger = 0.1
     irestart = 0
     iskip = 5
     itbnd_gc = 2
@@ -39,6 +46,7 @@
     growth_file = 'inputs/growth.txt'
     levels_file = 'inputs/levels.txt'
     nuc_file = 'inputs/nucleation.txt'
+    optics_file = 'inputs/optics.txt'
     p_boundary_file = 'inputs/pbound.txt'
     temps_file = 'inputs/temps.txt'
     winds_file = 'inputs/winds.txt'
@@ -58,4 +66,23 @@
     thcond_2 = -0.00012585
     velocity_avg = -1
     wtmol_air_set = 2.345644240358553
+/
+
+&radiation
+    adiabat = 0
+    adiabat_file = ''
+    ck_table_file = ''
+    cloud_rad = 1
+    do_radiation = 0
+    kzz_mixl_scale = 1.0
+    kzz_mode = 1
+    rad_accel = 1.0
+    rad_dt_tol = 1.0
+    rad_dtau_tol = 0.02
+    rad_gap_max = 100
+    rad_mu0 = 0.5
+    rad_w_surf = 0.0
+    t_int = 0.0
+    t_irr = 0.0
+    t_star = 0.0
 /

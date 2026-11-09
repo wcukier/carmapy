@@ -252,60 +252,72 @@ RGAS = 8.31430e+07 # Define universal gas constant [ erg / deg_K / mole ]
 
 
 
+
 gas_dict = { 
     "H2O": {
         "wtmol_dif": WTMOL_H2O,
+        "coldia": COLDIA_H2O,
         "gcomp": I_GCOMP_H2O,
         "hill_formula": "H2O1"
 
     },
         "KCl": {
         "wtmol_dif": WTMOL_KCL,
+        "coldia": COLDIA_KCL,
         "gcomp": I_GCOMP_KCL,
         "hill_formula": "Cl1K1"
     },
         "Zn": {
         "wtmol_dif": WTMOL_ZN,
+        "coldia": 1.35e-8*2,  # Slater 1964 Atomic Radius
         "gcomp": I_GCOMP_ZNS,
         "hill_formula": "Zn"
     },
         "Na": {
         "wtmol_dif": WTMOL_NA,
+        "coldia": 1.80e-8*2,  # Slater 1964 Atomic Radius
         "gcomp": I_GCOMP_NA2S,
         "hill_formula": "Na"
     },
         "Mn": {
         "wtmol_dif": WTMOL_MN,
+        "coldia": 1.40e-8*2,  # Slater 1964 Atomic Radius
         "gcomp": I_GCOMP_MNS,
         "hill_formula": "Mn"
     },
         "Cr": {
         "wtmol_dif": WTMOL_CR,
+        "coldia": COLDIA_CR,
         "gcomp": I_GCOMP_CR,
         "hill_formula": "Cr"
     },
         "Mg": {
         "wtmol_dif": WTMOL_MG,
+        "coldia": 1.50e-8*2,  # Slater 1964 Atomic Radius
         "gcomp": I_GCOMP_MG2SIO4,
         "hill_formula": "Mg"
     },
         "Fe": {
         "wtmol_dif": WTMOL_FE,
+        "coldia": COLDIA_FE,
         "gcomp": I_GCOMP_FE,
         "hill_formula": "Fe"
     },
         "TiO2": {
         "wtmol_dif": WTMOL_TIO2,
+        "coldia": COLDIA_TIO2,
         "gcomp": I_GCOMP_TIO2,
         "hill_formula": "O2Ti1"
     },
         "Al": {
         "wtmol_dif": WTMOL_AL,
+        "coldia": 1.25e-8*2,  # Slater 1964 Atomic Radius
         "gcomp": I_GCOMP_AL2O3,
         "hill_formula": "Al"
     },
         "SiO": { # need better sourcing for these constants
         "wtmol_dif": 44.0849,
+        "coldia":  4.04e-8,  # Estimated from Sedlmayr & Gail (2014)
         "gcomp": I_GCOMP_SIO,
         "hill_formula": "O1Si1"
     }
@@ -325,7 +337,6 @@ group_dict = {
         "rho_cond": RHO_W,
         "surften_0": np.nan,
         "surften_slope": np.nan,
-        "coldia": COLDIA_H2O,
         "is_typeIII": False,
         "lat_heat_e": np.nan, # ignored
         "stofact": 1,
@@ -346,7 +357,6 @@ group_dict = {
         "rho_cond": RHO_KCL,
         "surften_0": 160.4 + 0.07*273.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.07,
-        "coldia": COLDIA_KCL,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
@@ -366,7 +376,6 @@ group_dict = {
         "rho_cond": RHO_ZNS,
         "surften_0": 860.0, #  @Citation: Zhang et al. 2003, J. Phys. Chem. B 2003, 107, 13051-13060 
         "surften_slope": 0,
-        "coldia": COLDIA_ZNS,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
@@ -386,7 +395,6 @@ group_dict = {
         "rho_cond": RHO_NA2S,
         "surften_0": 1033, #  @Citation: Elsie Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
-        "coldia": COLDIA_NA2S,
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
@@ -406,7 +414,6 @@ group_dict = {
         "rho_cond": RHO_MNS,
         "surften_0": 2326, #  @Citation:  Elsie Lee's calculations, estimated from enthalpy data
         "surften_slope": 0,
-        "coldia": COLDIA_MNS,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
@@ -426,7 +433,6 @@ group_dict = {
         "rho_cond": RHO_CR,
         "surften_0": 1642 + .2 * 2133.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.2,
-        "coldia": COLDIA_CR,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
@@ -446,7 +452,6 @@ group_dict = {
         "rho_cond": RHO_MG2SIO4,
         "surften_0": 436, #  @!Kazasa et al. 1989 
         "surften_slope": 0,
-        "coldia": COLDIA_MG2SIO4,
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
@@ -466,7 +471,6 @@ group_dict = {
         "rho_cond": RHO_FE,
         "surften_0": 1862 + .39*1803.15, #  @Citation: http://www.kayelaby.npl.co.uk/general_physics/2_2/2_2_5.html 
         "surften_slope": 0.39,
-        "coldia": COLDIA_FE,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
@@ -486,7 +490,6 @@ group_dict = {
         "rho_cond": RHO_TIO2,
         "surften_0": 535.124, #  @Citation: Lee et al. (2015) TODO: Sindel et al. (2022) sig = 589.79_dp - 0.0708_dp * T
         "surften_slope": 0.04396,
-        "coldia": COLDIA_TIO2,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
@@ -506,7 +509,6 @@ group_dict = {
         "rho_cond": RHO_AL2O3,
         "surften_0": 690, #  @Kazasa et al. 1989!900._f ! Dobrovinskaya et al. (2009)
         "surften_slope": 0,
-        "coldia": COLDIA_AL2O3,
         "is_typeIII": True,
         "lat_heat_e": -1,
         "stofact": 2,
@@ -526,7 +528,6 @@ group_dict = {
         "rho_cond": 2.13,
         "surften_0": 500, 
         "surften_slope": 0,
-        "coldia": 4.04e-8,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
@@ -546,37 +547,11 @@ group_dict = {
         "rho_cond": RHO_MGSIO3,
         "surften_0": 400, 
         "surften_slope": 0,
-        "coldia": 4.65e-8,
         "is_typeIII": False,
         "lat_heat_e": -1,
         "stofact": 1,
         "gas_phase": "SiO",
         "stoich": {"SiO": 1, "Mg": 1}
-    },
-    # LLM-GENERATED — UNVERIFIED (tier: physics)
-    # Remove this banner only after completing the checks in Assistant/POLICY.md §2.
-    "SiO2": {
-        "cond_rho": 2.65,   # alpha-quartz, Kiefer et al. 2026 Table 1, doi:10.3847/1538-4357/ae5101
-        "rtn": I_VAPRTN_USER,
-        # SiO(g) + H2O(g) -> SiO2(s) + H2(g): log10 P[bar] = 13.168 - 28265/T - [Fe/H]
-        # Grant et al. 2023 Eq. 3, doi:10.3847/2041-8213/acfc3b
-        "vp_offset": 13.168,
-        "vp_tcoeff": 28265.0,
-        "vp_metcoeff": 1,
-        "vp_logpcoeff": 0,
-        "wtmol": 60.0843,
-        "mucos_dict": {"TiO2": 0.995},  # assumed equal to Mg2SiO4/MgSiO3; not sourced
-        "opacity_files": "SiO2_complex.txt",  # TODO: add alpha-quartz indices file
-        "rho_cond": 2.65,
-        # sigma = 243.2 + 0.031*T erg/cm^2, Kiefer et al. 2026 Table 1 (surften_0 - surften_slope*T)
-        "surften_0": 243.2,
-        "surften_slope": -0.031,
-        "coldia": 4.04e-8,  # placeholder, same unsourced value as the SiO entry; needs sourcing
-        "is_typeIII": False,
-        "lat_heat_e": -1,
-        "stofact": 1,
-        "gas_phase": "SiO",
-        "stoich": {"SiO": 1}
     }
 }
 

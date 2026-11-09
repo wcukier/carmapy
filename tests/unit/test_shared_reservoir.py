@@ -1,5 +1,6 @@
-"""Condensates sharing a gas reservoir: Mg2SiO4 (keyed to Mg), MgSiO3 and SiO2
-(both keyed to SiO). subprocess is mocked, so no Fortran binary runs.
+"""Condensates sharing gas reservoirs: Mg2SiO4 (keyed to Mg), MgSiO3 on TiO2 and
+homogeneous SiO (both keyed to SiO). subprocess is mocked, so no Fortran binary
+runs.
 """
 import os
 import filecmp
@@ -34,7 +35,7 @@ def _silicate_carma(name):
     r_het = 1e-8 * 2 ** (1 / 3)
     c.add_het_group("Mg2SiO4", "TiO2", r_het)
     c.add_het_group("MgSiO3", "TiO2", r_het)
-    c.add_het_group("SiO2", "TiO2", r_het)
+    c.add_hom_group("SiO", 1e-8)
     c.set_nmr({"TiO2": 1e-7, "Mg": 1e-5, "SiO": 1e-5})
     c.set_stepping(dt=100, output_gap=5, n_tstep=10)
     return c
@@ -42,17 +43,17 @@ def _silicate_carma(name):
 
 @pytest.mark.unit
 def test_shared_gas_deduplicated():
-    """MgSiO3 and SiO2 reuse one SiO reservoir; Mg2SiO4 gets its own Mg."""
+    """MgSiO3 and SiO reuse one SiO reservoir; Mg2SiO4 gets its own Mg."""
     c = Carma("_t")
     c.add_hom_group("TiO2", 1e-8)
     r_het = 1e-8 * 2 ** (1 / 3)
     c.add_het_group("Mg2SiO4", "TiO2", r_het)
     c.add_het_group("MgSiO3", "TiO2", r_het)
-    c.add_het_group("SiO2", "TiO2", r_het)
+    c.add_hom_group("SiO", 1e-8)
 
     # H2O is the always-present background gas.
     assert sorted(c.gases) == ["H2O", "Mg", "SiO", "TiO2"]
-    assert c.groups["MgSiO3 on TiO2"].gas is c.groups["SiO2 on TiO2"].gas
+    assert c.groups["MgSiO3 on TiO2"].gas is c.groups["Pure SiO"].gas
     assert c.groups["Mg2SiO4 on TiO2"].gas.name == "Mg"
 
 
@@ -65,17 +66,17 @@ def test_growth_pathways_share_igas():
     r_het = 1e-8 * 2 ** (1 / 3)
     c.add_het_group("Mg2SiO4", "TiO2", r_het)
     c.add_het_group("MgSiO3", "TiO2", r_het)
-    c.add_het_group("SiO2", "TiO2", r_het)
+    c.add_hom_group("SiO", 1e-8)
 
     rows = {(g.elem.group.material, g.gas.name): (g.nu, g.is_key)
             for g in c.growth}
-    # SiO2 limited by SiO; Mg2SiO4 limited by Mg but also depleting SiO;
+    # SiO limited by SiO; Mg2SiO4 limited by Mg but also depleting SiO;
     # MgSiO3 limited by SiO but also depleting Mg.
     assert rows[("Mg2SiO4", "Mg")] == (2, True)
     assert rows[("Mg2SiO4", "SiO")] == (1, False)
     assert rows[("MgSiO3", "SiO")] == (1, True)
     assert rows[("MgSiO3", "Mg")] == (1, False)
-    assert rows[("SiO2", "SiO")] == (1, True)
+    assert rows[("SiO", "SiO")] == (1, True)
     key_rows = [g for g in c.growth if g.is_key]
     assert len(key_rows) == 4  # one per condensate incl. TiO2
 
@@ -93,7 +94,7 @@ def test_growth_file_v3_format(tmp_path):
 
     assert header == ["ielem", "igas", "nu", "is_key", "xref"]
     assert all(len(r) == 5 for r in rows)
-    # One key row per volatile element (TiO2, Mg2SiO4, MgSiO3, SiO2) plus the
+    # One key row per volatile element (TiO2, Mg2SiO4, MgSiO3, SiO) plus the
     # two secondary depletion rows (Mg2SiO4->SiO, MgSiO3->Mg).
     assert len(rows) == 6
     key_rows = [r for r in rows if int(r[3]) == 1]
@@ -117,7 +118,7 @@ def test_growth_file_v3_format(tmp_path):
 @pytest.mark.unit
 def test_shared_reservoir_roundtrip(tmp_path):
     """run() -> load_carma() -> run() reproduces identical input files for the
-    three-silicate configuration."""
+    shared-reservoir configuration."""
     from carmapy.base import load_carma
 
     dir1 = str(tmp_path / "first")
@@ -142,17 +143,18 @@ def test_shared_reservoir_roundtrip(tmp_path):
 
 @pytest.mark.unit
 def test_cloud_base_uses_deepest_condensate(tmp_path):
-    """With MgSiO3 and SiO2 sharing the SiO reservoir, the reservoir abundance
-    is evaluated at the deeper (higher-pressure) of the two cloud bases."""
+    """SiO gas is the key gas of MgSiO3 and of the SiO condensate, and a
+    secondary gas of Mg2SiO4; its reservoir abundance is evaluated at the deepest
+    (highest-pressure) of the three cloud bases, here Mg2SiO4's."""
     import carmapy.chemistry as chemistry
 
     c = _silicate_carma(str(tmp_path / "base"))
 
     bases = {
-        "Pure TiO2":       (2e6, 1900.0),
-        "Mg2SiO4 on TiO2": (6e6, 1750.0),
+        "Pure TiO2":       (9e6, 1900.0),
+        "Mg2SiO4 on TiO2": (6e6, 1750.0),   # deepest SiO consumer
         "MgSiO3 on TiO2":  (5e6, 1700.0),
-        "SiO2 on TiO2":    (9e6, 1800.0),   # deepest SiO consumer
+        "Pure SiO":        (1e6, 1500.0),
     }
 
     def fake_find_cloud_base(carma, group):
@@ -169,7 +171,7 @@ def test_cloud_base_uses_deepest_condensate(tmp_path):
         chemistry.populate_abundances_at_cloud_base(c)
 
     sio_hill = c.gases["SiO"].hill_formula
-    assert calls[sio_hill] == (1800.0, 9e6)
+    assert calls[sio_hill] == (1750.0, 6e6)
 
 
 @pytest.mark.unit
@@ -193,9 +195,9 @@ def test_legacy_growth_file_still_loads(tmp_path):
     from carmapy.base import load_carma
     c2 = load_carma(dir1)
     # load_carma does not reconstruct group.material; key by element name.
-    by_name = {g.elem.name.split(" ")[0]: g for g in c2.growth}
-    assert by_name["Mg2SiO4"].nu == 2
-    assert by_name["SiO2"].nu == 1
+    by_name = {g.elem.name: g for g in c2.growth}
+    assert by_name["Mg2SiO4 Mantle (TiO2)"].nu == 2
+    assert by_name["Pure SiO"].nu == 1
     assert all(g.is_key for g in c2.growth)
 
 

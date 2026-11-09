@@ -117,18 +117,18 @@ def load_carma(path: str, restart: int =0) -> Carma:
 
     io = nml["io_files"]
 
-    # Condensate properties are owned by the group. The group reservoir gas is
-    # re-linked below via the growth pathways, so it is left as None here.
     with open(os.path.join(path, io["groups_file"]), "r") as f:
-        f.readline()
+        groups_have_coldia = "coldia" in f.readline().split()
         for line in f:
+            fields = shlex.split(line[:-1])
+            if groups_have_coldia:
+                del fields[6]
             (name,
              rmin,
              wtmol,
              _,
              rho_cond,
              surften_0,
-             coldia,
              vp_offset,
              vp_tcoeff,
              is_typeIII,
@@ -138,7 +138,7 @@ def load_carma(path: str, restart: int =0) -> Carma:
              lat_heat_e,
              desorption,
              stofact,
-             wtmol_core) = shlex.split(line[:-1])
+             wtmol_core) = fields
             carma.groups[name] = Group(len(carma.groups)+1,
                                        name,
                                        float(rmin),
@@ -148,7 +148,6 @@ def load_carma(path: str, restart: int =0) -> Carma:
                                        rho_cond=float(rho_cond),
                                        surften_0=float(surften_0),
                                        surften_slope=float(surften_slope),
-                                       coldia=float(coldia),
                                        vp_offset=float(vp_offset),
                                        vp_tcoeff=float(vp_tcoeff),
                                        vp_metcoeff=float(vp_metcoeff),
@@ -159,19 +158,19 @@ def load_carma(path: str, restart: int =0) -> Carma:
                                        stofact=int(float(stofact)))
 
     with open(os.path.join(path, io["gases_file"]), "r") as f:
-        f.readline()
+        gases_have_coldia = "coldia" in f.readline().split()
         for line in f:
-            (name,
-             wtmol_dif,
-             gcomp,
-             hill_formula) = shlex.split(line[:-1])
+            fields = shlex.split(line[:-1])
+            name, wtmol_dif, gcomp, hill_formula = fields[:4]
+            kwargs = {"coldia": float(fields[4])} if gases_have_coldia else {}
 
             name = name[:-len(' Vapor')]
             carma.gases[name] = Gas(name,
                                     len(carma.gases)+1,
                                     wtmol_dif=float(wtmol_dif),
                                     gcomp=int(float(gcomp)),
-                                    hill_formula=str(hill_formula))
+                                    hill_formula=str(hill_formula),
+                                    **kwargs)
             
     
     with open(os.path.join(path, io["elements_file"]), "r") as f:
@@ -209,9 +208,8 @@ def load_carma(path: str, restart: int =0) -> Carma:
     with open(os.path.join(path, io["growth_file"])) as f:
         f.readline()
         for line in f:
-            # Rows are (ielem, igas, nu, is_key, xref), or just (ielem, igas)
-            # for a single key pathway per element with nu = stofact.  The
-            # silicate_comp test fixture has no xref column.
+            # Rows are (ielem, igas, nu, is_key[, xref]), or just (ielem, igas)
+            # for a single key pathway per element with nu = stofact.
             fields = shlex.split(line[:-1])
             ielem, igas = fields[0], fields[1]
             elem = carma.elems[list(carma.elems.keys())[int(ielem)-1]]

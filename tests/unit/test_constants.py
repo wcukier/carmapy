@@ -3,19 +3,19 @@ from carmapy.constants import gas_dict, group_dict, TCOEFF_TIO2_HELLING
 
 KNOWN_SPECIES = [
     "H2O", "KCl", "ZnS", "Na2S", "MnS", "Cr",
-    "Mg2SiO4", "Fe", "TiO2", "Al2O3", "SiO", "MgSiO3", "SiO2",
+    "Mg2SiO4", "Fe", "TiO2", "Al2O3", "SiO", "MgSiO3",
 ]
 
 # Condensate properties now live on the group (group_dict).
 GROUP_FIELDS = [
-    "rho_cond", "wtmol", "coldia",
+    "rho_cond", "wtmol",
     "vp_offset", "vp_tcoeff", "vp_metcoeff", "vp_logpcoeff",
     "surften_0", "surften_slope", "is_typeIII", "stofact",
     "mucos_dict", "gas_phase", "stoich",
 ]
 
 # Gas-phase properties stay on the gas (gas_dict), keyed by the gas-phase name.
-GAS_FIELDS = ["wtmol_dif", "hill_formula"]
+GAS_FIELDS = ["wtmol_dif", "coldia", "hill_formula"]
 
 
 def _gas_of(species):
@@ -55,11 +55,12 @@ def test_wtmol_positive(species):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("species", KNOWN_SPECIES)
-def test_coldia_reasonable(species):
+@pytest.mark.parametrize("gas", sorted(gas_dict))
+def test_coldia_reasonable(gas):
     """Collision diameters should be ~1–10 Ångström (1e-8 to 1e-7 cm)."""
-    cd = group_dict[species]["coldia"]
-    assert 5e-9 < cd < 5e-7, f"{species} coldia={cd} looks unreasonable"
+    cd = gas_dict[gas]["coldia"]
+    assert cd is not None, f"gas '{gas}' has no collision diameter (TODO in constants.py)"
+    assert 5e-9 < cd < 5e-7, f"gas '{gas}' coldia={cd} looks unreasonable"
 
 
 @pytest.mark.unit
@@ -106,9 +107,8 @@ def test_gcomp_unique():
 
 @pytest.mark.unit
 def test_silicates_share_sio_reservoir():
-    """SiO2 and MgSiO3 draw from the SiO reservoir; Mg2SiO4 is keyed to Mg but
-    also depletes SiO."""
-    assert group_dict["SiO2"]["gas_phase"] == "SiO"
+    """MgSiO3 draws from the SiO reservoir; Mg2SiO4 is keyed to Mg but also
+    depletes SiO."""
     assert group_dict["MgSiO3"]["gas_phase"] == "SiO"
     assert group_dict["Mg2SiO4"]["gas_phase"] == "Mg"
     assert group_dict["Mg2SiO4"]["stoich"] == {"Mg": 2, "SiO": 1}

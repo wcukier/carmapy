@@ -19,9 +19,9 @@ from carmapy.carmapy import Carma, Gas, Group
 
 
 # Properties of a made-up condensate "Al_oxide" (gas-phase reservoir "Al_oxide").
-CUSTOM_GAS = dict(wtmol_dif=26.98, hill_formula="Al", gcomp=0)
+CUSTOM_GAS = dict(wtmol_dif=26.98, coldia=3.825e-8, hill_formula="Al", gcomp=0)
 CUSTOM_COND = dict(
-    rho_cond=3.99, wtmol=101.926, coldia=3.825e-8,
+    rho_cond=3.99, wtmol=101.926,
     vp_offset=17.7, vp_tcoeff=45892.6, vp_metcoeff=1.66, vp_logpcoeff=0,
     surften_0=690, surften_slope=0, stofact=2, is_typeIII=True,
 )
