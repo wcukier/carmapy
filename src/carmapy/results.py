@@ -85,6 +85,11 @@ class Results:
           that longitude.  This function is designed to work on the 
           ``results.clouds["numden"]`` array as well as any of the microphysical
           rates arrays in ``results.clouds``.
+
+    The radiative fields ``T_history``, ``dTdt``, ``flux_net``, ``F_TOA``,
+    ``kzz_history``, ``convective``, ``nzone``, ``conv_resid`` and
+    ``rad_interval`` are None if the run was not radiatively coupled.
+    ``convective_zones`` gives the bounds of each zone in ``convective``.
     """
 
 
@@ -117,44 +122,31 @@ class Results:
     """ Temperature centers alias [K] (NZ, [NLONG]) """
 
     T_history : np.ndarray
-    """ Temperature centers at each output of a radiatively coupled run [K]
-    (NZ, NT). None if the run was not radiatively coupled. """
+    """ Temperature centers at each output of a radiatively coupled run [K] (NZ, NT) """
 
     dTdt : np.ndarray
-    """ Radiative heating rate at each output [K/s] (NZ, NT).  None if the run
-    was not radiatively coupled. """
+    """ Radiative heating rate at each output [K/s] (NZ, NT) """
 
     flux_net : np.ndarray
-    """ Net upward longwave flux at the cell levels [W/m²] (NZ+1, NT).  None if
-    the run was not radiatively coupled. """
+    """ Net upward longwave flux at the cell levels [W/m²] (NZ+1, NT) """
 
     F_TOA : np.ndarray
-    """ Emergent flux at the top of the atmosphere [W/m²] (NT).  Converges to
-    ``sigma * t_int**4``.  None if the run was not radiatively coupled. """
+    """ Emergent flux at the top of the atmosphere, converging to ``sigma * t_int**4`` [W/m²] (NT) """
 
     kzz_history : np.ndarray
-    """ Eddy diffusion the microphysics used at each output, at the cell levels
-    [cm²/s] (NZ+1, NT).  None if the run was not radiatively coupled. """
+    """ Eddy diffusion the microphysics used at each output, at the cell levels [cm²/s] (NZ+1, NT) """
 
     convective : np.ndarray
-    """ Which layers the convective adjustment left neutrally stable, at each
-    output (NZ, NT), bool.  There may be more than one contiguous zone; see
-    ``convective_zones``.  None if the run was not radiatively coupled. """
+    """ Which layers the convective adjustment left neutrally stable, at each output (NZ, NT), bool """
 
     nzone : np.ndarray
-    """ Number of contiguous convective zones at each output (NT).  None if the
-    run was not radiatively coupled. """
+    """ Number of contiguous convective zones at each output (NT) """
 
     conv_resid : np.ndarray
-    """ Largest fractional superadiabaticity left by the convective adjustment
-    at each output (NT).  A small value is normal; a growing one means the
-    adjustment is not keeping up.  None if the run was not radiatively
-    coupled. """
+    """ Largest fractional superadiabaticity left by the convective adjustment at each output (NT) """
 
     rad_interval : np.ndarray
-    """ Realized number of timesteps per full radiative solve (NT).  1 means the
-    adaptive cadence is saving nothing.  None if the run was not radiatively
-    coupled. """
+    """ Realized number of timesteps per full radiative solve at each output (NT) """
 
     group_names : list[str]
     """ The name of each of the simulated groups """

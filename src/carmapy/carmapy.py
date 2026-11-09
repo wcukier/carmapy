@@ -132,12 +132,7 @@ class Carma:
     """ 1 if and only if a restarted run should add to existing files (default 0)"""
 
     t_evolves: bool
-    """ True if T/P change between timesteps (e.g. radiative coupling). Default False.
-
-    When False, CARMA initializes fall velocities, diffusion coefficients and
-    growth kernels once from the reference atmosphere and reuses them for the
-    whole run.  True recomputes them every step, at a cost in runtime.
-    """
+    """ True if T/P change between timesteps, so transport and growth coefficients are recomputed each step (Default False) """
 
     groups: dict[str, "Group"]
     """ Dictionary of group objects indexed by group name used in the sim """
