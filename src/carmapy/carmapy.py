@@ -1274,7 +1274,7 @@ class Carma:
         documents the coupling, and the result is stored as
         ``self.radiation``.  
         """
-        
+
         radiation = Radiation(**kwargs)
 
         if not os.path.exists(radiation.ck_table_path):
@@ -1850,7 +1850,6 @@ class Element:
         self.igas:  int     = igas #TODO change to reference gas directly
     
 
-# Read-only default; each Gas takes a mutable copy at construction.
 _DEFAULT_GAS_BC = types.MappingProxyType({"bot_conc": -1,
                     "top_conc": -1,
                     "bot_flux": 0,
