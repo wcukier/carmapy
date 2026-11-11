@@ -162,7 +162,7 @@ subroutine test_day()
   integer               :: ibin
   integer               :: ibinm
   integer               :: iz
-  integer               :: icomposition, iroutine
+  integer               :: icomposition
   integer               :: nu_dep
   integer, parameter    :: lunerr = 48
   integer, parameter    :: lun = 42
@@ -182,6 +182,7 @@ subroutine test_day()
   integer, parameter    :: lunrates = 55
   integer, parameter    :: lunratesp = 56
   integer, parameter    :: lunrad = 57
+  integer, parameter    :: lunprec = 92
 
   real(kind=f)          :: nretries
   real(kind=f)          :: lastret = 0._f
@@ -263,21 +264,15 @@ subroutine test_day()
 
   ! Radiative-convective coupling, inert when do_radiation is 0.
   type(rce_type)      :: rce
-  integer             :: do_radiation, rad_gap_max, ios_rad, ios_scan, ic_scan
-  logical             :: has_rad_group
-  character(len=256)  :: rad_line
-  ! Whether cloud opacity was included; only printed. The cloud optics are
-  ! zeroed in optics_file when it is not.
+  integer             :: do_radiation, rad_gap_max
   integer             :: cloud_rad
   character(len=256)  :: ck_table_file
   real(kind=f)        :: t_int, rad_accel
   real(kind=f)        :: t_irr, t_star, rad_mu0, rad_w_surf
   real(kind=f)        :: rad_dT_tol, rad_dtau_tol
-  ! 0 = Parmentier fit, 1 = tabulated H/He gradient from adiabat_file.
-  integer             :: adiabat
+  integer             :: adiabat   ! 0 = Parmentier fit, 1 = tabulated H/He gradient from adiabat_file.
   character(len=256)  :: adiabat_file
-  ! 0 = hold the levels_file Kzz, 1 = mixing length theory.
-  integer             :: kzz_mode
+  integer             :: kzz_mode   ! 0 = hold the levels_file Kzz, 1 = mixing length theory.
   real(kind=f)        :: kzz_mixl_scale
   integer             :: nsolve_last   !! rce%nsolve as of the previous output
 
@@ -294,7 +289,6 @@ subroutine test_day()
   real(kind=f) ::rho_cond, surften_0, coldia, vp_offset, vp_tcoeff, surften_slope, vp_metcoeff, vp_logpcoeff, lat_heat_e, desorption
   integer :: is_type3, stofact
   real(kind=f) :: wtmol_core
-  integer :: igrp
 
   real(kind=f), allocatable ::tempr(:), pre(:), prel(:), alt(:), altl(:), wtmol_air(:), grav(:), ekz(:), ekzl(:), wtmol_gas(:)
   real(kind=f), allocatable ::temp_equator(:, :), p_equator_center(:), p_equator_level(:), velocity(:), longitudes(:)
@@ -362,38 +356,9 @@ subroutine test_day()
     read(10, nml=input_params)
     read(10, nml=io_files)
     read(10, nml=physical_params)
-    ! The radiation group is optional; without it the defaults above apply.
-    read(10, nml=radiation, iostat=ios_rad)
+    ! carmapy always writes the radiation group, uncoupled or not.
+    read(10, nml=radiation)
   close(10)
-
-  ! A radiation group that is present but fails to parse is fatal, since the
-  ! keys after the bad one would silently keep their defaults.
-  if (ios_rad /= 0) then
-    has_rad_group = .false.
-    open(unit=10, file=nml_file, status='old')
-    do
-      read(10, '(A)', iostat=ios_scan) rad_line
-      if (ios_scan /= 0) exit
-      rad_line = adjustl(rad_line)
-      if (rad_line(1:1) == '&') then
-        do ic_scan = 1, len_trim(rad_line)
-          if (rad_line(ic_scan:ic_scan) >= 'A' .and. &
-              rad_line(ic_scan:ic_scan) <= 'Z') then
-            rad_line(ic_scan:ic_scan) = &
-              achar(iachar(rad_line(ic_scan:ic_scan)) + 32)
-          end if
-        end do
-        if (trim(rad_line) == '&radiation') has_rad_group = .true.
-      end if
-    end do
-    close(10)
-
-    if (has_rad_group) then
-      write(*,*) "*** input.nml has a &radiation group that could not be read;"
-      write(*,*) "*** iostat =", ios_rad, "- likely an obsolete or misspelled key."
-      stop 1
-    end if
-  end if
 
   NZP1 = NZ + 1
 
@@ -412,16 +377,10 @@ subroutine test_day()
   allocate(grp_iroutine(NGROUP), grp_is_type3(NGROUP), grp_stofact(NGROUP))
   allocate(winds(NZ))
 
-  ! Cloud optics, only for NWAVE > 0.
+  ! Cloud optics, read only for NWAVE > 0; the arrays are zero-size otherwise.
+  allocate(grp_qext(NWAVE, NBIN, NGROUP), grp_ssa(NWAVE, NBIN, NGROUP), &
+           grp_asym(NWAVE, NBIN, NGROUP))
   if (NWAVE > 0) then
-    allocate(grp_qext(NWAVE, NBIN, NGROUP), grp_ssa(NWAVE, NBIN, NGROUP), &
-             grp_asym(NWAVE, NBIN, NGROUP))
-
-    if (len_trim(optics_file) == 0) then
-      write(*,*) "*** NWAVE > 0 but no optics_file was given in input.nml ***"
-      stop
-    end if
-
     open(10, file = optics_file, status='old')
     read(10, *) opt_ngroup, opt_nwave, opt_nbin
 
@@ -547,7 +506,7 @@ subroutine test_day()
   ! Test-build diagnostics: per-substep gas-failure log (written by gsolve) and
   ! full-precision number densities at each output stamp.
   open(unit=91, file='failures_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
-  open(unit=92, file='fullprec_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
+  open(unit=lunprec, file='fullprec_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
 #endif
 
   ! Allocate the arrays that we need for the model
@@ -628,26 +587,15 @@ subroutine test_day()
 
     write(*,*) "Add " //TRIM(name)//"..."
 
-    if (NWAVE > 0) then
-      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
+    call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
       .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_vp_offset(i), &
-      grp_vp_tcoeff(i), INT(grp_iroutine(i)), rc, &
-      wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
+      grp_vp_tcoeff(i), grp_iroutine(i), rc, &
+      wtmol_core=grp_wtmol_core(i), is_type3=grp_is_type3(i), &
       surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
       vp_logpcoeff=grp_vp_logpcoeff(i), lat_heat_e=grp_lat_heat_e(i), &
-      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), &
+      stofact=grp_stofact(i), desorption=grp_desorption(i), &
       do_vtran=.TRUE., is_sulfate=.FALSE., &
       qext=grp_qext(:,:,i), ssa=grp_ssa(:,:,i), asym=grp_asym(:,:,i))
-    else
-      call CARMAGROUP_Create(carma, i, name, rmin, 2._f, grp_wtmol(i), I_SPHERE, 1._f, &
-      .FALSE., grp_rho_cond(i), grp_surften_0(i), grp_vp_offset(i), &
-      grp_vp_tcoeff(i), INT(grp_iroutine(i)), rc, &
-      wtmol_core=grp_wtmol_core(i), is_type3=INT(grp_is_type3(i)), &
-      surften_slope=grp_surften_slope(i), vp_metcoeff=grp_vp_metcoeff(i), &
-      vp_logpcoeff=grp_vp_logpcoeff(i), lat_heat_e=grp_lat_heat_e(i), &
-      stofact=INT(grp_stofact(i)), desorption=grp_desorption(i), &
-      do_vtran=.TRUE., is_sulfate=.FALSE.)
-    end if
 
     if (rc < 0) stop "    *** FAILED ***"
 
@@ -910,11 +858,6 @@ subroutine test_day()
 
   ! Set up the radiative-convective coupling.
   if (do_radiation .eq. 1) then
-    if (NWAVE .le. 0) then
-      write(*,*) "*** do_radiation = 1 requires NWAVE > 0 and an optics_file ***"
-      stop
-    end if
-
     call rce_init(rce, NZ, NBIN, NGROUP, NWAVE, igridv, trim(ck_table_file), &
                   t_int, t_irr, t_star, rad_mu0, rad_w_surf, &
                   CP, grav_set, wtmol_air_set, &
@@ -1207,13 +1150,13 @@ subroutine test_day()
 #ifdef CARMA_TEST_CHECKS
       ! Per layer: air density and thickness; then per (bin, layer): the mass
       ! mixing ratio of every element and every gas.
-      write(92,'(a,i10)') 'T', istep
+      write(lunprec,'(a,i10)') 'T', istep
       do i = 1, NZ
-        write(92,'(2es26.16e3)') rho_atm_cgs(i), abs(zl(i+1) - zl(i))
+        write(lunprec,'(2es26.16e3)') rho_atm_cgs(i), abs(zl(i+1) - zl(i))
       end do
       do j = 1, NBIN
         do i = 1, NZ
-          write(92,'(*(es26.16e3))') (mmr(i, ielem, j), ielem = 1, NELEM), &
+          write(lunprec,'(*(es26.16e3))') (mmr(i, ielem, j), ielem = 1, NELEM), &
             (mmr_gas(i,igas), igas = 1, NGAS)
         end do
       end do
@@ -1276,13 +1219,6 @@ subroutine test_day()
                                   rce%absorbed_sw, rce%reflected_sw
         nsolve_last = rce%nsolve
 
-        ! Cumulative energy budget of the temperature update [J/m^2]; see
-        ! rce_type%e_comp. LLM-GENERATED — UNVERIFIED (tier: physics)
-        write(*,'(a,8es20.11)') ' RCE energy:', istep*dtime, rce%e_comp, &
-                                rce%e_appl, rce%e_adj, &
-                                rce%e_comp_rad, rce%e_appl_rad, &
-                                rce%e_comp_cnv, rce%e_appl_cnv
-
         do i = 1, NZ
           write(lunrad,'(i5,3e25.15,i3)') i, p(i) * 10._f, t(i), rce%dtdt(i), &
                                           merge(1, 0, rce%is_conv(i))
@@ -1319,16 +1255,6 @@ subroutine test_day()
   if (do_radiation .eq. 1) then
     write(*,*) "Radiation: solves =", rce%nsolve, " of", nstep, &
                " steps; dT clamp fired", rce%nclamp, "times"
-    ! Per-layer energy budget of the temperature update [J/m^2]: layer,
-    ! pressure [barye], computed heating, applied heating.
-    ! LLM-GENERATED — UNVERIFIED (tier: physics)
-    if (allocated(rce%e_comp_z)) then
-      open(unit=99, file='rce_energy_' // filename(1:len_trim(filename)) // filesuffix, status='unknown')
-      do i = 1, NZ
-        write(99,'(i5,3es20.11)') i, p(i) * 10._f, rce%e_comp_z(i), rce%e_appl_z(i)
-      end do
-      close(99)
-    end if
     close(unit=lunrad)
     call rce_destroy(rce)
   end if
