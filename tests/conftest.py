@@ -1,6 +1,5 @@
 import os
 import shutil
-import subprocess
 import numpy as np
 import pytest
 from pathlib import Path
@@ -20,92 +19,8 @@ def _pkg_exe() -> Path:
     return _pkg_dir() / "carmapy.exe"
 
 
-def _carma_src_root() -> Path:
-    """Return src/CARMA/ relative to the installed package (works for editable installs)."""
-    return _pkg_dir().parent / "CARMA"
-
-
-def _test_build_dir() -> Path:
-    return _carma_src_root() / "build" / "carma_test"
-
-
-def _test_exe() -> Path:
-    return _test_build_dir() / "carmapy.exe"
-
-
 def _binary_available():
     return _pkg_exe().exists() or shutil.which("carmapy.exe") is not None
-
-
-def _build_test_binary():
-    """Build carmapy.exe with -DCARMA_TEST_CHECKS into the carma_test build dir.
-
-    Requires an editable install so that src/CARMA/ is accessible.
-    Returns the path to the built binary, or None if the build failed.
-    Only rebuilds if the binary is missing or older than carma_carmapy.F90.
-    """
-    carma_src = _carma_src_root()
-    src_f90 = carma_src / "tests" / "carma_carmapy.F90"
-    test_exe = _test_exe()
-    test_build = _test_build_dir()
-
-    if not carma_src.exists():
-        print(
-            "\nWARNING: CARMA source not found at expected location for editable install. "
-            "Cannot build test binary. Integration tests will use the production binary."
-        )
-        return None
-
-    if (
-        test_exe.exists()
-        and src_f90.exists()
-        and test_exe.stat().st_mtime >= src_f90.stat().st_mtime
-    ):
-        return str(test_exe)
-
-    test_build.mkdir(parents=True, exist_ok=True)
-    shutil.copy(carma_src / "Makefile", test_build / "Makefile")
-
-    result = None
-    for compiler in ("ifort", "gfortran"):
-        try:
-            result = subprocess.run(
-                ["make", "all", f"FORTRAN={compiler}",
-                 "EXTRA_FFLAGS=-DCARMA_TEST_CHECKS"],
-                cwd=str(test_build),
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0 and test_exe.exists():
-                return str(test_exe)
-        except FileNotFoundError:
-            continue
-
-    print(
-        "\nWARNING: Could not build test binary with -DCARMA_TEST_CHECKS. "
-        "Integration tests will use the production binary (invariant checks disabled).\n"
-        f"Build output:\n{result.stderr[-2000:] if result else '(no output)'}"
-    )
-    return None
-
-
-def pytest_sessionstart(session):
-    """Before any tests run, build the test binary if integration tests are enabled.
-
-    The test binary (compiled with -DCARMA_TEST_CHECKS) is only injected for
-    `integration`-marked tests. Pathway and regression tests deliberately use
-    the production binary so that committed references stay stable across
-    compiler/flag changes that don't affect physics.
-    """
-    if os.environ.get("CARMAPY_RUN_INTEGRATION", "0") != "1":
-        return
-    if "CARMAPY_EXE" in os.environ:
-        return  # caller already pinned a binary; respect it
-    exe = _build_test_binary()
-    # Store the test binary path in a private variable; the autouse fixture in
-    # tests/integration/conftest.py will inject it only for integration tests.
-    if exe:
-        os.environ["_CARMAPY_TEST_EXE"] = exe
 
 
 def pytest_configure(config):

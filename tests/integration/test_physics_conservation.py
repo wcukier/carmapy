@@ -192,7 +192,7 @@ def _ffloat(tok):
 
 def _reservoir_columns(c):
     """Column totals [mol/cm2 x const] of every non-water gas reservoir at each
-    output, from the test binary's full-precision dump: the gas, plus nu times
+    output, from the idiag = 1 full-precision dump: the gas, plus nu times
     the mantle of every condensate depleting it, plus seed mass for the seed's
     own reservoir.  The dump's air density carries a constant factor, which
     cancels in relative drift."""
@@ -200,8 +200,6 @@ def _reservoir_columns(c):
     from carmapy.constants import gas_dict
     name = os.path.basename(c.name.rstrip("/"))
     path = os.path.join(c.name, f"fullprec_{name}.txt")
-    if not os.path.exists(path):
-        pytest.skip("full-precision dump missing: needs the -DCARMA_TEST_CHECKS test binary")
     NZ, NBIN = c.NZ, c.NBIN
     NELEM = len(c.elems)
     gnames = list(c.gases.keys())
@@ -245,13 +243,11 @@ def _reservoir_columns(c):
 
 def _floor_clamps(c):
     """Number of gsolve floor clamps of gas that microphysics was consuming,
-    from the test binary's failure log.  Clamps of round-off negatives
+    from the idiag = 1 failure log.  Clamps of round-off negatives
     transported into empty layers are not counted."""
     import os
     name = os.path.basename(c.name.rstrip("/"))
     path = os.path.join(c.name, f"failures_{name}.txt")
-    if not os.path.exists(path):
-        pytest.skip("failure log missing: needs the -DCARMA_TEST_CHECKS test binary")
     n = 0
     for line in open(path):
         p = line.split()
@@ -267,6 +263,7 @@ def test_silicate_reservoirs_conserved_full_precision(tmp_path, example_levels):
     at full precision, with no floor clamp of consumed gas."""
     c = _build_silicate_closed_box(str(tmp_path / "fpcons"), example_levels)
     c.implicit_gas = True
+    c.idiag = 1
     c.run(suppress_output=True)
 
     totals = _reservoir_columns(c)

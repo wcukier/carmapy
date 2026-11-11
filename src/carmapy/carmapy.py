@@ -128,6 +128,9 @@ class Carma:
     name: str
     """ The name of the directory the carma object is saved / loaded from """
 
+    idiag: int
+    """ 1 to write the solver diagnostics failures_<name>.txt and the large full-precision dump fullprec_<name>.txt (default 0) """
+
     iappend: int
     """ 1 if and only if a restarted run should add to existing files (default 0)"""
 

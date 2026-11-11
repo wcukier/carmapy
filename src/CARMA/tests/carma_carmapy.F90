@@ -502,12 +502,12 @@ subroutine test_day()
   open(unit=lun,file =  filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
   open(unit=lunf,file =  flux // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
   open(unit=lunrates,file =  rates // filename(1:len_trim(filename)) // filesuffix, status="unknown", position=file_pos)
-#ifdef CARMA_TEST_CHECKS
-  ! Test-build diagnostics: per-substep gas-failure log (written by gsolve) and
-  ! full-precision number densities at each output stamp.
-  open(unit=91, file='failures_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
-  open(unit=lunprec, file='fullprec_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
-#endif
+  ! Diagnostics for idiag = 1: the engine's per-substep gas-failure and
+  ! implicit-solve log, and full-precision mixing ratios at each output.
+  if (idiag .eq. 1) then
+    open(unit=lundiagn, file='failures_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
+    open(unit=lunprec, file='fullprec_' // filename(1:len_trim(filename)) // filesuffix, status="unknown")
+  end if
 
   ! Allocate the arrays that we need for the model
   allocate(xc(NZ), dx(NZ), yc(NZ), dy(NZ), &
@@ -557,7 +557,6 @@ subroutine test_day()
   write(*,*) "Create CARMA Object ..."
 
   if (idiag .eq. 1) then 
-    open(lundiagn)
     call CARMA_Create(carma, NBIN, NELEM, NGROUP, NSOLUTE, NGAS, NWAVE, rc, LUNOPRT=6, lundiag=lundiagn)
   else
     call CARMA_Create(carma, NBIN, NELEM, NGROUP, NSOLUTE, NGAS, NWAVE, rc, LUNOPRT=6)
@@ -972,9 +971,7 @@ subroutine test_day()
     time = (istep - 1) * dtime
 
     write(*,*) 'istep, time', istep, time, filename(1:len_trim(filename))
-#ifdef CARMA_TEST_CHECKS
-    write(91,'(a,i10)') 'S', istep
-#endif
+    if (idiag .eq. 1) write(lundiagn,'(a,i10)') 'S', istep
 
 
     if (IS_2D .eq. 1) then
@@ -1147,20 +1144,20 @@ subroutine test_day()
         write(lunratesp,'(f25.5)') (istep)*dtime
       end if
 
-#ifdef CARMA_TEST_CHECKS
       ! Per layer: air density and thickness; then per (bin, layer): the mass
       ! mixing ratio of every element and every gas.
-      write(lunprec,'(a,i10)') 'T', istep
-      do i = 1, NZ
-        write(lunprec,'(2es26.16e3)') rho_atm_cgs(i), abs(zl(i+1) - zl(i))
-      end do
-      do j = 1, NBIN
+      if (idiag .eq. 1) then
+        write(lunprec,'(a,i10)') 'T', istep
         do i = 1, NZ
-          write(lunprec,'(*(es26.16e3))') (mmr(i, ielem, j), ielem = 1, NELEM), &
-            (mmr_gas(i,igas), igas = 1, NGAS)
+          write(lunprec,'(2es26.16e3)') rho_atm_cgs(i), abs(zl(i+1) - zl(i))
         end do
-      end do
-#endif
+        do j = 1, NBIN
+          do i = 1, NZ
+            write(lunprec,'(*(es26.16e3))') (mmr(i, ielem, j), ielem = 1, NELEM), &
+              (mmr_gas(i,igas), igas = 1, NGAS)
+          end do
+        end do
+      end if
 
       do j = 1, NBIN
         do i = 1, NZ
@@ -1269,6 +1266,7 @@ subroutine test_day()
   close(unit=lunrates)
   if (idiag .eq. 1) then
     close(unit=lundiagn)
+    close(unit=lunprec)
   end if
 
 
